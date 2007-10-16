@@ -14,7 +14,6 @@ Makefile
 Makefile.fragments
 Makefile.global
 Makefile.objects
-Release
 Release_TS
 Release_TSDbg
 Release_TS_inline
