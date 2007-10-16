@@ -1,7 +1,7 @@
 --TEST--
 clean
 --FILE--
-<?
+<?php
 include('common.inc');
 $body = <<<BODY
 ================================

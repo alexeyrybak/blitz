@@ -1,7 +1,7 @@
 --TEST--
 mix #4
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz();

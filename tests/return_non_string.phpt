@@ -1,7 +1,7 @@
 --TEST--
 returning non-strings from user methods
 --FILE---
-<?
+<?php
 include('common.inc');
 
 $global_errors = '';

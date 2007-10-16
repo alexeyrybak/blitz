@@ -1,7 +1,7 @@
 --TEST--
 mix #5
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $body = <<<BODY

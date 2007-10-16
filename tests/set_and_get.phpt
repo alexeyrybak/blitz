@@ -1,7 +1,7 @@
 --TEST--
 set and get
 --FILE--
-<?
+<?php
 include('common.inc');
 
 class Template extends Blitz

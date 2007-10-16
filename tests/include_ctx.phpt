@@ -1,7 +1,7 @@
 --TEST--
 include with context iteration
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz();

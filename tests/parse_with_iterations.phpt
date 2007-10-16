@@ -1,7 +1,7 @@
 --TEST--
 parse with iteration set 
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz();

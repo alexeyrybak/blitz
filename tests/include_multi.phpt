@@ -1,7 +1,7 @@
 --TEST--
 multiple include cache test
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz();

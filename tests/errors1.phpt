@@ -1,7 +1,7 @@
 --TEST--
 errors and warnings: syntax
 --FILE--
-<?
+<?php
 include('common.inc');
 error_reporting(E_ALL);
 set_error_handler('my_error_handler');

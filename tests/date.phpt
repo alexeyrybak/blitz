@@ -1,7 +1,7 @@
 --TEST--
 date output wrapper
 --FILE--
-<?
+<?php
 include('common.inc');
 
 if (function_exists('date_default_timezone_set'))

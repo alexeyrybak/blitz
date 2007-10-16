@@ -1,7 +1,7 @@
 --TEST--
 method call from inner include
 --FILE---
-<?
+<?php
 include('common.inc');
 
 class View extends Blitz {

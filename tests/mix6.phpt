@@ -1,7 +1,7 @@
 --TEST--
 mix #6
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz('fetch_cmplx.tpl');

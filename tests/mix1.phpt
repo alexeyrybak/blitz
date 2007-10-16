@@ -1,7 +1,7 @@
 --TEST--
 mix #1
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $body = "start = {{\$start }}\n{{ begin test }}name = {{ \$name }}\n{{ end }}";

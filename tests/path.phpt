@@ -1,7 +1,7 @@
 --TEST--
 relative path (blitz.path)
 --FILE--
-<?
+<?php
 
 include('common.inc'); // path set is here already
 

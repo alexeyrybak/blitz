@@ -1,7 +1,7 @@
 --TEST--
 fetch#3
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz('fetch_cmplx.tpl');

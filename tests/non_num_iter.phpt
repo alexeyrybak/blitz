@@ -1,7 +1,7 @@
 --TEST--
 numerical and non-numerical keys in the iteration set
 --FILE--
-<?
+<?php
 include('common.inc');
 
 error_reporting(E_ALL);

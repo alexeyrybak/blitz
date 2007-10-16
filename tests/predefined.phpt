@@ -1,7 +1,7 @@
 --TEST--
 predefined loop variables: $_total, $_num, $_even, $_odd, $_first, $_last
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $body = 'predefined loop variables

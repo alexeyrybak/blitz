@@ -1,7 +1,7 @@
 --TEST--
 has context
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $body = <<<BODY

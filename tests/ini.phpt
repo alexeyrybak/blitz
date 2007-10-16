@@ -1,7 +1,7 @@
 --TEST--
 ini-values settings test
 --FILE--
-<?
+<?php
 include('common.inc');
 
 ini_set('blitz.var_prefix', '@');

@@ -1,7 +1,7 @@
 --TEST--
 {{ $hash.sub.key }} syntax
 --FILE--
-<?
+<?php
 include('common.inc');
 
 class DummyObjWithSubProperty {

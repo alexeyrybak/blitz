@@ -1,7 +1,7 @@
 --TEST--
 controller include method
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz();

@@ -1,7 +1,7 @@
 --TEST--
 get context
 --FILE--
-<?
+<?php
 include('common.inc');
 
 $T = new Blitz();
