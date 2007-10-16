@@ -3622,7 +3622,7 @@ PHP_FUNCTION(blitz_fetch) {
 
     if (BLITZ_DEBUG) {
         php_printf("tpl->iterations:\n");
-        if (tpl->iterations && &tpl->iterations) php_var_dump(&tpl->iterations,1 TSRMLS_CC);
+        if (tpl->iterations) php_var_dump(&tpl->iterations,1 TSRMLS_CC);
     }
 
     /* merge data with input params */
