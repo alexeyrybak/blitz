@@ -3525,7 +3525,7 @@ PHP_FUNCTION(blitz_get_globals) {
         RETURN_FALSE;
     }
 
-    ALLOC_HASHTABLE_REL(tmp_ht);
+    ALLOC_HASHTABLE(tmp_ht);
     zend_hash_init(tmp_ht, 0, NULL, ZVAL_PTR_DTOR, 0);
     zend_hash_copy(tmp_ht, tpl->hash_globals, (copy_ctor_func_t) zval_add_ref, (void *) &tmp, sizeof(zval *));
     return_value->value.ht = tmp_ht;
