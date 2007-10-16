@@ -1869,7 +1869,7 @@ inline int blitz_exec_user_method (
     int predefined = -1;
    
     MAKE_STD_ZVAL(zmethod);
-    ZVAL_STRING(zmethod,node->lexem,1);
+    ZVAL_STRING(zmethod, node->lexem, 1);
 
     /* prepare arguments if needed */
     /* 2DO: probably there's much more easy way to prepare arguments without two emalloc */
@@ -1918,15 +1918,10 @@ inline int blitz_exec_user_method (
     } 
 
     /* call object method */
-    method_res = call_user_function_ex(
-        CG(function_table), &obj,
-        zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC
-    );
+    method_res = call_user_function_ex(CG(function_table), &obj, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
 
     if (method_res == FAILURE) { /* failure: */
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,
-            "INTERNAL ERROR: calling user method \"%s\" failed, check if this method exists or parameters are valid", node->lexem
-        );
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: calling user method \"%s\" failed, check if this method exists or parameters are valid", node->lexem);
     } else if (retval) { /* retval can be empty even in success: method throws exception */
         convert_to_string_ex(&retval);
         buf_len = Z_STRLEN_P(retval);
@@ -1936,7 +1931,11 @@ inline int blitz_exec_user_method (
         p_result+=*result_len;
     }
 
-    zval_dtor(zmethod);
+    zval_ptr_dtor(&zmethod);
+    
+    if (retval) {
+        zval_ptr_dtor(&retval);
+    }
 
     if (pargs) {
          for(i=0; i<node->n_args; i++) {
@@ -3861,6 +3860,6 @@ zend_module_entry blitz_module_entry = {
  * tab-width: 4
  * c-basic-offset: 4
  * End:
- * vim600: sw=4 ts=4 fdm=marker
+ * vim600: sw=4 ts=4 fdm=marker expandtab
  * vim<600: sw=4 ts=4
  */
