@@ -247,7 +247,7 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC){
     tpl->current_iteration = NULL;
     tpl->last_iteration = NULL;
     tpl->current_iteration_parent = & tpl->iterations;
-    tpl->current_path = "/";
+    tpl->current_path = estrndup("/", sizeof("/") - 1);
 
     tpl->tmp_buf = emalloc(BLITZ_TMP_BUF_MAX_LEN);
     tpl->static_data.fetch_index = NULL;
@@ -1269,17 +1269,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     */
 
     /* allocate memory for nodes */
-    tpl->static_data.nodes = (tpl_node_struct*)emalloc(
-        n_open*sizeof(tpl_node_struct)
-    );
-
-    if (!tpl->static_data.nodes) {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR, 
-            "INTERNAL ERROR: unable to allocate memory for %u nodes", n_open
-        );
-        efree(pos);
-        return 0;
-    }
+    tpl->static_data.nodes = ecalloc(n_open, sizeof(tpl_node_struct));
 
     /* set correct pairs even if template has wrong grammar */
     i = 0;
@@ -1457,6 +1447,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
                         parent->type = BLITZ_NODE_TYPE_CONTEXT;
                         --pp_node_stack;
                         parent = *pp_node_stack;
+						++n_nodes;
                     } else {
                         /* error: end with no begin */
                         i_node->has_error = 1;
@@ -1499,6 +1490,10 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
 
     tpl->static_data.n_nodes = n_nodes;
     efree(pos);
+	
+	if (node_stack) {
+		efree(node_stack);
+	}
 
     return 1;
 }
@@ -1989,14 +1984,17 @@ inline void blitz_exec_var (
             (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, lexem, lexem_len_p1, (void**)&zparam))) )
         {
             if (Z_TYPE_PP(zparam) != IS_STRING) {
-                zval *p = NULL;
-                MAKE_STD_ZVAL(p);
-                *p = **zparam;
-                zval_copy_ctor(p);
-                convert_to_string_ex(&p);
-                buf_len = Z_STRLEN_P(p);
-                BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
-                p_result = (char*)memcpy(p_result,Z_STRVAL_P(p), buf_len);
+                zval p;
+
+                p = **zparam;
+                zval_copy_ctor(&p);
+                convert_to_string(&p);
+				INIT_ZVAL(p);
+
+                buf_len = Z_STRLEN(p);
+                BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result,p_result);
+                p_result = (char*)memcpy(p_result, Z_STRVAL(p), buf_len);
+				zval_dtor(&p);
             } else {
                buf_len = Z_STRLEN_PP(zparam);
                BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
@@ -2237,9 +2235,9 @@ int blitz_exec_nodes (
 /* }}} */
 
 /* {{{ blitz_populate_root */
-inline blitz_populate_root (
-    blitz_tpl *tpl TSRMLS_DC) {
+inline int blitz_populate_root (blitz_tpl *tpl TSRMLS_DC) {
     zval *empty_array;
+
     if (BLITZ_DEBUG) php_printf("will populate the root iteration\n");
     MAKE_STD_ZVAL(empty_array);
     array_init(empty_array);
@@ -2658,7 +2656,7 @@ int blitz_find_iteration_by_path(
             }
 
             if (BLITZ_DEBUG) {
-                php_printf("key %s: we are here:\n");
+                php_printf("key %s: we are here:\n", key);
                 php_var_dump(tmp, 0 TSRMLS_CC);
             }
 
@@ -2753,7 +2751,9 @@ int blitz_build_fetch_index(blitz_tpl *tpl TSRMLS_DC) {
     char path[1024] = "";
     unsigned int path_len = 0;
     tpl_node_struct *i_node = NULL;
+
     ALLOC_HASHTABLE(tpl->static_data.fetch_index);
+
     if (!tpl->static_data.fetch_index || (FAILURE == zend_hash_init(tpl->static_data.fetch_index, 8, NULL, ZVAL_PTR_DTOR, 0))) {
         php_error_docref(NULL TSRMLS_CC, E_ERROR, "INTERNAL ERROR: unable to allocate or fill memory for blitz fetch index");
         return 0;
@@ -3074,8 +3074,6 @@ PHP_FUNCTION(blitz_init) {
     blitz_tpl *tpl = NULL;
     unsigned int filename_len = 0;
     char *filename = NULL;
-
-    zval *new_object = NULL;
     int ret = 0;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|s",&filename,&filename_len)) {
@@ -3097,17 +3095,9 @@ PHP_FUNCTION(blitz_init) {
         }
     }
 
-    MAKE_STD_ZVAL(new_object);
-
-    if (object_init(new_object) != SUCCESS)
-    {
-        RETURN_FALSE;
-    }
-
     ret = zend_list_insert(tpl, le_blitz);
     add_property_resource(getThis(), "tpl", ret);
     zend_list_addref(ret);
-
 }
 /* }}} */
 
@@ -3408,6 +3398,10 @@ PHP_FUNCTION(blitz_context) {
     if ((current_len != norm_len) || (0 != strncmp(tpl->tmp_buf,tpl->current_path,norm_len))) {
         tpl->current_iteration = NULL; 
     }
+	
+    if (tpl->current_path) {
+       efree(tpl->current_path);
+    }
 
     tpl->current_path = estrndup(tpl->tmp_buf,norm_len);
 }
@@ -3665,7 +3659,7 @@ PHP_FUNCTION(blitz_fetch) {
         php_printf("tpl->iterations:\n");
         if (tpl->iterations && &tpl->iterations) php_var_dump(&tpl->iterations,1 TSRMLS_CC);
         php_printf("final_params:\n");
-        if (final_params && &final_params) php_var_dump(&final_params,1 TSRMLS_CC);
+        if (final_params) php_var_dump(&final_params,1 TSRMLS_CC);
     }
 
     exec_status = blitz_fetch_node_by_path(tpl, id, 
