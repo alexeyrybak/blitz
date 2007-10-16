@@ -418,62 +418,104 @@ int blitz_load_body(
 }
 /* }}} */
 
-/*  {{{ blitz_free_tpl(blitz_tpl *tpl) */
-void blitz_free_tpl(blitz_tpl *tpl) {
-    unsigned char n_nodes=0, n_args=0, i=0, j=0;
+static inline void blitz_free_node(tpl_node_struct *node) /* {{{ */
+{
+    int i;
 
-    if (!tpl) return;
-
-    if (tpl->static_data.config) 
-        efree(tpl->static_data.config);
-
-    n_nodes = tpl->static_data.n_nodes;
-    if (n_nodes) {
-        for(i=0;i<n_nodes;++i) {
-            n_args = tpl->static_data.nodes[i].n_args;
-            for(j=0;j<n_args;++j) {
-                if (tpl->static_data.nodes[i].args[j].name) {
-                    efree(tpl->static_data.nodes[i].args[j].name); 
-                }
-            }
-            if (tpl->static_data.nodes[i].lexem)
-                efree(tpl->static_data.nodes[i].lexem);
-            if (tpl->static_data.nodes[i].args)
-                efree(tpl->static_data.nodes[i].args);
-            if (tpl->static_data.nodes[i].children)
-                efree(tpl->static_data.nodes[i].children);
+    for(i = 0; i < node->n_args; i++) {
+        if (node->args[i].name) {
+            efree(node->args[i].name);
         }
     }
+    node->n_args = 0;
 
-    if (tpl->static_data.name)
+    if (node->lexem) {
+        efree(node->lexem);
+        node->lexem = NULL;
+    }
+    if (node->args) {
+        efree(node->args);
+        node->args = NULL;
+    }
+
+    for(i = 0; i < node->n_children; i++) {
+        blitz_free_node(node->children[i]);
+    }
+
+    if (node->children) {
+        efree(node->children);
+        node->children = NULL;
+    }
+    node->n_children = 0;
+}
+/* }}} */
+
+static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
+{
+    unsigned char n_nodes=0, i=0;
+
+    if (!tpl) {
+        return;
+    }
+
+    if (tpl->static_data.config) {
+        efree(tpl->static_data.config);
+    }
+
+    n_nodes = tpl->static_data.n_nodes;
+    for(i = 0 ; i < n_nodes; i++) {
+        blitz_free_node(&tpl->static_data.nodes[i]);
+	}
+
+    if (tpl->static_data.name) {
         efree(tpl->static_data.name);
-    if (tpl->static_data.nodes)
+    }
+
+    if (tpl->static_data.nodes) {
         efree(tpl->static_data.nodes);
+    }
 
-    if (tpl->static_data.body) 
-        efree(tpl->static_data.body); 
+    if (tpl->static_data.body) {
+        efree(tpl->static_data.body);
+    }
 
-    if (tpl->hash_globals && !(tpl->flags & BLITZ_FLAG_GLOBALS_IS_OTHER))
+    if (tpl->hash_globals && !(tpl->flags & BLITZ_FLAG_GLOBALS_IS_OTHER)) {
+        zend_hash_destroy(tpl->hash_globals);
         FREE_HASHTABLE(tpl->hash_globals);
+    }
 
-    if (tpl->ht_tpl_name)
+    if (tpl->ht_tpl_name) {
+        zend_hash_destroy(tpl->ht_tpl_name);
         FREE_HASHTABLE(tpl->ht_tpl_name);
+    }
 
-    if (tpl->static_data.fetch_index)
+    if (tpl->static_data.fetch_index) {
+        zend_hash_destroy(tpl->static_data.fetch_index);
         FREE_HASHTABLE(tpl->static_data.fetch_index);
+    }
 
-    if (tpl->tmp_buf)
+    if (tpl->tmp_buf) {
         efree(tpl->tmp_buf);
+    }
 
-    if (tpl->iterations && !(tpl->flags & BLITZ_FLAG_ITERATION_IS_OTHER))
-        FREE_ZVAL(tpl->iterations);
+    if (tpl->iterations && !(tpl->flags & BLITZ_FLAG_ITERATION_IS_OTHER)) {
+        zval_dtor(tpl->iterations);
+        efree(tpl->iterations);
+        tpl->iterations = NULL;
+    }
 
-    if (tpl->itpl_list) { 
+    if (tpl->itpl_list) {
         for(i=0; i<tpl->itpl_list_len; i++) {
-            if (tpl->itpl_list[i])
+            if (tpl->itpl_list[i]) {
                 blitz_free_tpl(tpl->itpl_list[i]);
+            }
         }
         efree(tpl->itpl_list);
+    }
+
+    if (tpl->current_path) {
+        efree(tpl->current_path);
+        tpl->current_path = NULL;
     }
 
     efree(tpl);
