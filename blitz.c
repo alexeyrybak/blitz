@@ -1985,7 +1985,6 @@ inline void blitz_exec_var (
                 p = **zparam;
                 zval_copy_ctor(&p);
                 convert_to_string(&p);
-				INIT_ZVAL(p);
 
                 buf_len = Z_STRLEN(p);
                 BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result,p_result);
@@ -2025,14 +2024,16 @@ inline void blitz_exec_var_path (
         return;
 
     if (Z_TYPE_PP(elem) != IS_STRING) {
-        zval *p = NULL;
-        MAKE_STD_ZVAL(p);
-        *p = **elem;
-        zval_copy_ctor(p);
-        convert_to_string_ex(&p);
-        buf_len = Z_STRLEN_P(p);
+        zval p;
+        
+        p = **elem;
+        zval_copy_ctor(&p);
+        convert_to_string(&p);
+
+        buf_len = Z_STRLEN(p);
         BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
-        p_result = (char*)memcpy(p_result,Z_STRVAL_P(p), buf_len);
+        p_result = (char*)memcpy(p_result,Z_STRVAL(p), buf_len);
+        zval_dtor(&p);
     } else {
        buf_len = Z_STRLEN_PP(elem);
        BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
@@ -2920,7 +2921,6 @@ inline int blitz_merge_iterations_by_str_keys(
     char *key = NULL;
     int key_len = 0;
     long index = 0;
-    int res = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
         return 0;
@@ -2937,18 +2937,15 @@ inline int blitz_merge_iterations_by_str_keys(
             continue;
         }
 
-        if (key) {
+        if (key && key_len) {
             zval *temp;
-            ALLOC_INIT_ZVAL(temp);
+
+            ALLOC_ZVAL(temp);
             *temp = **elem;
             zval_copy_ctor(temp);
+            INIT_PZVAL(temp);
 
-            res = zend_hash_update(
-                Z_ARRVAL_PP(target),
-                key,
-                key_len,
-                (void*)&temp, sizeof(zval *), NULL
-            );
+            zend_hash_update(Z_ARRVAL_PP(target), key, key_len, (void*)&temp, sizeof(zval *), NULL);
         }
         zend_hash_move_forward(input_ht);
     }
@@ -2984,16 +2981,12 @@ inline int blitz_merge_iterations_by_num_keys(
             continue;
         }
 
-        ALLOC_INIT_ZVAL(temp);
+        ALLOC_ZVAL(temp);
         *temp = **elem;
         zval_copy_ctor(temp);
+        INIT_PZVAL(temp);
 
-        zend_hash_index_update(
-            Z_ARRVAL_PP(target),
-            index,
-            (void*)&temp, sizeof(zval *), NULL
-        );
-
+        zend_hash_index_update(Z_ARRVAL_PP(target), index, (void*)&temp, sizeof(zval *), NULL);
         zend_hash_move_forward(input_ht);
     }
 
@@ -3201,16 +3194,13 @@ PHP_FUNCTION(blitz_get_iterations) {
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == array_init(return_value)) {
-        RETURN_FALSE;
-    }
-
     if (tpl->iterations) {
         *return_value = *tpl->iterations; 
         zval_copy_ctor(return_value);
+        INIT_PZVAL(return_value);
+    } else {
+        array_init(return_value);
     }
-
-    return;
 }
 /* }}} */
 
@@ -3244,9 +3234,10 @@ PHP_FUNCTION(blitz_set_global) {
             continue;
         } 
 
-        ALLOC_INIT_ZVAL(temp);
+        ALLOC_ZVAL(temp);
         *temp = **elem;
         zval_copy_ctor(temp);
+        INIT_PZVAL(temp);
 
         r = zend_hash_update(
             tpl->hash_globals,
@@ -3518,6 +3509,7 @@ PHP_FUNCTION(blitz_block) {
         if (tpl->last_iteration && *tpl->last_iteration) {
             **(tpl->last_iteration) = *input_arr;
             zval_copy_ctor(*tpl->last_iteration);
+            INIT_PZVAL(*tpl->last_iteration);
         } else {
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: last_iteration is empty, it's a bug\n"); 
         }
@@ -3634,18 +3626,15 @@ PHP_FUNCTION(blitz_fetch) {
                 continue;
             }
 
-            if (key) {
+            if (key && key_len) {
                 zval *temp;
-                ALLOC_INIT_ZVAL(temp);
+
+                ALLOC_ZVAL(temp);
                 *temp = **elem;
                 zval_copy_ctor(temp);
+                INIT_PZVAL(temp);
 
-                res = zend_hash_update(
-                    Z_ARRVAL_P(path_iteration),
-                    key,
-                    key_len,
-                    (void*)&temp, sizeof(zval *), NULL
-                );
+                zend_hash_update(Z_ARRVAL_P(path_iteration), key, key_len, (void*)&temp, sizeof(zval *), NULL);
             }
             zend_hash_move_forward(input_ht);
         }
@@ -3658,8 +3647,7 @@ PHP_FUNCTION(blitz_fetch) {
         if (final_params) php_var_dump(&final_params,1 TSRMLS_CC);
     }
 
-    exec_status = blitz_fetch_node_by_path(tpl, id, 
-        tpl->tmp_buf, norm_len, final_params, &result, &result_len TSRMLS_CC);
+    exec_status = blitz_fetch_node_by_path(tpl, id, tpl->tmp_buf, norm_len, final_params, &result, &result_len TSRMLS_CC);
     
     if (exec_status) {
         ZVAL_STRINGL(return_value,result,result_len,1);
