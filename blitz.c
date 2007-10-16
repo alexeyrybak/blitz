@@ -27,6 +27,7 @@
 #include "ext/standard/php_standard.h"
 #include "ext/standard/info.h"
 #include "ext/standard/html.h"
+#include <fcntl.h>
 
 #ifdef PHP_WIN32
 #include "win32/time.h"
@@ -61,8 +62,7 @@ static zend_class_entry blitz_class_entry;
 ZEND_GET_MODULE(blitz)
 #endif
 
-/* {{{ PHP_INI */
-ZEND_INI_MH(OnUpdateVarPrefixHanler) /* i prefer to have OnUpdateChar, but there's no such handler */
+ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
 {
     char *p;
 #ifndef ZTS
@@ -74,19 +74,20 @@ ZEND_INI_MH(OnUpdateVarPrefixHanler) /* i prefer to have OnUpdateChar, but there
 
     p = (char *) (base+(size_t) mh_arg1);
 
-    if (!new_value || new_value_length!=1) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,
-            "unable to set blitz.var_prefix (one character is allowed, like $ or %)");
+    if (!new_value || new_value_length != 1) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to set blitz.var_prefix (only one character is allowed, like $ or %%)");
         return FAILURE;
     }
 
     *p = new_value[0];
     return SUCCESS;
 }
+/* }}} */
 
+/* {{{ ini options */
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("blitz.var_prefix", BLITZ_TAG_VAR_PREFIX_S, PHP_INI_ALL,
-        OnUpdateVarPrefixHanler, var_prefix, zend_blitz_globals, blitz_globals)
+        OnUpdateVarPrefixHandler, var_prefix, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.tag_open", BLITZ_TAG_OPEN_DEFAULT, PHP_INI_ALL, 
         OnUpdateString, node_open, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.tag_close", BLITZ_TAG_CLOSE_DEFAULT, PHP_INI_ALL, 
@@ -194,9 +195,8 @@ inline int blitz_read_with_mmap(blitz_tpl *tpl, char *filename TSRMLS_DC) {
 
 /*  {{{ blitz_init_tpl_base */
 blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC){
-    zval *empty_array = NULL;
-
     blitz_tpl *tpl = (blitz_tpl*)emalloc(sizeof(blitz_tpl));
+
     if (!tpl) {
         php_error_docref(
             NULL TSRMLS_CC, E_ERROR,
@@ -310,7 +310,6 @@ blitz_tpl *blitz_init_tpl(
     char *filename, 
     HashTable *globals,
     zval *iterations TSRMLS_DC) {
-    FILE *f = NULL;
     char *global_path = NULL;
     int global_path_len = 0;
     char normalized_buf[BLITZ_FILE_PATH_MAX_LEN];
@@ -728,7 +727,6 @@ void php_blitz_get_node_paths(zval *list, tpl_node_struct *node, char *parent_pa
 /* {{{ php_blitz_get_path_list(blitz_tpl *tpl, zval *list) */
 void php_blitz_get_path_list(blitz_tpl *tpl, zval *list) {
     unsigned long i = 0;
-    unsigned int level = 0;
     unsigned int last_close = 0;
     char path[BLITZ_CONTEXT_PATH_MAX_LEN] = "/";
 
@@ -866,7 +864,7 @@ inline void blitz_parse_call (
     if (BLITZ_DEBUG) {
         char *tmp = estrndup(text, len_text);
         tmp[len_text-1] = '\x0';
-        php_printf("blitz_parse_call, started at pos=%ld, c=%c\n", pos, *c);
+        php_printf("blitz_parse_call, started at pos=%u, c=%c\n", pos, *c);
         php_printf("text: %s\n", tmp);
     }
 
@@ -889,12 +887,12 @@ inline void blitz_parse_call (
             state = BLITZ_CALL_STATE_FINISHED;
         }
     } else if (BLITZ_IS_ALPHA(*c)) { /* scan function */
-        if (BLITZ_DEBUG) php_printf("D1: pos=%ld, i_pos=%ld, c=%c\n", pos, i_pos, *c);
+        if (BLITZ_DEBUG) php_printf("D1: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
         BLITZ_SCAN_ALNUM(c,p,i_pos,i_symb);
-        if (BLITZ_DEBUG) php_printf("D2: pos=%ld, i_pos=%ld, c=%c\n", pos, i_pos, *c);
+        if (BLITZ_DEBUG) php_printf("D2: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
         pos+=i_pos-1;
         c = text + pos;
-        if (BLITZ_DEBUG) php_printf("D3: pos=%ld, i_pos=%ld, c=%c\n", pos, i_pos, *c);
+        if (BLITZ_DEBUG) php_printf("D3: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
 
         if (i_pos>0) {
             node->lexem = estrndup(main_token,i_pos);
@@ -902,7 +900,7 @@ inline void blitz_parse_call (
             *true_lexem_len = i_pos-1;
             ++pos; ++c;
 
-            if (BLITZ_DEBUG) php_printf("METHOD: %s, pos=%ld, c=%c, type=%u\n", node->lexem, pos, *c, node->type);
+            if (BLITZ_DEBUG) php_printf("METHOD: %s, pos=%u, c=%c, type=%u\n", node->lexem, pos, *c, node->type);
             if (*c == '(') { /* has arguments */
                 ok = 1; ++pos; 
                 BLITZ_SKIP_BLANK(c,i_pos,pos);
@@ -950,10 +948,10 @@ inline void blitz_parse_call (
             }
         }
 
-        if (BLITZ_DEBUG) php_printf("LOOP_BEGIN: pos=%ld, c=%c\n", pos, *c);
+        if (BLITZ_DEBUG) php_printf("LOOP_BEGIN: pos=%u, c=%c\n", pos, *c);
         c = text + pos;
         while ((symb = *c) && ok) {
-            if (BLITZ_DEBUG) php_printf("LOOP_BODY: pos=%ld, state=%ld, c=%c\n", pos, state, symb);
+            if (BLITZ_DEBUG) php_printf("LOOP_BODY: pos=%u, state=%d, c=%c\n", pos, state, symb);
             switch(state) {
                 case BLITZ_CALL_STATE_BEGIN:
                     symb = *c;
@@ -970,7 +968,7 @@ inline void blitz_parse_call (
                     } else {
                         state = BLITZ_CALL_STATE_ERROR;
                     }
-                    if (BLITZ_DEBUG) php_printf("STATE_BEGIN: pos=%ld, c=%c, next_state=%d\n", pos, *c, state);
+                    if (BLITZ_DEBUG) php_printf("STATE_BEGIN: pos=%u, c=%c, next_state=%d\n", pos, *c, state);
                     break;
                 case BLITZ_CALL_STATE_END:
                     i_pos = 0;
@@ -979,7 +977,7 @@ inline void blitz_parse_call (
                         BLITZ_SCAN_ALNUM(c,p,i_pos,i_symb); pos += i_pos; i_pos = 0;
                     }
                     state = BLITZ_CALL_STATE_FINISHED;
-                    if (BLITZ_DEBUG) php_printf("STATE_END: pos=%ld, c=%c, next_state = %d\n", pos, *c, state);
+                    if (BLITZ_DEBUG) php_printf("STATE_END: pos=%u, c=%c, next_state = %d\n", pos, *c, state);
                     break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
@@ -988,7 +986,7 @@ inline void blitz_parse_call (
                     p = token;
                     i_type = 0;
 
-                    if (BLITZ_DEBUG) php_printf("STATE_NEXT_ARG: %ld, %ld; c = %c\n", pos, len_text, *c);
+                    if (BLITZ_DEBUG) php_printf("STATE_NEXT_ARG: %u, %u; c = %c\n", pos, len_text, *c);
                     if (symb == var_prefix) {
                         ++c; ++pos;
                         /*BLITZ_SCAN_ALNUM(c,p,i_pos,i_symb); */
@@ -1029,19 +1027,19 @@ inline void blitz_parse_call (
                         }
                     }
                     if (BLITZ_DEBUG) 
-                        php_printf("STATE_NEXT_ARG(2): %ld, %ld; c = \"%c\", i_pos = %ld\n", pos, len_text, *c, i_pos);
+                        php_printf("STATE_NEXT_ARG(2): %u, %u; c = \"%c\", i_pos = %u\n", pos, len_text, *c, i_pos);
 
                     if (ok) {
                         pos += i_pos;
                         c = text + pos;
-                        if (BLITZ_DEBUG) php_printf("STATE_NEXT_ARG(3): %ld, %ld; c = \"%c\", i_pos = %ld\n", pos, len_text, *c, i_pos);
+                        if (BLITZ_DEBUG) php_printf("STATE_NEXT_ARG(3): %u, %u; c = \"%c\", i_pos = %u\n", pos, len_text, *c, i_pos);
                         if (BLITZ_ARG_TYPE_BOOL == i_type) {
                             ADD_CALL_ARGS(ptr_token, 1, BLITZ_ARG_TYPE_BOOL);
                         } else {
                             ADD_CALL_ARGS(token, i_len, i_type);
                         }
 
-                        if (BLITZ_DEBUG) php_printf("STATE_NEXT: %ld, %ld; c = %c\n", pos, len_text, *c);
+                        if (BLITZ_DEBUG) php_printf("STATE_NEXT: %u, %u; c = %c\n", pos, len_text, *c);
                         state = BLITZ_CALL_STATE_HAS_NEXT;
                     } else {
                         state = BLITZ_CALL_STATE_ERROR;
@@ -1050,28 +1048,28 @@ inline void blitz_parse_call (
                 case BLITZ_CALL_STATE_HAS_NEXT:
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
                     symb = *c;
-                    if (BLITZ_DEBUG) php_printf("STATE_HAS_NEXT: %ld, %ld; c = %c\n", pos, len_text, *c);
+                    if (BLITZ_DEBUG) php_printf("STATE_HAS_NEXT: %u, %u; c = %c\n", pos, len_text, *c);
                     if (symb == ',') {
                         state = BLITZ_CALL_STATE_NEXT_ARG;
                         ++c; ++pos;
                     } else if (symb == ')') {
                         state = BLITZ_CALL_STATE_FINISHED;
                         ++c; ++pos;
-                        if (BLITZ_DEBUG) php_printf("STATE_HAS_NEXT(2): %ld, %ld; c = %c\n", pos, len_text, *c);
+                        if (BLITZ_DEBUG) php_printf("STATE_HAS_NEXT(2): %u, %u; c = %c\n", pos, len_text, *c);
                     } else {
                         state = BLITZ_CALL_STATE_ERROR;
                     }
                     break;
                 case BLITZ_CALL_STATE_FINISHED:
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
-                    if (BLITZ_DEBUG) php_printf("STATE_FINISHED(1): %ld, %ld; c = %c\n", pos, len_text, *c);
+                    if (BLITZ_DEBUG) php_printf("STATE_FINISHED(1): %u, %u; c = %c\n", pos, len_text, *c);
                     if (*c == ';') {
                         ++c; ++pos;
                     }
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
-                    if (BLITZ_DEBUG) php_printf("STATE_FINISHED(2): %ld, %ld; c = %c\n", pos, len_text, *c);
+                    if (BLITZ_DEBUG) php_printf("STATE_FINISHED(2): %u, %u; c = %c\n", pos, len_text, *c);
                     if (pos < len_text) { /* when close tag contains whitespaces SKIP_BLANK will make pos>=len_text */
-                        if (BLITZ_DEBUG) php_printf("%ld <> %ld => error state\n", pos, len_text);
+                        if (BLITZ_DEBUG) php_printf("%u <> %u => error state\n", pos, len_text);
                         state = BLITZ_CALL_STATE_ERROR;
                     }
                     ok = 0;
@@ -1189,7 +1187,6 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     unsigned int lexem_len = 0;
     unsigned int true_lexem_len = 0;
     unsigned int shift = 0;
-    unsigned int n_alloc = 0;
     tpl_node_struct *i_node = NULL, *parent = NULL;
     tpl_node_struct **node_stack = NULL, **pp_node_stack = NULL; 
     unsigned char *body = NULL;
@@ -1201,7 +1198,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     unsigned long i_pos = 0; 
     unsigned char expect_type_mask = 0, i_type = 0, i_prev_type = 0, i_is_open = 0, is_phpt_tag = 0;
 
-    unsigned long current_open = 0, current_close, next_open = 0;
+    unsigned long current_open = 0, current_close;
 
     if (!tpl->static_data.body || (0 == tpl->static_data.body_len)) {
         return 1;
@@ -1255,7 +1252,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
 
     if (BLITZ_DEBUG) {
         for(i=0; i<pos_size; i++) {
-            php_printf("pos = %ld, %ld\n", pos[i].pos, pos[i].type);
+            php_printf("pos = %ld, %d\n", pos[i].pos, pos[i].type);
         }
     }
 
@@ -1321,7 +1318,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
         }
 
         if (BLITZ_DEBUG) {
-            php_printf("type = %ld, check_result = %ld, expect_type_mask = %ld, is_open=%ld\n", 
+            php_printf("type = %u, check_result = %u, expect_type_mask = %u, is_open=%u\n", 
                 i_type, i_type & expect_type_mask, expect_type_mask, i_is_open);
         }
 
@@ -1353,7 +1350,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
             shift = current_open + l_open_node;
             lexem_len = current_close - shift;
             if (BLITZ_DEBUG) {
-                php_printf("close_pos = %ld, shift = %ld, lexem_len = %ld\n", 
+                php_printf("close_pos = %ld, shift = %u, lexem_len = %u\n", 
                     current_close, shift, lexem_len);
             }
 
@@ -1486,7 +1483,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
 
         i_prev_type = i_type;
 
-        if (BLITZ_DEBUG) php_printf("%ld(%d)", expect_type_mask, i_is_open);
+        if (BLITZ_DEBUG) php_printf("%u(%d)", expect_type_mask, i_is_open);
         if (i_is_open) {
             if (BLITZ_TAG_POS_PHPT_CTX_LEFT == i_type) {
                 expect_type_mask = BLITZ_TAG_POS_PHPT_CTX_RIGHT;
@@ -1497,7 +1494,7 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
             expect_type_mask = BLITZ_TAG_POS_OPEN | BLITZ_TAG_POS_PHPT_CTX_LEFT;
         }
 
-        if (BLITZ_DEBUG) php_printf("-> %ld(%d)\n", expect_type_mask, i_is_open);
+        if (BLITZ_DEBUG) php_printf("-> %u(%d)\n", expect_type_mask, i_is_open);
     }
 
     tpl->static_data.n_nodes = n_nodes;
@@ -1519,9 +1516,7 @@ inline int blitz_exec_wrapper (
 {
     /* following wrappers are to be added: escape, date, gettext, something else?... */
     if (flags == BLITZ_NODE_TYPE_WRAPPER_ESCAPE) {
-        char *hint_charset = NULL;
         char *quote_str = args[1];
-        int hint_charset_len = 0;
         long quote_style = ENT_QUOTES;
         int all = 0, wrong_format = 0, quote_str_len = 0;
         
@@ -1552,7 +1547,7 @@ inline int blitz_exec_wrapper (
             return 0;
         }
 
-        *result = php_escape_html_entities(args[0], args_len[0], result_len, all, quote_style, hint_charset TSRMLS_CC);
+        *result = php_escape_html_entities(args[0], args_len[0], result_len, all, quote_style, NULL TSRMLS_CC);
     } else if (flags == BLITZ_NODE_TYPE_WRAPPER_DATE) {
 /* FIXME: make it work with Win32 */
 #ifndef PHP_WIN32
@@ -1662,8 +1657,6 @@ inline int blitz_fetch_var_by_path (
     int lexem_len,
     zval *params,
     HashTable *globals TSRMLS_DC) {
-    char *path = NULL;
-    int path_len = 0;
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
     char key[256];
     char root_found = 0;
@@ -1722,13 +1715,12 @@ inline int blitz_exec_predefined_method (
     char *tmp_buf TSRMLS_DC) {
     zval **z = NULL;
     unsigned long buf_len = 0, new_len = 0;
-    HashTable *params = NULL;
     char is_var = 0, is_var_path = 0, is_found = 0;
 
     if (node->type == BLITZ_NODE_TYPE_IF) {
         char not_empty = 0;
         int predefined = -1;
-        char i_arg = 0;
+        int i_arg = 0;
         call_arg *arg = NULL;
 
         arg = node->args;
@@ -1873,7 +1865,7 @@ inline int blitz_exec_user_method (
     unsigned char **p_result,
     unsigned long *result_len,
     unsigned long *result_alloc_len TSRMLS_DC) {
-    zval *retval = NULL, *retval_copy = NULL, *zmethod = NULL, **zparam = NULL;
+    zval *retval = NULL, *zmethod = NULL, **zparam = NULL;
     int method_res = 0;
     unsigned long buf_len = 0, new_len = 0;
     zval ***args = NULL; 
@@ -1982,7 +1974,6 @@ inline void blitz_exec_var (
     char *p_result = *result;
     int predefined = -1;
     char predefined_buf[BLITZ_PREDEFINED_BUF_LEN];
-    char is_found = 0;
 
     BLITZ_GET_PREDEFINED_VAR(tpl, lexem, lexem_len, predefined);
     if (predefined>=0) {
@@ -2029,7 +2020,6 @@ inline void blitz_exec_var_path (
     unsigned long *result_alloc_len TSRMLS_DC) {
     /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
     unsigned int lexem_len = strlen(lexem);
-    unsigned int lexem_len_p1 = lexem_len+1;
     unsigned long buf_len = 0, new_len = 0;
     char *p_result = *result;
     zval **elem = NULL;
@@ -2154,13 +2144,8 @@ int blitz_exec_nodes (
     unsigned char *p_result = NULL;
     unsigned long buf_len = 0, new_len = 0;
     unsigned long shift = 0, last_close = 0, current_open = 0;
-    unsigned long l_close_node = 0;
-    char *key = NULL;
-    unsigned int key_len = 0;
-    unsigned long key_index = 0;
     zval *parent_params = NULL;
     tpl_node_struct *node;
-    int check_key = 0;
 
     /* check parent data (once in the beginning) - user could put non-array here.  */
     /* if we use hash_find on non-array - we get segfaults. */
@@ -2178,7 +2163,7 @@ int blitz_exec_nodes (
     i_max = tpl->static_data.n_nodes;
     
     if (BLITZ_DEBUG) {
-        php_printf("BLITZ_FUNCTION blitz_exec_nodes, i_max:%ld, n_nodes = %ld\n",i_max,n_nodes);
+        php_printf("BLITZ_FUNCTION blitz_exec_nodes, i_max:%u, n_nodes = %u\n",i_max,n_nodes);
         if (parent_ctx_data) php_var_dump(&parent_ctx_data, 0 TSRMLS_CC);
         if (parent_params) php_var_dump(&parent_params, 0 TSRMLS_CC);
     }
@@ -2186,10 +2171,10 @@ int blitz_exec_nodes (
     for (; i<i_max && i_processed<n_nodes; ++i) {
         node = nodes + i;
         if (BLITZ_DEBUG)
-            php_printf("node:%s, %ld/%ld pos = %ld, lc = %ld\n",node->lexem, i, n_nodes, node->pos_begin, last_close);
+            php_printf("node:%s, %u/%u pos = %ld, lc = %ld\n",node->lexem, i, n_nodes, node->pos_begin, last_close);
 
         if (node->pos_begin<last_close) { /* not optimal: just fix for node-tree */
-            if (BLITZ_DEBUG) php_printf("SKIPPED(%ld) %ld\n", i, tpl->static_data.n_nodes);
+            if (BLITZ_DEBUG) php_printf("SKIPPED(%u) %u\n", i, tpl->static_data.n_nodes);
             continue;
         }
         current_open = node->pos_begin;
@@ -2405,8 +2390,6 @@ inline int blitz_iterate_by_path(
     char key[BLITZ_CONTEXT_PATH_MAX_LEN];
     int key_len  = 0;
     int found = 1; /* create new iteration (add new item to parent list) */
-    int res = 0;
-    long index = 0;
     int is_root = 0;
 
     k = pmax - 1;
@@ -2621,7 +2604,7 @@ int blitz_find_iteration_by_path(
     key = buffer;
 
     /* check root */
-    if (BLITZ_DEBUG) php_printf("D:-0 %s(%ld)\n", path, path_len);
+    if (BLITZ_DEBUG) php_printf("D:-0 %s(%d)\n", path, path_len);
 
     if (*p == '/' && pmax == 1) {
         if (0 == zend_hash_num_elements(Z_ARRVAL_PP(tmp))) {
@@ -2878,7 +2861,6 @@ int blitz_fetch_node_by_path(
 
 /* {{{ blitz_iterate_current(blitz_tpl *tpl TSRMLS_DC) */
 inline int blitz_iterate_current(blitz_tpl *tpl TSRMLS_DC) {
-    zval *empty_array = NULL;
 
     if (BLITZ_DEBUG) php_printf("[debug] BLITZ_FUNCTION: blitz_iterate_current, path=%s\n", tpl->current_path);
 
@@ -2988,7 +2970,6 @@ inline int blitz_merge_iterations_by_num_keys(
     char *key = NULL;
     int key_len = 0;
     long index = 0;
-    int res = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
         return 0;
@@ -3093,7 +3074,6 @@ PHP_FUNCTION(blitz_init) {
     blitz_tpl *tpl = NULL;
     unsigned int filename_len = 0;
     char *filename = NULL;
-    zval **desc = NULL;
 
     zval *new_object = NULL;
     int ret = 0;
@@ -3184,7 +3164,6 @@ PHP_FUNCTION(blitz_dump_struct) {
 PHP_FUNCTION(blitz_get_struct) {
     zval *id = NULL;
     zval **desc = NULL;
-    zval *list = NULL;
     blitz_tpl *tpl = NULL;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
@@ -3327,7 +3306,6 @@ PHP_FUNCTION(blitz_has_context) {
     blitz_tpl *tpl;
     char *path = NULL;
     int path_len = 0, norm_len = 0, current_len = 0;
-    long index = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
@@ -3367,11 +3345,6 @@ PHP_FUNCTION(blitz_parse) {
     unsigned char *result = NULL;
     unsigned long result_len = 0;
     zval *input_arr = NULL;
-    zval      **src_entry = NULL;
-    char      *string_key = NULL;
-    unsigned int      string_key_len = 0;
-    unsigned long     num_key = 0;
-    HashTable *input_ht = NULL;
     char res = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
@@ -3486,12 +3459,7 @@ PHP_FUNCTION(blitz_set) {
     zval **desc = NULL;
     blitz_tpl *tpl;
     zval *input_arr = NULL;
-    HashTable *input_ht = NULL;
-    char *key = NULL;
-    int key_len = 0;
-    long index = 0;
     int res = 0;
-    int first_key_type = 0, is_current_iteration = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
@@ -3579,11 +3547,6 @@ PHP_FUNCTION(blitz_include) {
     unsigned char *result = NULL;
     unsigned long result_len = 0;
     zval *input_arr = NULL;
-    zval **src_entry = NULL;
-    char *string_key = NULL;
-    unsigned int string_key_len = 0;
-    unsigned long num_key = 0;
-    HashTable *input_ht = NULL;
     int res = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
@@ -3743,9 +3706,6 @@ PHP_FUNCTION(blitz_clean) {
     blitz_tpl *tpl;
     char *path = NULL;
     int path_len = 0, norm_len = 0, res = 0, current_len = 0;
-    char *key = NULL;
-    int key_len = 0;
-    long index = 0;
     zval *path_iteration = NULL;
     zval *path_iteration_parent = NULL;
     zval *warn_param = NULL;
