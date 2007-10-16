@@ -41,6 +41,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
+#define BLITZ_VERSION_STRING "0.5.7-devel"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -56,55 +57,6 @@ static int le_blitz;
 
 /* internal classes: Blitz, BlitzPack */
 static zend_class_entry blitz_class_entry;
-
-/* {{{ blitz_functions[] : Blitz class */
-function_entry blitz_functions[] = {
-    PHP_FALIAS(blitz,               blitz_init,                 NULL)
-    PHP_FALIAS(load,                blitz_load,                 NULL)
-    PHP_FALIAS(dump_struct,         blitz_dump_struct,          NULL)
-    PHP_FALIAS(get_struct,          blitz_get_struct,           NULL)
-    PHP_FALIAS(dump_iterations,     blitz_dump_iterations,      NULL)
-    PHP_FALIAS(get_iterations,      blitz_get_iterations,       NULL)
-    PHP_FALIAS(get_context,         blitz_get_context,          NULL)
-    PHP_FALIAS(has_context,         blitz_has_context,          NULL)
-    PHP_FALIAS(set_global,          blitz_set_global,           NULL)
-    PHP_FALIAS(set_globals,         blitz_set_global,           NULL)
-    PHP_FALIAS(get_globals,         blitz_get_globals,          NULL)
-    PHP_FALIAS(set,                 blitz_set,                  NULL)
-    PHP_FALIAS(parse,               blitz_parse,                NULL)
-    PHP_FALIAS(include,             blitz_include,              NULL)
-    PHP_FALIAS(iterate,             blitz_iterate,              NULL)
-    PHP_FALIAS(context,             blitz_context,              NULL)
-    PHP_FALIAS(block,               blitz_block,                NULL)
-    PHP_FALIAS(fetch,               blitz_fetch,                NULL)
-    PHP_FALIAS(clean,               blitz_clean,                NULL)
-    PHP_FALIAS(dumpstruct,          blitz_dump_struct,          NULL)
-    PHP_FALIAS(getstruct,           blitz_get_struct,           NULL)
-    PHP_FALIAS(dumpiterations,      blitz_dump_iterations,      NULL)
-    PHP_FALIAS(getiterations,       blitz_get_iterations,       NULL)
-    PHP_FALIAS(hascontext,          blitz_has_context,          NULL)
-    PHP_FALIAS(getcontext,          blitz_get_context,          NULL)
-    PHP_FALIAS(setglobal,           blitz_set_global,           NULL)
-    PHP_FALIAS(setglobals,          blitz_set_global,           NULL)
-    PHP_FALIAS(getglobals,          blitz_get_globals,          NULL)
-    {NULL, NULL, NULL}
-};
-/* }}} */
-
-/* {{{ blitz_module_entry */
-zend_module_entry blitz_module_entry = {
-    STANDARD_MODULE_HEADER,
-    "blitz",
-    NULL,
-    PHP_MINIT(blitz),
-    PHP_MSHUTDOWN(blitz),
-    PHP_RINIT(blitz),        /* Replace with NULL if there's nothing to do at request start */
-    PHP_RSHUTDOWN(blitz),    /* Replace with NULL if there's nothing to do at request end */
-    PHP_MINFO(blitz),
-    NO_VERSION_YET,
-    STANDARD_MODULE_PROPERTIES
-};
-/* }}} */
 
 #ifdef COMPILE_DL_BLITZ
 ZEND_GET_MODULE(blitz)
@@ -638,91 +590,6 @@ static void php_blitz_init_globals(zend_blitz_globals *blitz_globals)
 }
 /* }}} */
 
-/* {{{ PHP_MINIT_FUNCTION */
-/**********************************************************************************************************************/
-PHP_MINIT_FUNCTION(blitz)
-/**********************************************************************************************************************/
-{
-    ZEND_INIT_MODULE_GLOBALS(blitz, php_blitz_init_globals, NULL);
-    REGISTER_INI_ENTRIES();
-    le_blitz = zend_register_list_destructors_ex(
-        blitz_resource_dtor, NULL, "blitz template", module_number);
-
-    INIT_CLASS_ENTRY(blitz_class_entry, "blitz", blitz_functions);
-    zend_register_internal_class(&blitz_class_entry TSRMLS_CC);
-
-    return SUCCESS;
-}
-/* }}} */
-
-/* {{{ PHP_MSHUTDOWN_FUNCTION */
-/**********************************************************************************************************************/
-PHP_MSHUTDOWN_FUNCTION(blitz)
-/**********************************************************************************************************************/
-{
-    UNREGISTER_INI_ENTRIES();
-    return SUCCESS;
-}
-/* }}} */
-
-/* Remove if there's nothing to do at request start */
-/* {{{ PHP_RINIT_FUNCTION */
-/**********************************************************************************************************************/
-PHP_RINIT_FUNCTION(blitz)
-/**********************************************************************************************************************/
-{
-    return SUCCESS;
-}
-/* }}} */
-
-/* {{{ PHP_RSHUTDOWN_FUNCTION */
-/**********************************************************************************************************************/
-PHP_RSHUTDOWN_FUNCTION(blitz)
-/**********************************************************************************************************************/
-{
-    return SUCCESS;
-}
-/* }}} */
-
-/* {{{ PHP_MINFO_FUNCTION */
-/**********************************************************************************************************************/
-PHP_MINFO_FUNCTION(blitz)
-/**********************************************************************************************************************/
-{
-    char *buf[2048];
-    char *node_open =  BLITZ_G(node_open);
-    char *node_close = BLITZ_G(node_close);
-    char var_prefix = (char)BLITZ_G(var_prefix);
-    char *phpt_l = BLITZ_G(phpt_ctx_left);
-    char *phpt_r = BLITZ_G(phpt_ctx_right);
-
-    php_info_print_table_start();
-    php_info_print_table_row(2, "Blitz support", "enabled");
-    php_info_print_table_row(2, "Version", "0.5.7-develko");
-    php_info_print_table_end();
-
-    DISPLAY_INI_ENTRIES();
-
-    php_info_print_table_start();
-    php_info_print_table_colspan_header(2, "Mini template HOWTO ;)");
-    snprintf((char*)buf, 2048, "%s %cvar; %s or %s %cvar %s", node_open, var_prefix, node_close, node_open, var_prefix, node_close);
-    php_info_print_table_row(2, "Varible:", buf);
-    snprintf((char*)buf, 2048, "%s %cvar; %s or %s %cvar %s", phpt_l, var_prefix, phpt_r, phpt_l, var_prefix, phpt_r);
-    php_info_print_table_row(2, "Varible (alt):", buf);
-    snprintf((char*)buf, 2048, "%s test(); %s or %s test('a',\"b\",%cc,TRUE,0) %s", node_open, node_close, node_open, var_prefix, node_close);
-    php_info_print_table_row(2, "Method:", buf);
-    snprintf((char*)buf, 2048, "%stest();%s or %stest('a',\"b\",%cc,TRUE,0)%s", phpt_l, phpt_r, phpt_l, var_prefix, phpt_r);
-    php_info_print_table_row(2, "Method (alt):", buf);
-    snprintf((char*)buf, 2048, "%s BEGIN something %s something %s END %s ", node_open, node_close, node_open, node_close);
-    php_info_print_table_row(2, "Context:", buf);
-    snprintf((char*)buf, 2048, "%sBEGIN something%s something %sEND%s ", phpt_l, phpt_r, phpt_l, phpt_r);
-    php_info_print_table_row(2, "Context (alt):", buf);
-
-    php_info_print_table_end();
-
-}
-/* }}} */
-
 // debug functions
 /* {{{ php_blitz_dump_struct_plain(blitz_tpl *tpl) */
 /**********************************************************************************************************************/
@@ -1224,7 +1091,6 @@ inline void blitz_parse_call (
     // 2DO: check arguments for wrappers (escape, date, trim)
 }
 /* }}} */
-
 
 /* {{{ get_line_number(char *str, unsigned long pos) */
 /*************************************************************************************************/
@@ -4025,6 +3891,123 @@ PHP_FUNCTION(blitz_clean) {
     RETURN_TRUE;
 }
 /* }}} */
+
+
+/* {{{ blitz_functions[] : Blitz class */
+function_entry blitz_functions[] = {
+    PHP_FALIAS(blitz,               blitz_init,                 NULL)
+    PHP_FALIAS(load,                blitz_load,                 NULL)
+    PHP_FALIAS(dump_struct,         blitz_dump_struct,          NULL)
+    PHP_FALIAS(get_struct,          blitz_get_struct,           NULL)
+    PHP_FALIAS(dump_iterations,     blitz_dump_iterations,      NULL)
+    PHP_FALIAS(get_iterations,      blitz_get_iterations,       NULL)
+    PHP_FALIAS(get_context,         blitz_get_context,          NULL)
+    PHP_FALIAS(has_context,         blitz_has_context,          NULL)
+    PHP_FALIAS(set_global,          blitz_set_global,           NULL)
+    PHP_FALIAS(set_globals,         blitz_set_global,           NULL)
+    PHP_FALIAS(get_globals,         blitz_get_globals,          NULL)
+    PHP_FALIAS(set,                 blitz_set,                  NULL)
+    PHP_FALIAS(parse,               blitz_parse,                NULL)
+    PHP_FALIAS(include,             blitz_include,              NULL)
+    PHP_FALIAS(iterate,             blitz_iterate,              NULL)
+    PHP_FALIAS(context,             blitz_context,              NULL)
+    PHP_FALIAS(block,               blitz_block,                NULL)
+    PHP_FALIAS(fetch,               blitz_fetch,                NULL)
+    PHP_FALIAS(clean,               blitz_clean,                NULL)
+    PHP_FALIAS(dumpstruct,          blitz_dump_struct,          NULL)
+    PHP_FALIAS(getstruct,           blitz_get_struct,           NULL)
+    PHP_FALIAS(dumpiterations,      blitz_dump_iterations,      NULL)
+    PHP_FALIAS(getiterations,       blitz_get_iterations,       NULL)
+    PHP_FALIAS(hascontext,          blitz_has_context,          NULL)
+    PHP_FALIAS(getcontext,          blitz_get_context,          NULL)
+    PHP_FALIAS(setglobal,           blitz_set_global,           NULL)
+    PHP_FALIAS(setglobals,          blitz_set_global,           NULL)
+    PHP_FALIAS(getglobals,          blitz_get_globals,          NULL)
+    {NULL, NULL, NULL}
+};
+/* }}} */
+
+/* {{{ PHP_MINIT_FUNCTION */
+/**********************************************************************************************************************/
+PHP_MINIT_FUNCTION(blitz)
+/**********************************************************************************************************************/
+{
+    ZEND_INIT_MODULE_GLOBALS(blitz, php_blitz_init_globals, NULL);
+    REGISTER_INI_ENTRIES();
+    le_blitz = zend_register_list_destructors_ex(
+        blitz_resource_dtor, NULL, "blitz template", module_number);
+
+    INIT_CLASS_ENTRY(blitz_class_entry, "blitz", blitz_functions);
+    zend_register_internal_class(&blitz_class_entry TSRMLS_CC);
+
+    return SUCCESS;
+}
+/* }}} */
+
+/* {{{ PHP_MSHUTDOWN_FUNCTION */
+/**********************************************************************************************************************/
+PHP_MSHUTDOWN_FUNCTION(blitz)
+/**********************************************************************************************************************/
+{
+    UNREGISTER_INI_ENTRIES();
+    return SUCCESS;
+}
+/* }}} */
+
+/* {{{ PHP_MINFO_FUNCTION */
+/**********************************************************************************************************************/
+PHP_MINFO_FUNCTION(blitz)
+/**********************************************************************************************************************/
+{
+    char *buf[2048];
+    char *node_open =  BLITZ_G(node_open);
+    char *node_close = BLITZ_G(node_close);
+    char var_prefix = (char)BLITZ_G(var_prefix);
+    char *phpt_l = BLITZ_G(phpt_ctx_left);
+    char *phpt_r = BLITZ_G(phpt_ctx_right);
+
+    php_info_print_table_start();
+    php_info_print_table_row(2, "Blitz support", "enabled");
+    php_info_print_table_row(2, "Version", BLITZ_VERSION_STRING);
+    php_info_print_table_end();
+
+    DISPLAY_INI_ENTRIES();
+
+    php_info_print_table_start();
+    php_info_print_table_colspan_header(2, "Mini template HOWTO ;)");
+    snprintf((char*)buf, 2048, "%s %cvar; %s or %s %cvar %s", node_open, var_prefix, node_close, node_open, var_prefix, node_close);
+    php_info_print_table_row(2, "Varible:", buf);
+    snprintf((char*)buf, 2048, "%s %cvar; %s or %s %cvar %s", phpt_l, var_prefix, phpt_r, phpt_l, var_prefix, phpt_r);
+    php_info_print_table_row(2, "Varible (alt):", buf);
+    snprintf((char*)buf, 2048, "%s test(); %s or %s test('a',\"b\",%cc,TRUE,0) %s", node_open, node_close, node_open, var_prefix, node_close);
+    php_info_print_table_row(2, "Method:", buf);
+    snprintf((char*)buf, 2048, "%stest();%s or %stest('a',\"b\",%cc,TRUE,0)%s", phpt_l, phpt_r, phpt_l, var_prefix, phpt_r);
+    php_info_print_table_row(2, "Method (alt):", buf);
+    snprintf((char*)buf, 2048, "%s BEGIN something %s something %s END %s ", node_open, node_close, node_open, node_close);
+    php_info_print_table_row(2, "Context:", buf);
+    snprintf((char*)buf, 2048, "%sBEGIN something%s something %sEND%s ", phpt_l, phpt_r, phpt_l, phpt_r);
+    php_info_print_table_row(2, "Context (alt):", buf);
+
+    php_info_print_table_end();
+
+}
+/* }}} */
+
+/* {{{ blitz_module_entry */
+zend_module_entry blitz_module_entry = {
+    STANDARD_MODULE_HEADER,
+    "blitz",
+    NULL,
+    PHP_MINIT(blitz),
+    PHP_MSHUTDOWN(blitz),
+    NULL,
+    NULL,
+    PHP_MINFO(blitz),
+    BLITZ_VERSION_STRING,
+    STANDARD_MODULE_PROPERTIES
+};
+/* }}} */
+
 
 /*
     2DO: useful extensions: gettext, q, qq 

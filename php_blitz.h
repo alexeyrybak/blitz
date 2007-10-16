@@ -32,30 +32,7 @@ extern zend_module_entry blitz_module_entry;
 // php interface
 PHP_MINIT_FUNCTION(blitz);
 PHP_MSHUTDOWN_FUNCTION(blitz);
-PHP_RINIT_FUNCTION(blitz);
-PHP_RSHUTDOWN_FUNCTION(blitz);
 PHP_MINFO_FUNCTION(blitz);
-
-// class Blitz
-PHP_FUNCTION(blitz_init);
-PHP_FUNCTION(blitz_load);
-PHP_FUNCTION(blitz_set);
-PHP_FUNCTION(blitz_set_global);
-PHP_FUNCTION(blitz_get_globals);
-PHP_FUNCTION(blitz_dump_struct);
-PHP_FUNCTION(blitz_get_struct);
-PHP_FUNCTION(blitz_dump_iterations);
-PHP_FUNCTION(blitz_get_iterations);
-PHP_FUNCTION(blitz_get_context);
-PHP_FUNCTION(blitz_has_context);
-PHP_FUNCTION(blitz_parse);
-PHP_FUNCTION(blitz_parse_new);
-PHP_FUNCTION(blitz_include);
-PHP_FUNCTION(blitz_iterate);
-PHP_FUNCTION(blitz_context);
-PHP_FUNCTION(blitz_block);
-PHP_FUNCTION(blitz_fetch);
-PHP_FUNCTION(blitz_clean);
 
 ZEND_BEGIN_MODULE_GLOBALS(blitz)
 	long  var_prefix;
