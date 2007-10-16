@@ -10,8 +10,6 @@
 .#*
 .deps
 .libs
-Debug
-Debug_TS
 Makefile
 Makefile.fragments
 Makefile.global
