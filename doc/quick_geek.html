@@ -1,0 +1,294 @@
+<html><head></head>
+<body>
+
+<h1>Quick Geek Blitz tutorial</h1>
+
+<pre>
+
+1. Hello, world!
+
+Having a template.tpl file:
+  Hello, {{ $name }}!
+
+and a script
+  $T = new Blitz('template.tpl');
+  echo $T-&gt;parse(array('name' =&gt; 'world'));
+
+you can produce probably the most dummy message in the world. 
+
+2. Loading body for quick tests
+
+To write tests quickly you can load text 
+strings as template body:
+  $T = new Blitz();
+  $T-&gt;load('Hello, {{ $name }}!');
+  echo $T-&gt;parse(array('name' =&gt; 'world'));
+
+3. MVC
+
+The "view" component of your application will be built by
+templates and template controllers. Template is an HTML file with
+some very simple syntax. No complex code mixed with HTML. 
+Controller is a template logic master, an instance of Blitz 
+class which operates template from opening to the final result. 
+Template controller is not your application controller which 
+stands for "C" in MVC. 
+
+No HTML code inside template controller is needed. 
+For a long historical reasons execution method was called "parse". 
+
+4. Template tags
+
+Every template code must be placed between basic tags "{{" and "}}" or 
+alternative tags "&lt;!-- " and " --&gt;". You can configure this, see 
+the details on a full documentation page.
+
+5. Template variables
+
+The following code will be replaced by a 'var' variable: {{ $var }}
+
+6. Including templates from another template
+
+To include another template say {{ include('some.tpl') }}
+
+7. Blocks or contexts
+
+Block is a part of template which can be populated on demand but 
+hidden by default: 
+  hello {{  BEGIN block }} {{ $name }} {{ END }}
+
+This template will produce just a "hello " string by default, 
+and block will be hidden. The following code will affect the block:
+
+  $T = new Blitz('some.tpl');
+  $T-&gt;block('/block', array('name' =&gt; 'Dude'));
+  echo $T-&gt;parse();
+
+This will output "hello  Dude ".
+Blocks are also referred as contexts. An execution of block is 
+called iteration. 
+
+To make the code simpler to read one can put a block name after END 
+statement: {{ END block }}. 
+
+8. Producing lists
+
+Every block can be iterated several times giving a basic way to deal with lists:
+  foreach (array('Dude', 'Sobchak', 'Donny') as $i_name) {
+      $T-&gt;block('/block', array('name' =&gt; $i_name);
+  }
+Being placed instead of a single block call in the p.7 example this will output
+"Hello  Dude  Donny  Sobchak "
+
+9. Context paths
+
+Every block is identified by it's path like /block. A block placed inside 
+another has path /parent/child. Even things like '../../some/path' work.
+
+10. Logic
+
+To make an example closer to the real life let's output comma separated list.
+There are two ways of doing it: using blocks or using if statement. 
+At first you can do a special separator block:
+  hello {{ BEGIN block }}{{ BEGIN comma }},{{ END }} {{ $name }} {{ END }}
+
+and iterate it in a loop when needed:
+     
+  $need_comma = FALSE;
+  foreach (array('Dude', 'Sobchak', 'Donny') as $i_name) {
+     if ($need_comma) {
+         $T-&gt;block('/block/comma');
+     } else 
+         $need_comma = TRUE;
+     }
+     $T-&gt;block('/block', array('name' =&gt; $i_name);
+  }
+
+As you can see all the logic is located in a controller code, not 
+in template. The reason is that even presentation level code tends 
+to be complex in a big project and having this code in HTML templates will 
+make your templates look like damned spaghetti. When logic is very simple 
+you can use a very basic "if" statement to make things easier.
+
+11. If statement in templates 
+
+Sometimes iterating blocks like comma is annoying. Use if in trivial cases:
+  hello {{ BEGIN block }}{{ if($_first,'',',') }} {{ $name }} {{ END }}.
+
+You can use any variable name instead of $_first but then you need 
+to set this variable manually from controller. $_first is a predefined 
+variable, equal to 1 when it's the first block iteration and 0 otherwise.
+Other predefined loop variables are: $_last, $_total, $_num, $_even, $_odd.
+Most of these variables have clear meaning, $_total is a number of context 
+iterations and $_num is a current number starting with 1, $_even and $_odd 
+are 1 or 0  depending on if the current iteration is even or odd.
+
+Other valid if statements are:
+{{ if(TRUE,'2+2=4','2+2=5'); }}
+{{ if($a,"b",$c); }}
+
+12. Context and iterate methods.
+
+Block method can be replaced by a combination of three low-level methods: 
+context, set and iterate. Context method takes a single argument, 
+a full or relative context path, 
+and sets this path as default. All further sets and relative path 
+calculations will use this path. And iterate method just executes the block:
+  $T-&gt;context('/block');
+  foreach (array('Dude', 'Sobchak', 'Donny') as $i_name) {
+      $T-&gt;iterate();
+      $T-&gt;set(array('name' =&gt; $i_name));
+  }
+
+This example is equivalent to the previous one.
+Context method works like a cd command in your console. 
+Iterate call populates the block.
+Using block method is easier, but in a lot of cases you will 
+need low-level operations with context and iterate.
+
+13. Everything is iteration 
+
+Switch on you math. Every template state can be described 
+by a specific iterations data structure. If you add the following 
+code in the end of previous example:
+$data = $T-&gt;getIterations();
+you will get something like this in $data:
+array(
+    0 =&gt; array(
+        'block' =&gt; array(
+             0 =&gt; array('name' =&gt; 'Dude'),
+             1 =&gt; array('name' =&gt; 'Sobchak'),
+             2 =&gt; array('name' =&gt; 'Donny')
+         )
+    ),
+)
+
+This is an internal template state just before the parse call. 
+The whole template was iterated once, that's why it has 
+array(array(...)) structure. In a signle template
+iteration context with path /block is iterated three times with
+corresponding name variable. 
+
+Whatever you do with templates using block, set, iterate, 
+context methods - blitz works on this data structure. When you call
+parse - blitz executes templates according to the iterations set
+structure. Practice with different calls and read iteration dump to 
+debug your code quickly.
+
+14. Complex sets
+
+To get the final point of iterations see the code below:
+    $data = array(
+        0 =&gt; array(
+            'block' =&gt; array(
+                 0 =&gt; array('name' =&gt; 'Dude'),
+                 1 =&gt; array('name' =&gt; 'Sobchak'),
+                 2 =&gt; array('name' =&gt; 'Donny')
+             )
+        ),
+    );
+
+    $T = new Blitz('some.tpl');
+    echo $T-&gt;parse($data);
+
+some.tpl:
+{{ BEGIN block }}{{ if($_first,'',',') }} {{ $name }} {{ END }}
+
+This code will produce the same result as in pp. 10-12. 
+And this doesn't use any context/block/iterate call. 
+Parse just accepts the whole iteration set. You can use complex sets 
+like this for all the situations. This will be very fast but probably not very 
+clear sometimes. 
+
+15. Nested iterations
+
+Everything is iteration. Nested blocks? Sure:
+    $data = array(
+        array(
+            'who' =&gt; 'soldiers',
+            'what' =&gt; array(
+                0 =&gt; array(
+                    'verb' =&gt; 'going',
+                    'details' =&gt; array(
+                        0 =&gt; array('item' =&gt; 'nowhere'),
+                    )
+                ),
+                1 =&gt; array(
+                    'verb' =&gt; 'blinded',
+                    'details' =&gt; array(
+                        0 =&gt; array('item' =&gt; 'by'),
+                        1 =&gt; array('item' =&gt; 'their'),
+                        2 =&gt; array('item' =&gt; 'faith')
+                    )
+                )
+            )
+        )
+    );
+
+    $T = new Blitz();
+    $T-&gt;load('{{ $who }} {{ BEGIN what }}{{ $verb }} {{ BEGIN details }}{{ $item }} {{ END }}{{ END }}');
+    $T-&gt;set($data);
+    echo $T-&gt;parse();
+
+this will produce:
+soldiers going nowhere blinded by their faith
+
+When you understand how it works - you will fully understand
+contexts and iterations.
+ 
+16. Fetching
+
+Sometimes you want to use blocks from your template independently.
+Executing a part of template is done by fetch.
+some.tpl:
+{{ BEGIN hello }} hello, {{ $name }} {{ END }}
+{{ BEGIN bye }} bye, {{ $name }} {{ END }}
+
+code:
+echo $T-&gt;fetch('/hello', array('name' =&gt; 'Lena')); // hello, Lena
+echo $T-&gt;fetch('/bye', array('name' =&gt; 'Sveta')); // bye, Sveta
+ 
+
+17. Extending templates
+
+Extending templates rocks.
+Any code like {{ some($a, "foo", 'bar', TRUE, 2005); }} means 
+that you call a controller method "some" passing corresponding variables to it.
+Just extend a blitz class and define the method:
+
+  class View extends Blitz {
+      function my_test($a) {
+          return 'user method called ('.__CLASS__.','.__LINE__.'), a = '.$a;
+      }
+  }
+
+  $T = new View();
+  $T-&gt;load('user method call test: {{ my_test("test") }}');
+  echo $T-&gt;parse();
+
+This code will output
+user method call test: user method called (blitztemplate,5), a = test
+
+Extend templates to encapsulate parts of the logic. Overloading methods 
+in controllers gives a basic approach to template inheritance.
+
+18. Congratulations!
+
+This was a quick and simple tutorial that shows the basics. This doesn't 
+cover lot of other things. To learn more refer to the full documentation
+from the tar ball or see it online at
+http://alexeyrybak.com/blitz/blitz_en.html.
+
+This tutorial was written for Blitz versions higher than 0.5.1. 
+If you use previous versions of Blitz the only difference is that 
+parse method can accept only global variables, no iteration set. To make 
+all of the examples works one should replace "echo parse($data);" 
+by two calls:
+set($data);
+echo parse();
+
+Have a lot of fun!
+
+</pre>
+
+</body></html>

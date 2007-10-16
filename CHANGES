@@ -1,0 +1,279 @@
+===================================================================================================
+0.5.7-devel version 15 Oct 2007
+===================================================================================================
+Code clean-up: a part of "static" template structure (which doesn't depend on iterations) was
+put into a separate attrubute calles static_data. This will help with caching issues in the future.
+
+===================================================================================================
+0.5.6 version 24 Sent 2007
+===================================================================================================
+Bug#80 (if works incorrectly with undefined vars as predicate) was fixed.
+
+===================================================================================================
+0.5.5 version 29 August 2007
+===================================================================================================
+Lots of code cleanup was done. Experimental pack support was removed. Reading templates by mmap
+was switched off by default. 
+
+===================================================================================================
+0.5.4 version 20 August 2007
+===================================================================================================
+Segfault when accessing uninitialized memory was fixed (bug#76). 
+
+===================================================================================================
+0.5.3 version 20 August 2007
+===================================================================================================
+Variable path ($hash.key.whatever.else, $obj.property.whatever.else) support was added. 
+Each '.' points to a hash->value or object->property relation, both can be mixed in any way in 
+varible path. This should work for any variable, global and local, 
+in any place including user/predefined method arguments. Therefore setGlobals/set_globals may accept
+non-scalar key values to make things like $config.param work, so optional second parameter 
+warn_non_scalar became obsolete and was removed. See examples in tests/var_path.phpt. Tests were 
+updated, they should work correctly in any environment (there were problems with file paths in
+previous versions).
+
+===================================================================================================
+0.5.2 version 16 August 2007
+===================================================================================================
+TS & Win32 compilation fixes. Iniitialization varible 'blitz.path' support was added. When is't 
+not empty all the filenames will be prefixed by this value if filename doesn't start with '/'.
+
+===================================================================================================
+0.5.1 version 12 August 2007
+===================================================================================================
+Lots of code cleanup was done. "parse" and "include" methods were improved, their "vars" argument 
+is not a globals array anymore (old API), now it's just an arbitrary iteration set and both methods
+comply with set/block/fetch. Templates included by "include" method from PHP code inherit globals 
+from caller automatically. Corresponding tests were updated. A new article was added to the docs, 
+"Quick Geek Blitz Tutorial", which is addressed to those professionals who want to get maximum 
+information about API in a minimum of time.
+
+===================================================================================================
+0.4.25 version 03 August 2007
+===================================================================================================
+Predefined loop variables were added: $_total, $_num, $_even, $_odd, $_first, $_last - they can be 
+used in any context. Variable $_total is the total number of context iterations, $_num is the 
+current iteration number starting with 1, $_even and $_odd are 1 when the current 
+iteration is even or odd and 0 otherwise, $_first and $_last are 1 when the current
+iteration is first or last and 0 otherwise. Fixed bug#68 (nonexistant context iteration "cleans" 
+previous data set in the root iteration). Fixed bug#69 (problems with date() function tests and 
+optional second parameter).
+
+===================================================================================================
+0.4.24 version 28 July 2007
+===================================================================================================
+Predefined include method was improved: any include from template will use internal template 
+cache (in previos versions this cache worked for controller include method only). 
+"Context" method returns current context path, and new getContext/get_context method was added 
+for the same purpose. Additional minor fixes were made, most of them related to win32 and 
+multi-threaded issues. Some tests were updated and new tests were added.
+
+===================================================================================================
+0.4.23 version 22 July 2007
+===================================================================================================
+Very important include-related changes were made.
+A template included by the "include" directive (not include method) will
+inherit current context iterations. When you set
+array('test' => array('var' => 'value')) into the root context
+of a template which includes another template with a context named 'test',
+this 'test 'context will be iterated with params from the parent template. 
+To make this work properly, one have to use an additional non-empty 
+parameter "iterate_nonexistant" (TRUE, 1, 'Yes' - whatever) in parent "iterate" 
+or "block" calls, because normally non-existant contexts are not iterated 
+since 0.4.20 (otherwise iterating non-existant contexts will automatically 
+iterate the whole path). See tests/include_ctx.phpt for example. Additionally if we have a 
+mix of numerical and non-numerical keys in iteration set a warning will be generated 
+and non-numerical keys will be skipped. Several new tests were added and other minor 
+fixes were made.
+
+===================================================================================================
+0.4.22 version 12 July 2007
+===================================================================================================
+Block method semantics was extended: one can use block($data) instead of block(NULL,$data)
+to iterate current context. Set method can accept arrays with numerical keys to 
+set several root iterations simultaneously. Basic template examples were added to php_info(). 
+A couple of new tests were added. 
+
+===================================================================================================
+0.4.21 version 09 July 2007
+===================================================================================================
+Minor fetch bugfixes were made.
+
+===================================================================================================
+0.4.20 version 08 July 2007
+===================================================================================================
+Starting from this version Blitz "officially" supports lite variables assigning. One had to use
+a "list" of arrays (array with numerical keys and array values) to set context iterations in previous 
+versions. Now it's possible to use a "hash" of scalar/array values (array with string keys 
+for variables or block iterations) for a single iteration - this makes the code much more clear. 
+To have a single iteration of a context named "block", assigning a variable $var = "value", 
+one can just say $data['block']['var'] = 'value' and then $View->set($data). This also worked 
+in previos versions but in some cases like fetch this caused a segfault - now it's fixed. 
+Additionally two minor bugs were fixed: current path is not iterated when iterating 
+a nonexistent path, and there is no first empty iteration when the whole template is iterated 
+cyclically by a root path '/'.
+
+===================================================================================================
+0.4.19 version 03 July 2007
+===================================================================================================
+New API methods getIterations/get_iterations and getGlobals/get_globals 
+were added to get assigned template variables. Method alias setGlobals/set_globals 
+for setGlobal/set_global was added to improve naming style (setGlobal/set_global still works). 
+A bug in getStruct was fixed: nodes with errors are not returned. Alternative tags "<!--" and "-->" 
+were extended by additional whitespace, new values are "<!-- " and " -->" (please convert your 
+templates if you were using something like "<!--begin context-->").
+
+===================================================================================================
+0.4.18 version 23 June 2007
+===================================================================================================
+Bug #44 (naming conflicts) was fixed. getStruct()/get_struct() method was added to extend 
+php_templates compatibility (getStruct method is a partial analog for the tmpl_structure function 
+from php_templates extension, see samples/get_struct.php).
+
+===================================================================================================
+0.4.17 version 25 May 2007
+===================================================================================================
+Minor template parsing fixes were made (bugs## 40,41).
+
+===================================================================================================
+0.4.16 version 12 May 2007
+===================================================================================================
+Minor template parsing fixes were made.
+
+===================================================================================================
+0.4.15 version 1 May 2007. С праздником, товарищи! Коси и забивай.
+===================================================================================================
+A segfault which occurred when undefined variables were used in output wrapper was fixed. 
+Minor changes in tests and examples were made.
+
+===================================================================================================
+0.4.14 version 28 Apr 2007
+===================================================================================================
+Documentation was updated. Minor php_templates compability fix: function calls without 
+brackets are treated as variables with the same name by default. 
+
+===================================================================================================
+0.4.13 version 1 Apr 2007
+===================================================================================================
+Minor fixes in output wrappers were made (template syntax check was corrected,
+ENT_NOQUOTES support added to "escape" method, default time for "date" method
+is current time). Corresponding tests were updated.
+
+===================================================================================================
+0.4.12-1 version 31 Mar 2007
+===================================================================================================
+A segfault which occurred when variables are set into root context after clean/fetch 
+operations was fixed.
+
+===================================================================================================
+0.4.12 version 31 Mar 2007
+===================================================================================================
+changes in "clean" method were made:
+- "clean" removes all context iterations, not the latest one
+- "clean" accepts second boolean parameter which says if blitz will throw PHP-warnings 
+  when cleaning iteration is not found: $View->clean($path = '/', $warn_notfound = TRUE). 
+  This parameter is TRUE by default.
+
+Win32 compilation fixes (php_var_dump, php_parse_date) 
+
+===================================================================================================
+0.4.11 version 25 Mar 2007
+===================================================================================================
+A new output wrapper "date" was added: {{ date([FORMAT], $arg); }} will return a string formatted 
+according to the given format string. When $arg is numerical, it is treated as UNIX timestamp integer. 
+Otherwise $arg is parsed using internal PHP function "php_parse_date" which recognize a lot of date 
+formats. Format string has the same conversion specifiers as PHP function "strftime".
+
+Output wrapper "escape" was extended: {{ escape($arg) }} will use ENT_QUOTES quoting style by 
+default, while {{ escape($a, "ENT_COMPAT") }} will use ENT_COMPAT.
+
+===================================================================================================
+0.4.10 version 19 Mar 2007
+===================================================================================================
+- Clean method was added: $Tpl->clean($path) cleans up context iterations and parameters which were
+  made previously. Parameter $path is "root" by default ('/'): $Tpl->clean() with no parameter
+  will unset all template varibales and iterations.
+- Minor parsing fixes were made (long HTML comments treated as alternative tags
+  could cause "lexem is too long" warning since 0.4.4 version).
+
+===================================================================================================
+0.4.9. version 17 Mar 2007
+===================================================================================================
+- minor parsing fixes were made (context name for alternative END-tag is optional without 
+any syntax warning)
+
+===================================================================================================
+0.4.8. version 13 Mar 2007
+===================================================================================================
+- non-brackets format method fix: {{ test }}
+
+===================================================================================================
+0.4.7 version 11 Mar 2007
+===================================================================================================
+- segfault on alternative context parsing fixed (HTML comments started with 
+non-alpha-numeric characters)
+
+===================================================================================================
+0.4.6 version 27 Feb 2007
+===================================================================================================
+- syntax warning for HTML comments in alternative context format 
+  mode (<!-- BEGIN ctx --> ... <!-- END ctx -->) was fixed 
+
+===================================================================================================
+0.4.5 version, 25 Feb 2007
+===================================================================================================
+- internal escape output wrapper was added: {{ escape($a); }}, 
+  escape($a) works exactly like htmlspecialchars($a, ENT_QUOTES);
+
+===================================================================================================
+0.4.4 version, 11 Feb 2007
+===================================================================================================
+- [VERY IMPORTANT] lower/upper case policy changed. 
+  varible and context names are case sensitive, method names - not.
+- commonly used context format compatibility added: <!-- BEGIN ctx --> ... <!-- END ctx -->
+- other minor fixes
+
+===================================================================================================
+0.4.3 version, 10 Dec 2006 
+===================================================================================================
+- bugfix#11: warning when calling undefined user method from template
+- feature request#1: logical values in templates 
+- feature request#2: END tag can be followed by any text {{ END some_template_name }}
+- bugfix#10: win32 compilation errors
+
+===================================================================================================
+0.4.2 version, 27 Nov 2006
+===================================================================================================
+- bugfix #3: occasionally uninitialized pargs element in user method call 
+- bugfix #7: occasionally uninitialized parent_ctx_data in blitz_exec_nodes 
+- fetch: cleans-up latest iteration automatically
+
+===================================================================================================
+0.4.1 version
+===================================================================================================
+- several context/iterate fixes (logical, very important Dick's issues)
+- added has_context function
+- removed dump_set function (dump_iterations can be used instead)
+- removed pack-features for win32 (this code needs to be rewritten)
+- OOP-style function aliases dumpStruct, dumpIterations,  hasContext, setGlobal
+- new tests added, all tests are compatible with PHP5 now 
+- ini-params renamed, they are: var_prefix, tag_open, tag_close ("tag", not "node")
+- case insensitivity for contexts added
+- non-string objects returning from user methods are converted to strings
+- my_method() is a valid call now (nothing in brackets)
+- load(NULL) segfault fixed
+- passing wrong parameters to iterate/parse (arrays are of wrong format) fixed
+- dynamical realloc in blitz_analyze (segfault on big templates fix)
+- segfaults on user method calling (method throws an exception, returned value corruption)
+- empty template is not analyzed, and no warning is shown
+- line/number border-value fixes in error messages 
+- TSRM-related & win32 compilation fixes
+- clean-up of passing arguments to user methods corrected
+
+===================================================================================================
+0.4.0 version 
+===================================================================================================
+- context-related functionality added (context, iterate, block, fetch, set_globals)
+- human-readable errors (syntax, internal etc)
+- dump functions for debugging: dump_struct, dump_set, dump_iterations
+- T-cache (packed templates)

@@ -1,0 +1,5 @@
+ARG_ENABLE("blitz", "Enable blitz support", "no");
+
+if (PHP_BLITZ != "no") {
+	EXTENSION('blitz', 'blitz.c');
+}

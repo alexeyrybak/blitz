@@ -1,0 +1,48 @@
+body
+{
+	background: #FFFFFF;
+}
+
+span.term
+{
+	font-weight: bold;
+}
+
+div.sidebar
+{
+	background: #F0F0F0;
+	border: 1px solid gray;
+	padding: 5px;
+	margin: 20px;
+}
+
+pre.programlisting
+{
+	background: #F0F0F0;
+	padding: 2px;
+	font-size: 10pt;
+	white-space: pre;
+}
+
+p
+{
+	text-align: justify;
+	text-indent: 1.5em;
+}
+
+.implication
+{
+	text-decoration: line-through;
+}
+
+.command
+{
+	font-weight: normal;
+}
+
+.abstract em
+{
+	font-weight: bold;
+	font-size: 125%;
+	font-style: normal;
+}

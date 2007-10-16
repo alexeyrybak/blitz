@@ -1,0 +1,4 @@
+{{BEGIN counter}}
+    {{$i}},
+{{END}}
+
