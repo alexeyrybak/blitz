@@ -104,8 +104,8 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_NODE_TYPE_IF              (1<<2 | BLITZ_TYPE_METHOD)
 #define BLITZ_NODE_TYPE_INCLUDE         (2<<2 | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_BEGIN           (3<<2 | BLITZ_TYPE_METHOD) // non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT
-#define BLITZ_NODE_TYPE_END             (4<<2 | BLITZ_TYPE_METHOD) // non-finalized node - will be removed after parsing
+#define BLITZ_NODE_TYPE_BEGIN           (3<<2 | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
+#define BLITZ_NODE_TYPE_END             (4<<2 | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
 #define BLITZ_NODE_TYPE_CONTEXT         (5<<2 | BLITZ_TYPE_METHOD)
 #define BLITZ_NODE_TYPE_WRAPPER         (6<<2 | BLITZ_TYPE_METHOD)
 
@@ -225,13 +225,13 @@ typedef struct _blitz_tpl {
     char flags;
     HashTable *hash_globals;
     zval *iterations;
-    zval **current_iteration;  // current iteraion values
-    zval **last_iteration;     // latest iteration - used in combined iterate+set methods 
-    zval **current_iteration_parent; // list of current context iterations (current_iteration is last element in this list)
+    zval **current_iteration;  /* current iteraion values */
+    zval **last_iteration;     /* latest iteration - used in combined iterate+set methods  */
+    zval **current_iteration_parent; /* list of current context iterations (current_iteration is last element in this list) */
     char *current_path;
     char *tmp_buf;
-    HashTable *ht_tpl_name; // index template_name -> itpl_list number
-    struct _blitz_tpl **itpl_list; // list of included templates
+    HashTable *ht_tpl_name; /* index template_name -> itpl_list number */
+    struct _blitz_tpl **itpl_list; /* list of included templates */
     unsigned int itpl_list_alloc;
     unsigned int itpl_list_len;
     unsigned int loop_stack_level;
@@ -240,12 +240,12 @@ typedef struct _blitz_tpl {
 
 /* call scanner */
 
-#define BLITZ_ISNUM_MIN                48  // '0'
-#define BLITZ_ISNUM_MAX                57  // '9'
-#define BLITZ_ISALPHA_SMALL_MIN        97  // 'a'
-#define BLITZ_ISALPHA_SMALL_MAX        122 // 'z'
-#define BLITZ_ISALPHA_BIG_MIN          65  // 'A'
-#define BLITZ_ISALPHA_BIG_MAX          90  // 'Z'
+#define BLITZ_ISNUM_MIN                48  /* '0' */
+#define BLITZ_ISNUM_MAX                57  /* '9' */
+#define BLITZ_ISALPHA_SMALL_MIN        97  /* 'a' */
+#define BLITZ_ISALPHA_SMALL_MAX        122 /* 'z' */
+#define BLITZ_ISALPHA_BIG_MIN          65  /* 'A' */
+#define BLITZ_ISALPHA_BIG_MAX          90  /* 'Z' */
 
 #define BLITZ_SKIP_BLANK(c,len,pos)                                            \
     len = 0;                                                                   \
