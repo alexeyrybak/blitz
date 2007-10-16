@@ -130,10 +130,9 @@ inline int blitz_read_with_fread(blitz_tpl *tpl, char *filename TSRMLS_DC) {
         return 0; 
     }
 
-    if (!(stream = fopen(filename, "rb"))) { 
-        php_error_docref(NULL TSRMLS_CC, E_ERROR, 
-            "unable to open file %s", filename 
-        ); 
+    /* VCWD_FOPEN() fixes problems with relative paths in multithreaded environments */
+    if (!(stream = VCWD_FOPEN(filename, "rb"))) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open file %s", filename); 
         return 0;
     }
 
@@ -348,8 +347,6 @@ blitz_tpl *blitz_init_tpl(
 
 /* 
 It seems to be 10% faster to use just fread or mmap than streams on lebowski-bench. 
-However under win32 there are errors with relative paths and fread, 
-I didn't checked why yet ;) See php_blitz.h for BLITZ_USE_STREAMS definition.
 */
 
 #ifdef BLITZ_USE_STREAMS
