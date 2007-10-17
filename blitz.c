@@ -160,17 +160,12 @@ inline int blitz_read_with_mmap(blitz_tpl *tpl, char *filename TSRMLS_DC) {
     }
 
     if (-1 == (fd = open(filename, 0))) {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR,
-            "unable to open file %s", filename
-        );
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open file %s", filename);
         return 0;
     }
 
    if (-1 == fstat(fd, &stat_info)) {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR,
-            "unable to open file %s", filename
-        );
-
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open file %s", filename);
         return 0;
     }
 
@@ -193,30 +188,16 @@ inline int blitz_read_with_mmap(blitz_tpl *tpl, char *filename TSRMLS_DC) {
 /* }}} */
 
 /*  {{{ blitz_init_tpl_base */
-blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC){
-    blitz_tpl *tpl = (blitz_tpl*)emalloc(sizeof(blitz_tpl));
-
-    if (!tpl) {
-        php_error_docref(
-            NULL TSRMLS_CC, E_ERROR,
-            "INTERNAL ERROR: unable to allocate memory for blitz template structure"
-        );
-        return NULL;
-    }
+blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC)
+{
+    blitz_tpl *tpl = ecalloc(1, sizeof(blitz_tpl));
 
     tpl->static_data.name = NULL;
     tpl->static_data.body = NULL;
 
     tpl->flags = 0;
     tpl->static_data.n_nodes = 0;
-    tpl->static_data.config = (tpl_config_struct*)emalloc(sizeof(tpl_config_struct));
-    if (!tpl->static_data.config) {
-        php_error_docref(
-            NULL TSRMLS_CC, E_ERROR,
-            "INTERNAL ERROR: unable to allocate memory for blitz template config structure"
-        );
-        return NULL;
-    }
+    tpl->static_data.config = ecalloc(1, sizeof(tpl_config_struct));
 
     tpl->static_data.config->open_node = BLITZ_G(node_open);
     tpl->static_data.config->close_node = BLITZ_G(node_close);
@@ -255,17 +236,7 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC){
     if (globals == NULL) { 
         tpl->hash_globals = NULL;
         ALLOC_HASHTABLE(tpl->hash_globals);
-
-        if (
-            !tpl->hash_globals 
-            || (FAILURE == zend_hash_init(tpl->hash_globals, 8, NULL, ZVAL_PTR_DTOR, 0))
-        ) {
-            php_error_docref(
-                NULL TSRMLS_CC, E_ERROR,
-                "INTERNAL ERROR: unable to allocate or fill memory for blitz params"
-            );
-            return NULL;
-        }
+        zend_hash_init(tpl->hash_globals, 8, NULL, ZVAL_PTR_DTOR, 0);
     } else {
         /* 
            "Inherit" globals from opener, used for includes. Just make a copy mark template
@@ -277,26 +248,9 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC){
 
     tpl->ht_tpl_name = NULL;
     ALLOC_HASHTABLE(tpl->ht_tpl_name);
-    if (
-        !tpl->ht_tpl_name
-        || (FAILURE == zend_hash_init(tpl->ht_tpl_name, 8, NULL, ZVAL_PTR_DTOR, 0))
-    ) {
-        php_error_docref(
-            NULL TSRMLS_CC, E_ERROR,
-            "INTERNAL ERROR: unable to allocate or fill memory for blitz template index"
-        );
-        return NULL;
-    }
+    zend_hash_init(tpl->ht_tpl_name, 8, NULL, ZVAL_PTR_DTOR, 0);
 
-    tpl->itpl_list = 
-        (blitz_tpl**)emalloc(BLITZ_ITPL_ALLOC_INIT*sizeof(blitz_tpl*));
-    if (!tpl->itpl_list) {
-        php_error_docref(
-            NULL TSRMLS_CC, E_ERROR,
-            "INTERNAL ERROR: unable to allocate memory for inner-include blitz template list"
-        );
-        return NULL;
-    }
+    tpl->itpl_list = ecalloc(BLITZ_ITPL_ALLOC_INIT, sizeof(blitz_tpl*));
     tpl->itpl_list_len = 0;
     tpl->itpl_list_alloc = BLITZ_ITPL_ALLOC_INIT;
 
@@ -335,8 +289,7 @@ blitz_tpl *blitz_init_tpl(char *filename, int filename_len, HashTable *globals, 
         global_path_len = strlen(global_path);
         if (global_path_len) {
             if (global_path_len + filename_len > BLITZ_FILE_PATH_MAX_LEN) {
-                php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                    "INTERNAL ERROR: file path is too long, increase BLITZ_MAX_FILE_PATH");
+                php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long, increase BLITZ_MAX_FILE_PATH");
                 return NULL;
             }
             filename_normalized = normalized_buf;
@@ -1148,12 +1101,6 @@ inline int add_child_to_parent(
     }
 
     if (n_alloc>0) {
-        if (!parent->children) {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                "INTERNAL ERROR: unable to allocate memory for children"
-            );
-            return 0;
-        }
         parent->n_children_alloc = n_alloc;
     }
 
@@ -2309,14 +2256,14 @@ inline int blitz_normalize_path(char **dest, char *local, int local_len, char *g
 
     if (local_len && local[0] == '/') {
         if (local_len+1>BLITZ_CONTEXT_PATH_MAX_LEN) {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR,"context path %s is too long (limit %d)",local,BLITZ_CONTEXT_PATH_MAX_LEN);
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "context path %s is too long (limit %d)",local,BLITZ_CONTEXT_PATH_MAX_LEN);
             return 0;
         }
         memcpy(buf, local, local_len+1);
         buf_len = local_len;
     } else {
         if (local_len + global_len + 2 > BLITZ_CONTEXT_PATH_MAX_LEN) {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR,"context path %s is too long (limit %d)",local,BLITZ_CONTEXT_PATH_MAX_LEN);
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "context path %s is too long (limit %d)",local,BLITZ_CONTEXT_PATH_MAX_LEN);
             return 0;
         }
 
@@ -2421,8 +2368,6 @@ inline int blitz_iterate_by_path(
                 }
             }
         } else {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                "INTERNAL ERROR: zend_hash_get_current_data failed (0) in blitz_iterate_by_path");
             return 0;
         }
         return 1;
@@ -2446,8 +2391,6 @@ inline int blitz_iterate_by_path(
                 array_init(empty_array);
                 add_next_index_zval(*tmp,empty_array);
                 if (SUCCESS != zend_hash_get_current_data(Z_ARRVAL_PP(tmp), (void **) &tmp)) {
-                    php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                        "INTERNAL ERROR: zend_hash_get_current_data failed (1) in blitz_iterate_by_path");
                     return 0;
                 }
                 if (BLITZ_DEBUG) {
@@ -2498,15 +2441,11 @@ inline int blitz_iterate_by_path(
                 /* 2DO: getting tmp and current_iteration_parent can be done by 1 call of zend_hash_get_current_data */
                 if (is_current_iteration) {
                     if (SUCCESS != zend_hash_get_current_data(Z_ARRVAL_PP(tmp), (void **) &tpl->current_iteration_parent)) {
-                        php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                            "INTERNAL ERROR: zend_hash_get_current_data failed (2) in blitz_iterate_by_path");
                         return 0;
                     }
                 }
 
                 if (SUCCESS != zend_hash_get_current_data(Z_ARRVAL_PP(tmp), (void **) &tmp)) {
-                    php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                        "INTERNAL ERROR: zend_hash_get_current_data failed (3) in blitz_iterate_by_path");
                     return 0;
                 }
 
@@ -2748,11 +2687,7 @@ int blitz_build_fetch_index(blitz_tpl *tpl TSRMLS_DC) {
     tpl_node_struct *i_node = NULL;
 
     ALLOC_HASHTABLE(tpl->static_data.fetch_index);
-
-    if (!tpl->static_data.fetch_index || (FAILURE == zend_hash_init(tpl->static_data.fetch_index, 8, NULL, ZVAL_PTR_DTOR, 0))) {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR, "INTERNAL ERROR: unable to allocate or fill memory for blitz fetch index");
-        return 0;
-    }
+    zend_hash_init(tpl->static_data.fetch_index, 8, NULL, ZVAL_PTR_DTOR, 0);
 
     for (i=0;i<tpl->static_data.n_nodes;i++) {
         i_node = tpl->static_data.nodes + i;
@@ -3037,9 +2972,7 @@ inline int blitz_merge_iterations_set (
         res = blitz_merge_iterations_by_str_keys(target_iteration, input_arr TSRMLS_CC);
     } else {
         if (!tpl->current_iteration_parent) {
-            php_error_docref(NULL TSRMLS_CC, E_ERROR,
-                "INTERNAL ERROR: unable to set into current_iteration_parent, is NULL"
-            );
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: unable to set into current_iteration_parent, is NULL");
             return 0;
         }
         target_iteration = tpl->current_iteration_parent;
