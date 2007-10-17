@@ -799,9 +799,7 @@ inline void blitz_parse_call (
     char *ptr_token = &cl;
 
     /* init node */
-    node->n_args = 0;
-    node->args = NULL;
-    node->lexem = NULL;
+    blitz_free_node(node);
     node->type = BLITZ_TYPE_METHOD;
 
     *true_lexem_len = 0; /* used for parameters only */
