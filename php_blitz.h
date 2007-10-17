@@ -400,7 +400,6 @@ typedef struct _blitz_tpl {
 
 #define BLITZ_FETCH_TPL_RESOURCE(id,tpl,desc)                                                     \
     if (((id) = getThis()) == 0) {                                                                \
-        WRONG_PARAM_COUNT;                                                                        \
         RETURN_FALSE;                                                                             \
     }                                                                                             \
                                                                                                   \
