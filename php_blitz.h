@@ -88,12 +88,12 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_NODE_TYPE_END_SU 			"END"
 
 #define BLITZ_TAG_IS_BEGIN(s)                               \
-    (((0 == strcmp(s,BLITZ_NODE_TYPE_BEGIN_SU))        \
-          || (0 == strcmp(s,BLITZ_NODE_TYPE_BEGIN_S))))
+    (((0 == strcmp((char *)s,BLITZ_NODE_TYPE_BEGIN_SU))        \
+          || (0 == strcmp((char *)s,BLITZ_NODE_TYPE_BEGIN_S))))
 
 #define BLITZ_TAG_IS_END(s)                                 \
-    (((0 == strcmp(s,BLITZ_NODE_TYPE_END_SU))          \
-          || (0 == strcmp(s,BLITZ_NODE_TYPE_END_S))))
+    (((0 == strcmp((char *)s,BLITZ_NODE_TYPE_END_SU))          \
+          || (0 == strcmp((char *)s,BLITZ_NODE_TYPE_END_S))))
 
 #define BLITZ_TAG_IS_BEGIN_OR_END(s)                        \
     ((BLITZ_TAG_IS_BEGIN(s) || BLITZ_TAG_IS_END(s)))
@@ -394,7 +394,7 @@ typedef struct _blitz_tpl {
         while ((alen) < (nlen)) {                                                                 \
             (alen) <<= 1;                                                                         \
         }                                                                                         \
-        (res) = (unsigned char*)erealloc((res),(alen + 1)*sizeof(unsigned char));                     \
+        (res) = erealloc((res),(alen + 1)*sizeof(char));                                          \
         (pres) = (res) + (rlen);                                                                  \
     }                                                                                             \
 

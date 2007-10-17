@@ -7,6 +7,8 @@
   |                                                                      |
   |          Template analyzing is partially based on php_templates code |
   |          by Maxim Poltarak (http://php-templates.sf.net)             |
+  |          Bug & memleak fixes                                         |
+  |          by Antony Dovgal <tony at daylessday dot org>               |
   +----------------------------------------------------------------------+
 */
 
@@ -47,9 +49,9 @@
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
 /* some declarations  */
-int blitz_exec_template(blitz_tpl *tpl, zval *id, unsigned char **result, unsigned long *result_len TSRMLS_DC);
+int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned long *result_len TSRMLS_DC);
 int blitz_exec_nodes(blitz_tpl *tpl, tpl_node_struct *nodes, unsigned int n_nodes, zval *id,
-    unsigned char **result, unsigned long *result_len, unsigned long *result_alloc_len,
+    char **result, unsigned long *result_len, unsigned long *result_alloc_len,
     unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC);
 inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC);
 
@@ -290,7 +292,7 @@ static inline void blitz_free_node(tpl_node_struct *node) /* {{{ */
 
 static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 {
-    unsigned char n_nodes=0, i=0;
+    int n_nodes=0, i=0;
 
     if (!tpl) {
         return;
@@ -363,7 +365,6 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 /*  {{{ blitz_init_tpl */
 blitz_tpl *blitz_init_tpl(char *filename, int filename_len, HashTable *globals, zval *iterations TSRMLS_DC)
 {
-    char *global_path = NULL;
     int global_path_len = 0;
     char filename_normalized[BLITZ_FILE_PATH_MAX_LEN];
 #ifdef BLITZ_USE_STREAMS
@@ -687,6 +688,7 @@ void php_blitz_get_path_list(blitz_tpl *tpl, zval *list) {
     return;
 }
 /* }}} */
+
 # define REALLOC_POS_IF_EXCEEDS                                                 \
     if (p >= alloc_size) {                                                      \
         alloc_size = alloc_size << 1;                                           \
@@ -694,12 +696,12 @@ void php_blitz_get_path_list(blitz_tpl *tpl, zval *list) {
     }                                                                           \
 
 /* {{{ blitz_bm_search */
-inline void blitz_bm_search (                                                        
+inline void blitz_bm_search (
     unsigned char *haystack, 
     unsigned long haystack_length,
     unsigned char *needle,
     unsigned int  needle_len,
-    unsigned char pos_type,
+    char pos_type,
     unsigned int  *n_found,
     tag_pos **pos,
     unsigned int  *pos_size,
@@ -768,7 +770,7 @@ inline void blitz_bm_search (
 # define ADD_CALL_ARGS(token, i_len, i_type)                                    \
     REALLOC_ARG_IF_EXCEEDS;                                                     \
     i_arg = node->args + arg_id;                                                \
-    i_arg->name = estrndup((token),(i_len));                                    \
+    i_arg->name = estrndup((char *)(token),(i_len));                            \
     i_arg->len = (i_len);                                                       \
     i_arg->type = (i_type);                                                     \
     ++arg_id;                                                                   \
@@ -776,24 +778,24 @@ inline void blitz_bm_search (
 
 /* {{{ blitz_parse_call */
 inline void blitz_parse_call (
-    unsigned char *text, 
+    char *text, 
     unsigned int len_text, 
     tpl_node_struct *node, 
     unsigned int *true_lexem_len,
     char var_prefix,
-    unsigned char is_phpt_tag, 
-    unsigned char *error TSRMLS_DC) {
-    register unsigned char *c = text;
-    unsigned char *p = NULL;
-    register unsigned char symb = 0, i_symb = 0, is_path = 0;
-    unsigned char state = BLITZ_CALL_STATE_ERROR;
-    unsigned char ok = 0;
+    char is_phpt_tag, 
+    char *error TSRMLS_DC) {
+    register char *c = text;
+    char *p = NULL;
+    register char symb = 0, i_symb = 0, is_path = 0;
+    char state = BLITZ_CALL_STATE_ERROR;
+    char ok = 0;
     register unsigned int pos = 0, i_pos = 0, i_len = 0;
-    unsigned char was_escaped;
-    unsigned char main_token[1024], token[1024];
-    unsigned char n_arg_alloc = 0;
-    register unsigned char i_type = 0;
-    unsigned char arg_id = 0;
+    char was_escaped;
+    char main_token[1024], token[1024];
+    char n_arg_alloc = 0;
+    register char i_type = 0;
+    char arg_id = 0;
     call_arg *i_arg = NULL;
     char cl = 0;
     char *ptr_token = &cl;
@@ -1041,13 +1043,13 @@ inline void blitz_parse_call (
 /* }}} */
 
 /* {{{ get_line_number(char *str, unsigned long pos) */
-inline unsigned long get_line_number(unsigned char *str, unsigned long pos) {
+inline unsigned long get_line_number(char *str, unsigned long pos) {
     register char *p = str;
     register unsigned long i = pos;
     register unsigned int n = 0;
     p += i;
 
-    if (i>0) {
+    if (i > 0) {
         i++;
         while (i--) {
             if (*p == '\n') {
@@ -1065,7 +1067,7 @@ inline unsigned long get_line_number(unsigned char *str, unsigned long pos) {
 /* }}} */
 
 /* {{{ get_line_pos(char *str, unsigned long pos) */
-inline unsigned long get_line_pos(unsigned char *str, unsigned long pos) {
+inline unsigned long get_line_pos(char *str, unsigned long pos) {
     register char *p = str;
     register unsigned long i = pos;
 
@@ -1130,14 +1132,14 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     unsigned int shift = 0;
     tpl_node_struct *i_node = NULL, *parent = NULL;
     tpl_node_struct **node_stack = NULL, **pp_node_stack = NULL; 
-    unsigned char *body = NULL;
-    unsigned char *plex = NULL;
-    unsigned char i_error = 0;
+    char *body = NULL;
+    char *plex = NULL;
+    char i_error = 0;
     tag_pos *pos = NULL, *i_tag_pos = NULL;
     unsigned int pos_size = 0;
     unsigned int pos_alloc_size = 0;
     unsigned long i_pos = 0; 
-    unsigned char expect_type_mask = 0, i_type = 0, i_prev_type = 0, i_is_open = 0, is_phpt_tag = 0;
+    char expect_type_mask = 0, i_type = 0, i_prev_type = 0, i_is_open = 0, is_phpt_tag = 0;
 
     unsigned long current_open = 0, current_close;
 
@@ -1151,8 +1153,8 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     /* find open node positions */
     body = tpl->static_data.body;
     blitz_bm_search (
-        body, tpl->static_data.body_len, 
-        tpl->static_data.config->open_node, tpl->static_data.config->l_open_node, BLITZ_TAG_POS_OPEN,
+        (unsigned char *)body, tpl->static_data.body_len, 
+        (unsigned char *)tpl->static_data.config->open_node, tpl->static_data.config->l_open_node, BLITZ_TAG_POS_OPEN,
         &n_open, &pos, &pos_size, &pos_alloc_size TSRMLS_CC
     );
 
@@ -1160,8 +1162,8 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     /* find close node positions */
     body = tpl->static_data.body;
     blitz_bm_search (
-        body, tpl->static_data.body_len,
-        tpl->static_data.config->close_node, tpl->static_data.config->l_close_node, BLITZ_TAG_POS_CLOSE,
+        (unsigned char *)body, tpl->static_data.body_len,
+        (unsigned char *)tpl->static_data.config->close_node, tpl->static_data.config->l_close_node, BLITZ_TAG_POS_CLOSE,
         &n_close, &pos, &pos_size, &pos_alloc_size TSRMLS_CC
     );
 
@@ -1169,8 +1171,8 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     if (BLITZ_SUPPORT_PHPT_TAGS_PARTIALLY) {
         body = tpl->static_data.body;
         blitz_bm_search (
-            body, tpl->static_data.body_len,
-            tpl->static_data.config->phpt_ctx_left, tpl->static_data.config->l_phpt_ctx_left, BLITZ_TAG_POS_PHPT_CTX_LEFT,
+            (unsigned char *)body, tpl->static_data.body_len,
+            (unsigned char *)tpl->static_data.config->phpt_ctx_left, tpl->static_data.config->l_phpt_ctx_left, BLITZ_TAG_POS_PHPT_CTX_LEFT,
             &n_phpt_open, &pos, &pos_size, &pos_alloc_size TSRMLS_CC
         );
         n_open += n_phpt_open;
@@ -1178,8 +1180,8 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
         /* find close node positions */
         body = tpl->static_data.body;
         blitz_bm_search (
-            body, tpl->static_data.body_len,
-            tpl->static_data.config->phpt_ctx_right, tpl->static_data.config->l_phpt_ctx_right, BLITZ_TAG_POS_PHPT_CTX_RIGHT,
+            (unsigned char *)body, tpl->static_data.body_len,
+            (unsigned char *)tpl->static_data.config->phpt_ctx_right, tpl->static_data.config->l_phpt_ctx_right, BLITZ_TAG_POS_PHPT_CTX_RIGHT,
             &n_phpt_close, &pos, &pos_size, &pos_alloc_size TSRMLS_CC
         );
         n_close += n_phpt_close;
@@ -1479,7 +1481,7 @@ inline int blitz_exec_wrapper (
             return 0;
         }
 
-        *result = php_escape_html_entities(args[0], args_len[0], result_len, all, quote_style, NULL TSRMLS_CC);
+        *result = php_escape_html_entities((unsigned char *)args[0], args_len[0], result_len, all, quote_style, NULL TSRMLS_CC);
     } else if (flags == BLITZ_NODE_TYPE_WRAPPER_DATE) {
 /* FIXME: make it work with Win32 */
 #ifndef PHP_WIN32
@@ -1640,8 +1642,8 @@ inline int blitz_exec_predefined_method (
     tpl_node_struct *node,
     zval *iteration_params,
     zval *id,
-    unsigned char **result,
-    unsigned char **p_result,
+    char **result,
+    char **p_result,
     unsigned long *result_len,
     unsigned long *result_alloc_len,
     char *tmp_buf TSRMLS_DC) {
@@ -1722,7 +1724,7 @@ inline int blitz_exec_predefined_method (
     } else if (node->type == BLITZ_NODE_TYPE_INCLUDE) {
         char *filename = node->args[0].name;
         int filename_len = node->args[0].len;
-        unsigned char *inner_result = NULL;
+        char *inner_result = NULL;
         unsigned long inner_result_len = 0;
         blitz_tpl *itpl = NULL;
 
@@ -1801,8 +1803,8 @@ inline int blitz_exec_user_method (
     tpl_node_struct *node,
     zval *iteration_params,
     zval *obj,
-    unsigned char **result,
-    unsigned char **p_result,
+    char **result,
+    char **p_result,
     unsigned long *result_len,
     unsigned long *result_alloc_len TSRMLS_DC) {
     zval *retval = NULL, *zmethod = NULL, **zparam = NULL;
@@ -1903,7 +1905,7 @@ inline void blitz_exec_var (
     blitz_tpl *tpl,
     char *lexem,
     zval *params,
-    unsigned char **result,
+    char **result,
     unsigned long *result_len,
     unsigned long *result_alloc_len TSRMLS_DC) {
     /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
@@ -1959,7 +1961,7 @@ inline void blitz_exec_var_path (
     blitz_tpl *tpl,
     char *lexem,
     zval *params,
-    unsigned char **result,
+    char **result,
     unsigned long *result_len,
     unsigned long *result_alloc_len TSRMLS_DC) {
     /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
@@ -2004,7 +2006,7 @@ void blitz_exec_context (
     tpl_node_struct *node,
     zval *parent_params,
     zval *id,
-    unsigned char **result,
+    char **result,
     unsigned long *result_len,
     unsigned long *result_alloc_len TSRMLS_DC) {
     char *key = NULL;
@@ -2081,14 +2083,14 @@ int blitz_exec_nodes (
     tpl_node_struct *nodes,
     unsigned int n_nodes,
     zval *id, 
-    unsigned char **result,
+    char **result,
     unsigned long *result_len, 
     unsigned long *result_alloc_len,
     unsigned long parent_begin,
     unsigned long parent_end,
     zval *parent_ctx_data TSRMLS_DC) {
     unsigned int i = 0, i_max = 0, i_processed = 0;
-    unsigned char *p_result = NULL;
+    char *p_result = NULL;
     unsigned long buf_len = 0, new_len = 0;
     unsigned long shift = 0, last_close = 0, current_open = 0;
     zval *parent_params = NULL;
@@ -2199,7 +2201,7 @@ inline int blitz_populate_root (blitz_tpl *tpl TSRMLS_DC) {
 /* }}} */
 
 /* {{{ blitz_exec_template */
-int blitz_exec_template(blitz_tpl *tpl, zval *id, unsigned char **result, unsigned long *result_len TSRMLS_DC)
+int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned long *result_len TSRMLS_DC)
 {
     unsigned long result_alloc_len = 0;
 
@@ -2532,7 +2534,7 @@ int blitz_find_iteration_by_path(
     char buffer[BLITZ_CONTEXT_PATH_MAX_LEN];
     char *key = NULL;
     zval **dummy;
-    long index = 0;
+    unsigned long index = 0;
 
     k = pmax - 1;
     tmp = & tpl->iterations;
@@ -2746,7 +2748,7 @@ int blitz_fetch_node_by_path(
     char *path, 
     unsigned int path_len, 
     zval *input_params,
-    unsigned char **result, 
+    char **result, 
     unsigned long *result_len TSRMLS_DC) {
     tpl_node_struct *i_node = NULL;
     unsigned long result_alloc_len = 0;
@@ -2855,8 +2857,8 @@ inline int blitz_merge_iterations_by_str_keys(
     zval **elem;
     HashTable *input_ht = NULL;
     char *key = NULL;
-    int key_len = 0;
-    long index = 0;
+    unsigned int key_len = 0;
+    unsigned long index = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
         return 0;
@@ -2897,8 +2899,8 @@ inline int blitz_merge_iterations_by_num_keys(
     zval **elem;
     HashTable *input_ht = NULL;
     char *key = NULL;
-    int key_len = 0;
-    long index = 0;
+    unsigned int key_len = 0;
+    unsigned long index = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
         return 0;
@@ -2936,8 +2938,8 @@ inline int blitz_merge_iterations_set (
     zval *input_arr TSRMLS_DC) {
     HashTable *input_ht = NULL;
     char *key = NULL;
-    int key_len = 0;
-    long index = 0;
+    unsigned int key_len = 0;
+    unsigned long index = 0;
     int res = 0, is_current_iteration = 0, first_key_type = 0;
     zval **target_iteration;
 
@@ -3141,8 +3143,8 @@ PHP_FUNCTION(blitz_set_global) {
     zval *temp = NULL;
     HashTable *input_ht = NULL;
     char *key = NULL;
-    int key_len = 0;
-    long index = 0;
+    unsigned int key_len = 0;
+    unsigned long index = 0;
     int r = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
@@ -3247,7 +3249,7 @@ PHP_FUNCTION(blitz_parse) {
     zval *id = NULL;
     zval **desc = NULL;
     blitz_tpl *tpl;
-    unsigned char *result = NULL;
+    char *result = NULL;
     unsigned long result_len = 0;
     zval *input_arr = NULL;
     char res = 0;
@@ -3456,7 +3458,7 @@ PHP_FUNCTION(blitz_include) {
     int filename_len = 0;
     zval **desc = NULL;
     zval *id = NULL;
-    unsigned char *result = NULL;
+    char *result = NULL;
     unsigned long result_len = 0;
     zval *input_arr = NULL;
     int res = 0;
@@ -3495,7 +3497,7 @@ PHP_FUNCTION(blitz_fetch) {
     zval *id = NULL;
     zval **desc = NULL;
     blitz_tpl *tpl;
-    unsigned char *result = NULL;
+    char *result = NULL;
     unsigned long result_len = 0;
     char exec_status = 0;
     char *path = NULL;
@@ -3503,8 +3505,8 @@ PHP_FUNCTION(blitz_fetch) {
     zval *input_arr = NULL, **elem;
     HashTable *input_ht = NULL;
     char *key = NULL;
-    int key_len = 0;
-    long index = 0;
+    unsigned int key_len = 0;
+    unsigned long index = 0;
     zval *path_iteration = NULL;
     zval *path_iteration_parent = NULL;
     zval *final_params = NULL;
