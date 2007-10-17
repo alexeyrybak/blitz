@@ -2914,16 +2914,15 @@ inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr TSRMLS_DC)
 * Blitz CLASS methods
 **********************************************************************************************************************/
 
-/* {{{ blitz_init(filename) */
-PHP_FUNCTION(blitz_init) {
-    blitz_tpl *tpl = NULL;
-    unsigned int filename_len = 0;
+/* {{{ proto new Blitz([string filename]) */
+PHP_FUNCTION(blitz_init)
+{
+    blitz_tpl *tpl;
+    int filename_len = 0, ret;
     char *filename = NULL;
-    int ret = 0;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|s", &filename, &filename_len)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+        return;
     }
 
     /* initialize template  */
@@ -2940,7 +2939,6 @@ PHP_FUNCTION(blitz_init) {
 
     ret = zend_list_insert(tpl, le_blitz);
     add_property_resource(getThis(), "tpl", ret);
-    zend_list_addref(ret);
 }
 /* }}} */
 
