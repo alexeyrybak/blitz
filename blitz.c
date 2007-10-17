@@ -234,7 +234,6 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC)
 
     /* allocate "personal" hash-table */
     if (globals == NULL) { 
-        tpl->hash_globals = NULL;
         ALLOC_HASHTABLE(tpl->hash_globals);
         zend_hash_init(tpl->hash_globals, 8, NULL, ZVAL_PTR_DTOR, 0);
     } else {
@@ -246,7 +245,6 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC)
         tpl->flags |= BLITZ_FLAG_GLOBALS_IS_OTHER;
     }
 
-    tpl->ht_tpl_name = NULL;
     ALLOC_HASHTABLE(tpl->ht_tpl_name);
     zend_hash_init(tpl->ht_tpl_name, 8, NULL, ZVAL_PTR_DTOR, 0);
 
@@ -255,117 +253,6 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC)
     tpl->itpl_list_alloc = BLITZ_ITPL_ALLOC_INIT;
 
     return tpl;
-}
-/* }}} */
-
-/*  {{{ blitz_init_tpl */
-blitz_tpl *blitz_init_tpl(char *filename, int filename_len, HashTable *globals, zval *iterations TSRMLS_DC)
-{
-    char *global_path = NULL;
-    int global_path_len = 0;
-    char normalized_buf[BLITZ_FILE_PATH_MAX_LEN];
-    char *filename_normalized = filename;
-#ifdef BLITZ_USE_STREAMS
-    php_stream *stream = NULL;
-#endif
-    unsigned int filename_normalized_len = 0;
-    unsigned int add_buffer_len = 0;
-    int result = 0;
-
-    blitz_tpl *tpl = blitz_init_tpl_base(globals, iterations TSRMLS_CC);
-
-    if (!tpl) { 
-        return NULL;
-    }
-
-    if (!filename || !filename_len) {
-        return tpl; /* OK, will be loaded after */
-    }
-
-    filename_normalized_len = filename_len;
-
-    if ('/' != filename[0]) {
-        global_path = BLITZ_G(path);
-        global_path_len = strlen(global_path);
-        if (global_path_len) {
-            if (global_path_len + filename_len > BLITZ_FILE_PATH_MAX_LEN) {
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long, increase BLITZ_MAX_FILE_PATH");
-                return NULL;
-            }
-            filename_normalized = normalized_buf;
-            memcpy(filename_normalized, global_path, global_path_len);
-            memcpy(filename_normalized + global_path_len, filename, filename_len);
-            filename_normalized_len = filename_len + global_path_len;
-            filename_normalized[filename_normalized_len] = '\x0';
-        }
-    } 
-
-/* 
-It seems to be 10% faster to use just fread or mmap than streams on lebowski-bench. 
-*/
-
-#ifdef BLITZ_USE_STREAMS
-    result = blitz_read_with_stream(tpl, filename_normalized TSRMLS_CC);
-#else
-#ifdef BLITZ_USE_MMAP
-    result = blitz_read_with_mmap(tpl, filename_normalized TSRMLS_CC);
-#else
-    result = blitz_read_with_fread(tpl, filename_normalized TSRMLS_CC);
-#endif
-#endif
-
-    if (0 == result) return tpl;
-
-    /* search algorithm requires lager buffer: body_len + add_buffer */
-    add_buffer_len = MAX(
-        MAX(tpl->static_data.config->l_open_node,tpl->static_data.config->l_close_node), 
-        MAX(tpl->static_data.config->l_phpt_ctx_left,tpl->static_data.config->l_phpt_ctx_right) 
-    );
-
-    tpl->static_data.body = erealloc(tpl->static_data.body,tpl->static_data.body_len + add_buffer_len);
-    memset(tpl->static_data.body + tpl->static_data.body_len,'\x0',add_buffer_len);
-
-    tpl->static_data.name = emalloc(filename_normalized_len+1);
-    if (tpl->static_data.name){
-        memcpy(tpl->static_data.name, filename_normalized, filename_normalized_len);
-        tpl->static_data.name[filename_normalized_len] = '\x0';
-    }
-
-    return tpl;
-}
-/* }}} */
-
-/*  {{{ blitz_load_body */
-int blitz_load_body(
-    blitz_tpl *tpl,
-    zval *body TSRMLS_DC) {
-    unsigned int add_buffer_len = 0;
-    char *name = "noname_loaded_from_zval";
-    int name_len = strlen(name);
-
-    if (!tpl || !body) {
-        return 0;
-    }
-
-    tpl->static_data.body_len = Z_STRLEN_P(body);
-    if (tpl->static_data.body_len) {
-        add_buffer_len = MAX(
-            MAX(tpl->static_data.config->l_open_node,tpl->static_data.config->l_close_node),
-            MAX(tpl->static_data.config->l_phpt_ctx_left,tpl->static_data.config->l_phpt_ctx_right)
-        );
-
-        tpl->static_data.body = emalloc(tpl->static_data.body_len + add_buffer_len);
-        memcpy(tpl->static_data.body,Z_STRVAL_P(body),Z_STRLEN_P(body));
-        memset(tpl->static_data.body + tpl->static_data.body_len,'\x0',add_buffer_len);
-    }
-
-    tpl->static_data.name = emalloc(name_len+1);
-    if (tpl->static_data.name){
-        memcpy(tpl->static_data.name,name,name_len);
-        tpl->static_data.name[name_len] = '\x0';
-    }
-
-    return 1;
 }
 /* }}} */
 
@@ -473,6 +360,116 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 }
 /* }}} */
 
+/*  {{{ blitz_init_tpl */
+blitz_tpl *blitz_init_tpl(char *filename, int filename_len, HashTable *globals, zval *iterations TSRMLS_DC)
+{
+    char *global_path = NULL;
+    int global_path_len = 0;
+    char filename_normalized[BLITZ_FILE_PATH_MAX_LEN];
+#ifdef BLITZ_USE_STREAMS
+    php_stream *stream = NULL;
+#endif
+    unsigned int filename_normalized_len = 0;
+    unsigned int add_buffer_len = 0;
+    int result = 0;
+    blitz_tpl *tpl;
+
+    tpl = blitz_init_tpl_base(globals, iterations TSRMLS_CC);
+
+    if (!tpl) { 
+        return NULL;
+    }
+
+    if (!filename || !filename_len) {
+        return tpl; /* OK, will be loaded after */
+    }
+
+    filename_normalized_len = filename_len;
+
+    if ('/' != filename[0] && BLITZ_G(path)[0] != 0) {
+        global_path_len = strlen(BLITZ_G(path));
+
+        if ((global_path_len + filename_len) > BLITZ_FILE_PATH_MAX_LEN) {
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long, increase BLITZ_MAX_FILE_PATH");
+            blitz_free_tpl(tpl); /* XXX */
+            return NULL;
+        }
+
+        memcpy(filename_normalized, BLITZ_G(path), global_path_len);
+        memcpy(filename_normalized + global_path_len, filename, filename_len);
+        filename_normalized_len = filename_len + global_path_len;
+        filename_normalized[filename_normalized_len] = '\0';
+    } else {
+        memcpy(filename_normalized, filename, filename_len);
+        filename_normalized_len = filename_len;
+        filename_normalized[filename_normalized_len] = '\0';
+    }
+
+/* 
+It seems to be 10% faster to use just fread or mmap than streams on lebowski-bench. 
+*/
+
+#ifdef BLITZ_USE_STREAMS
+    result = blitz_read_with_stream(tpl, filename_normalized TSRMLS_CC);
+#else
+#ifdef BLITZ_USE_MMAP
+    result = blitz_read_with_mmap(tpl, filename_normalized TSRMLS_CC);
+#else
+    result = blitz_read_with_fread(tpl, filename_normalized TSRMLS_CC);
+#endif
+#endif
+
+    if (0 == result) { 
+        return tpl;
+    }
+
+    /* search algorithm requires lager buffer: body_len + add_buffer */
+    add_buffer_len = MAX(
+        MAX(tpl->static_data.config->l_open_node, tpl->static_data.config->l_close_node), 
+        MAX(tpl->static_data.config->l_phpt_ctx_left, tpl->static_data.config->l_phpt_ctx_right) 
+    );
+
+    tpl->static_data.body = erealloc(tpl->static_data.body, tpl->static_data.body_len + add_buffer_len);
+    memset(tpl->static_data.body + tpl->static_data.body_len, '\0', add_buffer_len);
+
+    tpl->static_data.name = emalloc(filename_normalized_len + 1);
+    memcpy(tpl->static_data.name, filename_normalized, filename_normalized_len);
+    tpl->static_data.name[filename_normalized_len] = '\0';
+
+    return tpl;
+}
+/* }}} */
+
+/*  {{{ blitz_load_body */
+int blitz_load_body(blitz_tpl *tpl, char *body, int body_len TSRMLS_DC)
+{
+    unsigned int add_buffer_len = 0;
+    char *name = "noname_loaded_from_zval";
+    int name_len = sizeof("noname_loaded_from_zval") - 1;
+
+    if (!tpl || !body || !body_len) {
+        return 0;
+    }
+
+    tpl->static_data.body_len = body_len;
+
+    if (tpl->static_data.body_len) {
+        add_buffer_len = MAX(
+            MAX(tpl->static_data.config->l_open_node, tpl->static_data.config->l_close_node),
+            MAX(tpl->static_data.config->l_phpt_ctx_left, tpl->static_data.config->l_phpt_ctx_right)
+        );
+
+        tpl->static_data.body = emalloc(tpl->static_data.body_len + add_buffer_len);
+        memcpy(tpl->static_data.body, body, body_len);
+        memset(tpl->static_data.body + tpl->static_data.body_len, '\0', add_buffer_len);
+    }
+
+    tpl->static_data.name = estrndup(name, name_len);
+
+    return 1;
+}
+/* }}} */
+
 /* {{{ blitz_include_tpl_cached */
 int blitz_include_tpl_cached(blitz_tpl *tpl, char *filename, unsigned int filename_len, zval *iteration_params, blitz_tpl **itpl TSRMLS_DC)
 {
@@ -489,7 +486,7 @@ int blitz_include_tpl_cached(blitz_tpl *tpl, char *filename, unsigned int filena
         } else {
             if ((*itpl)->iterations && !((*itpl)->flags & BLITZ_FLAG_ITERATION_IS_OTHER)) {
                 zend_hash_clean(Z_ARRVAL_P((*itpl)->iterations));
-            } else {
+            } else if (!(*itpl)->iterations) {
                 MAKE_STD_ZVAL((*itpl)->iterations);
                 array_init((*itpl)->iterations);
             }
@@ -500,7 +497,6 @@ int blitz_include_tpl_cached(blitz_tpl *tpl, char *filename, unsigned int filena
 
     /* initialize template */
     if (!(*itpl = blitz_init_tpl(filename, filename_len, tpl->hash_globals, iteration_params TSRMLS_CC))) {
-        blitz_free_tpl(*itpl);
         return 0;
     }
 
@@ -512,18 +508,8 @@ int blitz_include_tpl_cached(blitz_tpl *tpl, char *filename, unsigned int filena
 
     /* realloc list if needed */
     if (tpl->itpl_list_len >= tpl->itpl_list_alloc-1) {
-        tpl->itpl_list = (blitz_tpl**)erealloc(
-            tpl->itpl_list,(tpl->itpl_list_alloc<<1)*sizeof(blitz_tpl*)
-        );
-        if (tpl->itpl_list) {
-            tpl->itpl_list_alloc <<= 1;
-        } else {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
-                "INTERNAL ERROR: cannot realloc memory for inner-template list"
-            );
-            blitz_free_tpl(*itpl);
-            return 0;
-        }
+        tpl->itpl_list = erealloc(tpl->itpl_list,(tpl->itpl_list_alloc<<1) * sizeof(blitz_tpl*));
+        tpl->itpl_list_alloc <<= 1;
     }
 
     /* save template index values */
@@ -549,10 +535,10 @@ static void blitz_resource_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) {
 /* {{{ php_blitz_init_globals */
 static void php_blitz_init_globals(zend_blitz_globals *blitz_globals)
 {
+    memset(blitz_globals, 0, sizeof(blitz_globals));
     blitz_globals->var_prefix = BLITZ_TAG_VAR_PREFIX;
     blitz_globals->node_open = BLITZ_TAG_OPEN_DEFAULT;
     blitz_globals->node_close = BLITZ_TAG_CLOSE_DEFAULT;
-
 }
 /* }}} */
 
@@ -591,12 +577,21 @@ void php_blitz_dump_node(tpl_node_struct *node, unsigned int *p_level) {
     unsigned long j = 0;
     unsigned int level = 0;
     char shift_str[] = "--------------------------------"; 
-    if (!node) return;
+
+    if (!node) { 
+        return;
+    }
+
     level = p_level ? *p_level : 0;
-    if (level>=10) level = 10;
+
+    if (level>=10) { 
+        level = 10;
+    }
+
     memset(shift_str,' ',2*level+1);
     shift_str[2*level+1] = '^';
     shift_str[2*level+3] = '\x0';
+
     php_printf("\n%s%s[%u] (%lu(%lu), %lu(%lu)); ",
         shift_str,
         node->lexem,
@@ -604,6 +599,7 @@ void php_blitz_dump_node(tpl_node_struct *node, unsigned int *p_level) {
         node->pos_begin, node->pos_begin_shift,
         node->pos_end, node->pos_end_shift
     );
+
     if (BLITZ_IS_METHOD(node->type)) {
         php_printf("ARGS(%d): ",node->n_args);
         for (j=0;j<node->n_args;++j) {
@@ -650,7 +646,10 @@ void php_blitz_get_node_paths(zval *list, tpl_node_struct *node, char *parent_pa
     char suffix[2] = "\x0";
     char path[BLITZ_CONTEXT_PATH_MAX_LEN] = "\x0";
 
-    if (!node) return;
+    if (!node) {
+        return;
+    }
+
     if (node->type == BLITZ_NODE_TYPE_BEGIN) { /* non-finalized node (end was not found, error) */
         return;
     }
@@ -826,6 +825,7 @@ inline void blitz_parse_call (
         pos+=i_pos;
         if (i_pos!=0) {
             node->lexem = estrndup((char *)main_token,i_pos);
+            node->lexem_len = i_pos;
             *true_lexem_len = i_pos;
             if (is_path) {
                 node->type = BLITZ_NODE_TYPE_VAR_PATH;
@@ -843,9 +843,10 @@ inline void blitz_parse_call (
         if (BLITZ_DEBUG) php_printf("D3: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
 
         if (i_pos>0) {
-            node->lexem = estrndup((char *)main_token,i_pos);
+            node->lexem = estrndup((char *)main_token, i_pos);
+            node->lexem_len = i_pos;
             node->type = BLITZ_TYPE_METHOD;
-            *true_lexem_len = i_pos-1;
+            *true_lexem_len = i_pos;
             ++pos; ++c;
 
             if (BLITZ_DEBUG) php_printf("METHOD: %s, pos=%u, c=%c, type=%u\n", node->lexem, pos, *c, node->type);
@@ -1143,15 +1144,11 @@ inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) {
     unsigned long current_open = 0, current_close;
 
     if (!tpl->static_data.body || (0 == tpl->static_data.body_len)) {
-        return 1;
+        return 0;
     }
 
     pos = ecalloc(BLITZ_ALLOC_TAGS_STEP, sizeof(tag_pos));
     pos_alloc_size = BLITZ_ALLOC_TAGS_STEP;
-
-    if (pos == NULL) {
-        return -1;
-    }
 
     /* find open node positions */
     body = tpl->static_data.body;
@@ -1742,6 +1739,7 @@ inline int blitz_exec_predefined_method (
             *result_len += inner_result_len;
             p_result+=*result_len;
             (*result)[*result_len] = '\0';
+            efree(inner_result);
         }
 
     } else if (node->type == BLITZ_NODE_TYPE_WRAPPER) {
@@ -1787,6 +1785,9 @@ inline int blitz_exec_predefined_method (
             *result_len += str_len;
             p_result+=*result_len;
             (*result)[*result_len] = '\0';
+            if (str && str != tmp_buf) {
+                efree(str);
+            }
         } else {
             return 0;
         }
@@ -3031,26 +3032,24 @@ PHP_FUNCTION(blitz_init) {
 
 /* {{{ blitz_load */
 PHP_FUNCTION(blitz_load) {
-    blitz_tpl *tpl = NULL;
-    zval *body;
-    zval *id = NULL;
-    zval **desc = NULL;
+    blitz_tpl *tpl;
+    char *body;
+    int body_len;
+    zval *id, **desc;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"z",&body)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &body, &body_len)) {
+        return;
     }
 
-    convert_to_string_ex(&body);
     if (tpl->static_data.body) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING,"INTERNAL ERROR: template is already loaded");
         RETURN_FALSE;
     }
 
     /* load body */
-    if (!blitz_load_body(tpl, body TSRMLS_CC)) {
+    if (!blitz_load_body(tpl, body, body_len TSRMLS_CC)) {
         RETURN_FALSE;
     }
 
