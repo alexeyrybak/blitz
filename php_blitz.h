@@ -88,15 +88,15 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_NODE_TYPE_END_SU 			"END"
 
 #define BLITZ_TAG_IS_BEGIN(s)                               \
-    (s && ((0 == strcmp(s,BLITZ_NODE_TYPE_BEGIN_SU))        \
+    (((0 == strcmp(s,BLITZ_NODE_TYPE_BEGIN_SU))        \
           || (0 == strcmp(s,BLITZ_NODE_TYPE_BEGIN_S))))
 
 #define BLITZ_TAG_IS_END(s)                                 \
-    (s && ((0 == strcmp(s,BLITZ_NODE_TYPE_END_SU))          \
+    (((0 == strcmp(s,BLITZ_NODE_TYPE_END_SU))          \
           || (0 == strcmp(s,BLITZ_NODE_TYPE_END_S))))
 
 #define BLITZ_TAG_IS_BEGIN_OR_END(s)                        \
-    (s && (BLITZ_TAG_IS_BEGIN(s) || BLITZ_TAG_IS_END(s)))
+    ((BLITZ_TAG_IS_BEGIN(s) || BLITZ_TAG_IS_END(s)))
 
 #define BLITZ_WRAPPER_MAX_ARGS          3
 #define BLITZ_NODE_TYPE_WRAPPER_ESCAPE_S  "escape"
