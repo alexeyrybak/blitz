@@ -394,7 +394,7 @@ typedef struct _blitz_tpl {
         while ((alen) < (nlen)) {                                                                 \
             (alen) <<= 1;                                                                         \
         }                                                                                         \
-        (res) = (unsigned char*)erealloc((res),(alen)*sizeof(unsigned char));                     \
+        (res) = (unsigned char*)erealloc((res),(alen + 1)*sizeof(unsigned char));                     \
         (pres) = (res) + (rlen);                                                                  \
     }                                                                                             \
 
