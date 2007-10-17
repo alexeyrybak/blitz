@@ -305,10 +305,8 @@ blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations TSRMLS_DC){
 /* }}} */
 
 /*  {{{ blitz_init_tpl */
-blitz_tpl *blitz_init_tpl(
-    char *filename, 
-    HashTable *globals,
-    zval *iterations TSRMLS_DC) {
+blitz_tpl *blitz_init_tpl(char *filename, int filename_len, HashTable *globals, zval *iterations TSRMLS_DC)
+{
     char *global_path = NULL;
     int global_path_len = 0;
     char normalized_buf[BLITZ_FILE_PATH_MAX_LEN];
@@ -316,17 +314,21 @@ blitz_tpl *blitz_init_tpl(
 #ifdef BLITZ_USE_STREAMS
     php_stream *stream = NULL;
 #endif
-    unsigned int filename_len = 0, filename_normalized_len = 0;
+    unsigned int filename_normalized_len = 0;
     unsigned int add_buffer_len = 0;
     int result = 0;
 
     blitz_tpl *tpl = blitz_init_tpl_base(globals, iterations TSRMLS_CC);
 
-    if (!tpl) return NULL;
+    if (!tpl) { 
+        return NULL;
+    }
 
-    if (!filename) return tpl; /* OK, will be loaded after */
+    if (!filename || !filename_len) {
+        return tpl; /* OK, will be loaded after */
+    }
 
-    filename_normalized_len = filename_len = strlen(filename);
+    filename_normalized_len = filename_len;
 
     if ('/' != filename[0]) {
         global_path = BLITZ_G(path);
@@ -519,12 +521,8 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 /* }}} */
 
 /* {{{ blitz_include_tpl_cached */
-int blitz_include_tpl_cached(
-    blitz_tpl *tpl,
-    char *filename, 
-    unsigned int filename_len, 
-    zval *iteration_params,
-    blitz_tpl **itpl TSRMLS_DC){
+int blitz_include_tpl_cached(blitz_tpl *tpl, char *filename, unsigned int filename_len, zval *iteration_params, blitz_tpl **itpl TSRMLS_DC)
+{
     zval **desc = NULL;
     unsigned long itpl_idx = 0;
     zval *temp = NULL;
@@ -548,7 +546,7 @@ int blitz_include_tpl_cached(
     } 
 
     /* initialize template */
-    if (!(*itpl = blitz_init_tpl(filename, tpl->hash_globals, iteration_params TSRMLS_CC))) {
+    if (!(*itpl = blitz_init_tpl(filename, filename_len, tpl->hash_globals, iteration_params TSRMLS_CC))) {
         blitz_free_tpl(*itpl);
         return 0;
     }
@@ -3065,21 +3063,19 @@ PHP_FUNCTION(blitz_init) {
     char *filename = NULL;
     int ret = 0;
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|s",&filename,&filename_len)) {
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|s", &filename, &filename_len)) {
         WRONG_PARAM_COUNT;
         RETURN_FALSE;
     }
 
     /* initialize template  */
-    if (!(tpl = blitz_init_tpl(filename, NULL, NULL TSRMLS_CC))) {
-        blitz_free_tpl(tpl);    
+    if (!(tpl = blitz_init_tpl(filename, filename_len, NULL, NULL TSRMLS_CC))) {
         RETURN_FALSE;
     }
 
     if (filename) {
         /* analyse template  */
         if (!blitz_analyse(tpl TSRMLS_CC)) {
-            blitz_free_tpl(tpl);
             RETURN_FALSE;
         }
     }
@@ -3112,13 +3108,11 @@ PHP_FUNCTION(blitz_load) {
 
     /* load body */
     if (!blitz_load_body(tpl, body TSRMLS_CC)) {
-        blitz_free_tpl(tpl);
         RETURN_FALSE;
     }
 
     /* analyse template */
     if (!blitz_analyse(tpl TSRMLS_CC)) {
-        blitz_free_tpl(tpl);
         RETURN_FALSE;
     }
 
