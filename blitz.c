@@ -2942,7 +2942,7 @@ PHP_FUNCTION(blitz_init)
 }
 /* }}} */
 
-/* {{{ blitz_load */
+/* {{{ proto bool Blitz->load(string body) */
 PHP_FUNCTION(blitz_load) {
     blitz_tpl *tpl;
     char *body;
@@ -2974,7 +2974,7 @@ PHP_FUNCTION(blitz_load) {
 }
 /* }}} */
 
-/* {{{ blitz_dump_struct */
+/* {{{ proto bool Blitz->dumpStruct(void) */
 PHP_FUNCTION(blitz_dump_struct) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -2987,7 +2987,7 @@ PHP_FUNCTION(blitz_dump_struct) {
 }
 /* }}} */
 
-/* {{{ blitz_get_struct */
+/* {{{ proto void Blitz->getStruct(void) */
 PHP_FUNCTION(blitz_get_struct) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3005,7 +3005,7 @@ PHP_FUNCTION(blitz_get_struct) {
 }
 /* }}} */
 
-/* {{{ blitz_dump_iterations */
+/* {{{ proto bool Blitz->dumpIterations(void) */
 PHP_FUNCTION(blitz_dump_iterations) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3034,7 +3034,7 @@ PHP_FUNCTION(blitz_dump_iterations) {
 }
 /* }}} */
 
-/* {{{ blitz_get_iterations */
+/* {{{ proto array Blitz->getIterations(void) */
 PHP_FUNCTION(blitz_get_iterations) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3052,7 +3052,7 @@ PHP_FUNCTION(blitz_get_iterations) {
 }
 /* }}} */
 
-/* {{{ blitz_set_global(zend_array(node_key=>node_val)) */
+/* {{{ proto bool Blitz->setGlobals(array values) */
 PHP_FUNCTION(blitz_set_global) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3100,7 +3100,7 @@ PHP_FUNCTION(blitz_set_global) {
 }
 /* }}} */
 
-/* {{{ blitz_set_global(zend_array(node_key=>node_val)) */
+/* {{{ proto array Blitz->getGlobals(void) */
 PHP_FUNCTION(blitz_get_globals) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3123,7 +3123,7 @@ PHP_FUNCTION(blitz_get_globals) {
 }
 /* }}} */
 
-/* {{{ has_context(context) */
+/* {{{ proto bool Blitz->hasContext(string context) */
 PHP_FUNCTION(blitz_has_context) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3162,7 +3162,7 @@ PHP_FUNCTION(blitz_has_context) {
 }
 /* }}} */
 
-/* {{{ blitz_parse() */
+/* {{{ proto string Blitz->parse([array iterations]) */
 PHP_FUNCTION(blitz_parse) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3202,7 +3202,7 @@ PHP_FUNCTION(blitz_parse) {
 }
 /* }}} */
 
-/* {{{ blitz_context() */
+/* {{{ proto string Blitz->context(string path) */
 PHP_FUNCTION(blitz_context) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3242,7 +3242,7 @@ PHP_FUNCTION(blitz_context) {
 }
 /* }}} */
 
-/* {{{ blitz_get_context() */
+/* {{{ proto string Blitz->getContext(void) */
 PHP_FUNCTION(blitz_get_context) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3253,7 +3253,7 @@ PHP_FUNCTION(blitz_get_context) {
 }
 /* }}} */
 
-/* {{{ blitz_iterate() */
+/* {{{ proto bool Blitz->iterate([string path [, mixed nonexistent]]) */
 PHP_FUNCTION(blitz_iterate) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3281,8 +3281,7 @@ PHP_FUNCTION(blitz_iterate) {
 }
 /* }}} */
 
-
-/* {{{ blitz_set() */
+/* {{{ proto bool Blitz->set(array input) */
 PHP_FUNCTION(blitz_set) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3307,7 +3306,7 @@ PHP_FUNCTION(blitz_set) {
 }
 /* }}} */
 
-/* {{{ blitz_block() */
+/* {{{ proto bool Blitz->block(mixed p1 [, mixed p2[, mixed nonexistent]]) */
 PHP_FUNCTION(blitz_block) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3369,7 +3368,7 @@ PHP_FUNCTION(blitz_block) {
 }
 /* }}} */
 
-/* {{{ blitz_incude(filename,params) */
+/* {{{ proto string Blitz->include(string filename [, mixed params] ) */
 PHP_FUNCTION(blitz_include) {
     blitz_tpl *tpl = NULL, *itpl = NULL;
     char *filename = NULL;
@@ -3410,7 +3409,7 @@ PHP_FUNCTION(blitz_include) {
 }
 /* }}} */
 
-/* {{{ blitz_fetch(path,params) */
+/* {{{ proto string Blitz->fetch(string path, array params) */
 PHP_FUNCTION(blitz_fetch) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3527,7 +3526,7 @@ PHP_FUNCTION(blitz_fetch) {
 }
 /* }}} */
 
-/* {{{ blitz_clean(path, warn_not_found) */
+/* {{{ pool bool Blitz->clean([string path [, mixed warn_not_found ]]) */
 PHP_FUNCTION(blitz_clean) {
     zval *id = NULL;
     zval **desc = NULL;
@@ -3613,31 +3612,28 @@ function_entry blitz_functions[] = {
 };
 /* }}} */
 
-/* {{{ PHP_MINIT_FUNCTION */
-PHP_MINIT_FUNCTION(blitz)
+PHP_MINIT_FUNCTION(blitz) /* {{{ */
 {
     ZEND_INIT_MODULE_GLOBALS(blitz, php_blitz_init_globals, NULL);
     REGISTER_INI_ENTRIES();
-    le_blitz = zend_register_list_destructors_ex(
-        blitz_resource_dtor, NULL, "blitz template", module_number);
 
-    INIT_CLASS_ENTRY(blitz_class_entry, "blitz", blitz_functions);
+    le_blitz = zend_register_list_destructors_ex(blitz_resource_dtor, NULL, "Blitz template", module_number);
+
+    INIT_CLASS_ENTRY(blitz_class_entry, "Blitz", blitz_functions);
     zend_register_internal_class(&blitz_class_entry TSRMLS_CC);
 
     return SUCCESS;
 }
 /* }}} */
 
-/* {{{ PHP_MSHUTDOWN_FUNCTION */
-PHP_MSHUTDOWN_FUNCTION(blitz)
+PHP_MSHUTDOWN_FUNCTION(blitz) /* {{{ */
 {
     UNREGISTER_INI_ENTRIES();
     return SUCCESS;
 }
 /* }}} */
 
-/* {{{ PHP_MINFO_FUNCTION */
-PHP_MINFO_FUNCTION(blitz)
+PHP_MINFO_FUNCTION(blitz) /* {{{ */
 {
     char *buf[2048];
     char *node_open =  BLITZ_G(node_open);
