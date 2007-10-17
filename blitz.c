@@ -523,6 +523,11 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
         return 1;
     } 
 
+    if (filename_len >= MAXPATHLEN) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Filename exceeds the maximum allowed length of %d characters", MAXPATHLEN);
+        return 0;
+    }
+
     /* initialize template */
     if (!(*itpl = blitz_init_tpl(filename, filename_len, tpl->hash_globals, iteration_params TSRMLS_CC))) {
         return 0;
@@ -2929,6 +2934,11 @@ static PHP_FUNCTION(blitz_init)
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|s", &filename, &filename_len)) {
         return;
+    }
+
+    if (filename_len >= MAXPATHLEN) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Filename exceeds the maximum allowed length of %d characters", MAXPATHLEN);
+        RETURN_FALSE;
     }
 
     /* initialize template  */
