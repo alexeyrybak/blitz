@@ -3144,27 +3144,25 @@ PHP_FUNCTION(blitz_has_context)
 /* }}} */
 
 /* {{{ proto string Blitz->parse([array iterations]) */
-PHP_FUNCTION(blitz_parse) {
-    zval *id = NULL;
-    zval **desc = NULL;
+PHP_FUNCTION(blitz_parse)
+{
+    zval *id, **desc, *input_arr = NULL;
     blitz_tpl *tpl;
-    char *result = NULL;
-    unsigned long result_len = 0;
-    zval *input_arr = NULL;
-    char res = 0;
+    char *result;
+    unsigned long result_len;
+    int res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|z",&input_arr)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|a", &input_arr)) {
+        return;
     } 
 
     if (!tpl->static_data.body) { /* body was not loaded */
         RETURN_FALSE;
     }
 
-    if (input_arr && (IS_ARRAY == Z_TYPE_P(input_arr)) && (0 < zend_hash_num_elements(Z_ARRVAL_P(input_arr)))) {
+    if (input_arr && 0 < zend_hash_num_elements(Z_ARRVAL_P(input_arr))) {
         if (!blitz_merge_iterations_set(tpl, input_arr TSRMLS_CC)) {
             RETURN_FALSE;
         }
@@ -3178,34 +3176,30 @@ PHP_FUNCTION(blitz_parse) {
     } else {
         RETURN_FALSE;
     }
-
-    return;
 }
 /* }}} */
 
 /* {{{ proto string Blitz->context(string path) */
-PHP_FUNCTION(blitz_context) {
-    zval *id = NULL;
-    zval **desc = NULL;
-    blitz_tpl *tpl = NULL;
-    char *path = NULL;
-    int current_len = 0, norm_len = 0, path_len = 0, res = 0;
+PHP_FUNCTION(blitz_context)
+{
+    zval *id, **desc;
+    blitz_tpl *tpl;
+    char *path;
+    int current_len, norm_len = 0, path_len, res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"s",&path,&path_len)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
-    }
-
-    current_len = strlen(tpl->current_path);
-    ZVAL_STRINGL(return_value, tpl->current_path, current_len, 1);
-
-    if (path && path_len == current_len && 0 == strncmp(path,tpl->current_path,path_len)) {
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &path, &path_len)) {
         return;
     }
 
-    norm_len = 0;
+    current_len = strlen(tpl->current_path);
+    RETVAL_STRINGL(tpl->current_path, current_len, 1);
+
+    if (path && path_len == current_len && 0 == strncmp(path, tpl->current_path, path_len)) {
+        return;
+    }
+
     res = blitz_normalize_path(&tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
     if (res) {
         norm_len = strlen(tpl->tmp_buf);
@@ -3225,34 +3219,32 @@ PHP_FUNCTION(blitz_context) {
 
 /* {{{ proto string Blitz->getContext(void) */
 PHP_FUNCTION(blitz_get_context) {
-    zval *id = NULL;
-    zval **desc = NULL;
-    blitz_tpl *tpl = NULL;
+    zval *id, **desc;
+    blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    ZVAL_STRINGL(return_value, tpl->current_path, strlen(tpl->current_path), 1);
+    RETVAL_STRING(tpl->current_path, 1);
 }
 /* }}} */
 
 /* {{{ proto bool Blitz->iterate([string path [, mixed nonexistent]]) */
-PHP_FUNCTION(blitz_iterate) {
-    zval *id = NULL;
-    zval **desc = NULL;
-    blitz_tpl *tpl = NULL;
+PHP_FUNCTION(blitz_iterate)
+{
+    zval *id, **desc, *p_iterate_nonexistant = NULL;
+    blitz_tpl *tpl;
     char *path = NULL;
     int path_len = 0;
-    zval *p_iterate_nonexistant = NULL;
     int iterate_nonexistant = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|sz",&path, &path_len, &p_iterate_nonexistant)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+        return;
     }
 
-    if (p_iterate_nonexistant)
-        BLITZ_ZVAL_NOT_EMPTY(&p_iterate_nonexistant, iterate_nonexistant);
+    if (p_iterate_nonexistant) {
+         BLITZ_ZVAL_NOT_EMPTY(&p_iterate_nonexistant, iterate_nonexistant);
+    }
 
     if (blitz_prepare_iteration(tpl, path, path_len, iterate_nonexistant TSRMLS_CC)) {
         RETURN_TRUE;
@@ -3263,36 +3255,32 @@ PHP_FUNCTION(blitz_iterate) {
 /* }}} */
 
 /* {{{ proto bool Blitz->set(array input) */
-PHP_FUNCTION(blitz_set) {
-    zval *id = NULL;
-    zval **desc = NULL;
+PHP_FUNCTION(blitz_set)
+{
+    zval *id, **desc, *input_arr;
     blitz_tpl *tpl;
-    zval *input_arr = NULL;
-    int res = 0;
+    int res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"a",&input_arr)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "a", &input_arr)) {
+        return;
     }
 
     res = blitz_merge_iterations_set(tpl, input_arr TSRMLS_CC);
 
     if (res) {
         RETURN_TRUE;
-    } else {
-        RETURN_FALSE
     }
+    RETURN_FALSE;
 }
 /* }}} */
 
 /* {{{ proto bool Blitz->block(mixed p1 [, mixed p2[, mixed nonexistent]]) */
 PHP_FUNCTION(blitz_block) {
-    zval *id = NULL;
-    zval **desc = NULL;
+    zval *id, **desc;
     blitz_tpl *tpl;
-    zval *p1 = NULL, *p2 = NULL, *p_iterate_nonexistant = NULL, *input_arr = NULL;
+    zval *p1, *p2 = NULL, *p_iterate_nonexistant = NULL, *input_arr = NULL;
     char *path = NULL;
     int path_len = 0;
     int iterate_nonexistant = 0;
@@ -3300,14 +3288,13 @@ PHP_FUNCTION(blitz_block) {
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"z|zz",&p1,&p2,&p_iterate_nonexistant)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"z|zz", &p1, &p2, &p_iterate_nonexistant)) {
+        return;
     }
 
     if (IS_STRING == Z_TYPE_P(p1)) {
-        path = p1->value.str.val;
-        path_len = p1->value.str.len;
+        path = Z_STRVAL_P(p1);
+        path_len = Z_STRLEN_P(p1);
         if (p2 && (IS_ARRAY == Z_TYPE_P(p2))) {
             input_arr = p2;
         }
@@ -3318,12 +3305,13 @@ PHP_FUNCTION(blitz_block) {
     } else if (IS_ARRAY == Z_TYPE_P(p1)) {
         input_arr = p1;
     } else {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "block can accept NULL/string/array as first parameter only\n");
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "first pararmeter can be only NULL, string or array");
         RETURN_FALSE;
     }
 
-    if (p_iterate_nonexistant)
+    if (p_iterate_nonexistant) {
         BLITZ_ZVAL_NOT_EMPTY(&p_iterate_nonexistant, iterate_nonexistant)
+    }
 
     res = blitz_prepare_iteration(tpl, path, path_len, iterate_nonexistant TSRMLS_CC);
     if (res == -1) { /* context doesn't exist */
@@ -3333,7 +3321,7 @@ PHP_FUNCTION(blitz_block) {
     }
 
     /* copy params array to current iteration */
-    if (input_arr && zend_hash_num_elements(Z_ARRVAL_P(input_arr))>0) {
+    if (input_arr && zend_hash_num_elements(Z_ARRVAL_P(input_arr)) > 0) {
         if (tpl->last_iteration && *tpl->last_iteration) {
             zval_dtor(*(tpl->last_iteration));
             **(tpl->last_iteration) = *input_arr;
@@ -3349,23 +3337,22 @@ PHP_FUNCTION(blitz_block) {
 }
 /* }}} */
 
-/* {{{ proto string Blitz->include(string filename [, mixed params] ) */
-PHP_FUNCTION(blitz_include) {
-    blitz_tpl *tpl = NULL, *itpl = NULL;
-    char *filename = NULL;
-    int filename_len = 0;
-    zval **desc = NULL;
-    zval *id = NULL;
+/* {{{ proto string Blitz->include(string filename [, array params] ) */
+PHP_FUNCTION(blitz_include)
+{
+    blitz_tpl *tpl, *itpl;
+    char *filename;
+    int filename_len;
+    zval **desc, *id;
     char *result = NULL;
     unsigned long result_len = 0;
     zval *input_arr = NULL;
-    int res = 0;
+    int res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"s|z",&filename,&filename_len,&input_arr)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s|a", &filename, &filename_len, &input_arr)) {
+        return;
     }
 
     if (!filename) RETURN_FALSE;
@@ -3382,7 +3369,7 @@ PHP_FUNCTION(blitz_include) {
 
     res = blitz_exec_template(itpl, id, &result, &result_len TSRMLS_CC);
     if (res) {
-        ZVAL_STRINGL(return_value, result, result_len, 1);
+        RETVAL_STRINGL(result, result_len, 1);
         if (res == 1) efree(result);
     } else {
         RETURN_FALSE;
@@ -3391,15 +3378,15 @@ PHP_FUNCTION(blitz_include) {
 /* }}} */
 
 /* {{{ proto string Blitz->fetch(string path, array params) */
-PHP_FUNCTION(blitz_fetch) {
-    zval *id = NULL;
-    zval **desc = NULL;
+PHP_FUNCTION(blitz_fetch)
+{
+    zval *id, **desc;
     blitz_tpl *tpl;
     char *result = NULL;
     unsigned long result_len = 0;
     char exec_status = 0;
-    char *path = NULL;
-    int path_len = 0, norm_len = 0, res = 0, current_len = 0;
+    char *path;
+    int path_len, norm_len, res, current_len = 0;
     zval *input_arr = NULL, **elem;
     HashTable *input_ht = NULL;
     char *key = NULL;
@@ -3411,13 +3398,8 @@ PHP_FUNCTION(blitz_fetch) {
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"s|z",&path,&path_len,&input_arr)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
-    }
-
-    if (input_arr && (IS_ARRAY != Z_TYPE_P(input_arr))) {
-        input_arr = NULL;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"s|a", &path, &path_len, &input_arr)) {
+        return;
     }
 
     /* find corresponding iteration data */
@@ -3480,7 +3462,7 @@ PHP_FUNCTION(blitz_fetch) {
     exec_status = blitz_fetch_node_by_path(tpl, id, tpl->tmp_buf, norm_len, final_params, &result, &result_len TSRMLS_CC);
     
     if (exec_status) {
-        ZVAL_STRINGL(return_value,result,result_len,1);
+        RETVAL_STRINGL(result, result_len, 1);
         if (exec_status == 1) efree(result);
 
         /* clean-up parent path iteration after the fetch */
@@ -3502,28 +3484,23 @@ PHP_FUNCTION(blitz_fetch) {
     } else {
         RETURN_FALSE;
     }
-
-    return;
 }
 /* }}} */
 
 /* {{{ pool bool Blitz->clean([string path [, mixed warn_not_found ]]) */
-PHP_FUNCTION(blitz_clean) {
-    zval *id = NULL;
-    zval **desc = NULL;
+PHP_FUNCTION(blitz_clean)
+{
+    zval *id, **desc;
     blitz_tpl *tpl;
     char *path = NULL;
     int path_len = 0, norm_len = 0, res = 0, current_len = 0;
-    zval *path_iteration = NULL;
-    zval *path_iteration_parent = NULL;
-    zval *warn_param = NULL;
+    zval *path_iteration = NULL, *path_iteration_parent = NULL, *warn_param = NULL;
     int warn_not_found = 1;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|sz",&path,&path_len,&warn_param)) {
-        WRONG_PARAM_COUNT;
-        RETURN_FALSE;
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|sz", &path, &path_len, &warn_param)) {
+        return;
     }
 
     /* warn_param = FALSE: throw no warning when iteration is not found. All other cases - do please. */
