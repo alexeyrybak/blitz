@@ -810,7 +810,7 @@ inline void blitz_parse_call (
     BLITZ_SKIP_BLANK(c,i_pos,pos);
 
     if (BLITZ_DEBUG) {
-        char *tmp = estrndup(text, len_text);
+        char *tmp = estrndup((char *)text, len_text);
         tmp[len_text-1] = '\x0';
         php_printf("blitz_parse_call, started at pos=%u, c=%c\n", pos, *c);
         php_printf("text: %s\n", tmp);
@@ -825,7 +825,7 @@ inline void blitz_parse_call (
         BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
         pos+=i_pos;
         if (i_pos!=0) {
-            node->lexem = estrndup(main_token,i_pos);
+            node->lexem = estrndup((char *)main_token,i_pos);
             *true_lexem_len = i_pos;
             if (is_path) {
                 node->type = BLITZ_NODE_TYPE_VAR_PATH;
@@ -843,7 +843,7 @@ inline void blitz_parse_call (
         if (BLITZ_DEBUG) php_printf("D3: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
 
         if (i_pos>0) {
-            node->lexem = estrndup(main_token,i_pos);
+            node->lexem = estrndup((char *)main_token,i_pos);
             node->type = BLITZ_TYPE_METHOD;
             *true_lexem_len = i_pos-1;
             ++pos; ++c;
@@ -861,14 +861,14 @@ inline void blitz_parse_call (
                     state = BLITZ_CALL_STATE_NEXT_ARG;
 
                     /* predefined method? */
-                    if (0 == strcmp(main_token,BLITZ_NODE_TYPE_IF_S)) {
+                    if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_IF_S)) {
                         node->type = BLITZ_NODE_TYPE_IF;
-                    } else if (0 == strcmp(main_token,BLITZ_NODE_TYPE_INCLUDE_S)) {
+                    } else if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_INCLUDE_S)) {
                         node->type = BLITZ_NODE_TYPE_INCLUDE;
-                    } else if (0 == strcmp(main_token,BLITZ_NODE_TYPE_WRAPPER_ESCAPE_S)) {
+                    } else if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_WRAPPER_ESCAPE_S)) {
                         node->type = BLITZ_NODE_TYPE_WRAPPER;
                         node->flags = BLITZ_NODE_TYPE_WRAPPER_ESCAPE;
-                    } else if (0 == strcmp(main_token,BLITZ_NODE_TYPE_WRAPPER_DATE_S)) {
+                    } else if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_WRAPPER_DATE_S)) {
                         node->type = BLITZ_NODE_TYPE_WRAPPER;
                         node->flags = BLITZ_NODE_TYPE_WRAPPER_DATE;
                     } 
@@ -965,9 +965,9 @@ inline void blitz_parse_call (
                         if (i_pos!=0) {
                             ok = 1;
                             /* FIXME */
-                            if ((i_len == 5) && ((0 == strncmp("FALSE",token,5) || (0 == strncmp("false",token,5))))) {
+                            if ((i_len == 5) && ((0 == strncmp("FALSE",(char *)token,5) || (0 == strncmp("false", (char *)token,5))))) {
                                 *ptr_token = 'f';
-                            } else if ((i_len == 4) && ((0 == strncmp("TRUE",token,4) || (0 == strncmp("true",token,4))))){
+                            } else if ((i_len == 4) && ((0 == strncmp("TRUE", (char *)token,4) || (0 == strncmp("true", (char *)token,4))))){
                                 *ptr_token = 't';
                             } else {
                                 ok = 0;
@@ -1042,7 +1042,7 @@ inline void blitz_parse_call (
 /* }}} */
 
 /* {{{ get_line_number(char *str, unsigned long pos) */
-inline unsigned long get_line_number(char *str, unsigned long pos) {
+inline unsigned long get_line_number(unsigned char *str, unsigned long pos) {
     register char *p = str;
     register unsigned long i = pos;
     register unsigned int n = 0;
@@ -1066,7 +1066,7 @@ inline unsigned long get_line_number(char *str, unsigned long pos) {
 /* }}} */
 
 /* {{{ get_line_pos(char *str, unsigned long pos) */
-inline unsigned long get_line_pos(char *str, unsigned long pos) {
+inline unsigned long get_line_pos(unsigned char *str, unsigned long pos) {
     register char *p = str;
     register unsigned long i = pos;
 
@@ -3327,7 +3327,7 @@ PHP_FUNCTION(blitz_context) {
        efree(tpl->current_path);
     }
 
-    tpl->current_path = estrndup(tpl->tmp_buf,norm_len);
+    tpl->current_path = estrndup((char *)tpl->tmp_buf,norm_len);
 }
 /* }}} */
 
