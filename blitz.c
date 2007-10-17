@@ -154,7 +154,7 @@ static inline int blitz_read_with_stream(blitz_tpl *tpl, char *filename TSRMLS_D
 }
 /* }}} */
 
-static inline int blitz_read_with_fread(blitz_tpl *tpl, char *filename TSRMLS_DC) /* {{{ */
+static inline int blitz_read_with_fread(blitz_tpl *tpl, const char *filename TSRMLS_DC) /* {{{ */
 {
     FILE *stream;
     unsigned int get_len;
@@ -182,7 +182,7 @@ static inline int blitz_read_with_fread(blitz_tpl *tpl, char *filename TSRMLS_DC
 /* }}} */
 
 #if HAVE_MMAP
-static inline int blitz_read_with_mmap(blitz_tpl *tpl, char *filename TSRMLS_DC) /* {{{ */
+static inline int blitz_read_with_mmap(blitz_tpl *tpl, const char *filename TSRMLS_DC) /* {{{ */
 {
     int fd;
     struct stat stat_info;
@@ -392,7 +392,7 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 }
 /* }}} */
 
-static blitz_tpl *blitz_init_tpl(char *filename, int filename_len, HashTable *globals, zval *iterations TSRMLS_DC) /* {{{ */
+static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len, HashTable *globals, zval *iterations TSRMLS_DC) /* {{{ */
 {
     int global_path_len = 0;
     char filename_normalized[BLITZ_FILE_PATH_MAX_LEN];
@@ -470,7 +470,7 @@ It seems to be 10% faster to use just fread or mmap than streams on lebowski-ben
 }
 /* }}} */
 
-static int blitz_load_body(blitz_tpl *tpl, char *body, int body_len TSRMLS_DC) /* {{{ */
+static int blitz_load_body(blitz_tpl *tpl, const char *body, int body_len TSRMLS_DC) /* {{{ */
 {
     unsigned int add_buffer_len = 0;
     char *name = "noname_loaded_from_zval";
@@ -499,7 +499,7 @@ static int blitz_load_body(blitz_tpl *tpl, char *body, int body_len TSRMLS_DC) /
 }
 /* }}} */
 
-static int blitz_include_tpl_cached(blitz_tpl *tpl, char *filename, unsigned int filename_len, zval *iteration_params, blitz_tpl **itpl TSRMLS_DC) /* {{{ */
+static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsigned int filename_len, zval *iteration_params, blitz_tpl **itpl TSRMLS_DC) /* {{{ */
 {
     zval **desc = NULL;
     unsigned long itpl_idx = 0;
@@ -667,7 +667,7 @@ static void php_blitz_dump_struct(blitz_tpl *tpl) /* {{{ */
 }
 /* }}} */
 
-static void php_blitz_get_node_paths(zval *list, tpl_node_struct *node, char *parent_path) /* {{{ */
+static void php_blitz_get_node_paths(zval *list, tpl_node_struct *node, const char *parent_path) /* {{{ */
 {
     unsigned long j = 0;
     char suffix[2] = "\x0";
@@ -1042,8 +1042,8 @@ static inline void blitz_parse_call (
 }
 /* }}} */
 
-static inline unsigned long get_line_number(char *str, unsigned long pos) { /* {{{ */
-    register char *p = str;
+static inline unsigned long get_line_number(const char *str, unsigned long pos) { /* {{{ */
+    register const char *p = str;
     register unsigned long i = pos;
     register unsigned int n = 0;
     p += i;
@@ -1065,8 +1065,8 @@ static inline unsigned long get_line_number(char *str, unsigned long pos) { /* {
 }
 /* }}} */
 
-static inline unsigned long get_line_pos(char *str, unsigned long pos) { /* {{{ */
-    register char *p = str;
+static inline unsigned long get_line_pos(const char *str, unsigned long pos) { /* {{{ */
+    register const char *p = str;
     register unsigned long i = pos;
 
     p += i;
@@ -1573,7 +1573,7 @@ static inline int blitz_exec_wrapper(char **result, int *result_len, unsigned lo
 }
 /* }}} */
 
-static inline int blitz_fetch_var_by_path(zval ***zparam, char *lexem, int lexem_len, zval *params, HashTable *globals TSRMLS_DC) /* {{{ */
+static inline int blitz_fetch_var_by_path(zval ***zparam, const char *lexem, int lexem_len, zval *params, HashTable *globals TSRMLS_DC) /* {{{ */
 {
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
     char key[256];
@@ -1870,7 +1870,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, tpl_node_struct *node, 
 /* }}} */
 
 /* {{{ int blitz_exec_var() */
-static inline void blitz_exec_var(blitz_tpl *tpl, char *lexem, zval *params, char **result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
+static inline void blitz_exec_var(blitz_tpl *tpl, const char *lexem, zval *params, char **result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
 {
     /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
     unsigned int lexem_len = strlen(lexem);
@@ -1921,7 +1921,7 @@ static inline void blitz_exec_var(blitz_tpl *tpl, char *lexem, zval *params, cha
 /* }}} */
 
 /* {{{ int blitz_exec_var_path() */
-static inline void blitz_exec_var_path(blitz_tpl *tpl, char *lexem, zval *params, char **result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
+static inline void blitz_exec_var_path(blitz_tpl *tpl, const char *lexem, zval *params, char **result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
 {
     /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
     unsigned int lexem_len = strlen(lexem);
@@ -2197,7 +2197,7 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
 }
 /* }}} */
 
-static inline int blitz_normalize_path(char **dest, char *local, int local_len, char *global, int global_len TSRMLS_DC) /* {{{ */
+static inline int blitz_normalize_path(char **dest, const char *local, int local_len, char *global, int global_len TSRMLS_DC) /* {{{ */
 {
     int buf_len = 0;
     char *buf = *dest;
@@ -2265,11 +2265,11 @@ static inline int blitz_normalize_path(char **dest, char *local, int local_len, 
 }
 /* }}} */
 
-static inline int blitz_iterate_by_path(blitz_tpl *tpl, char *path, int path_len, int is_current_iteration, int create_new TSRMLS_DC) /* {{{ */
+static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int path_len, int is_current_iteration, int create_new TSRMLS_DC) /* {{{ */
 {
     zval **tmp;
     int i = 1, ilast = 1, j = 0, k = 0;
-    char *p = path;
+    const char *p = path;
     int pmax = path_len;
     char key[BLITZ_CONTEXT_PATH_MAX_LEN];
     int key_len  = 0;
@@ -2458,12 +2458,12 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, char *path, int path_len
 }
 /* }}} */
 
-static int blitz_find_iteration_by_path(blitz_tpl *tpl, char *path, int path_len, zval **iteration, zval **iteration_parent TSRMLS_DC) /* {{{ */
+static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int path_len, zval **iteration, zval **iteration_parent TSRMLS_DC) /* {{{ */
 {
     zval **tmp, **entry;
     register int i = 1;
     int ilast = 1, j = 0, k = 0, key_len = 0;
-    register char *p = path;
+    register const char *p = path;
     register int pmax = path_len;
     char buffer[BLITZ_CONTEXT_PATH_MAX_LEN];
     char *key = NULL;
@@ -2575,7 +2575,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, char *path, int path_len
 }
 /* }}} */
 
-static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, char *path, unsigned int path_len) /* {{{ */
+static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, const char *path, unsigned int path_len) /* {{{ */
 {
     unsigned long j = 0;
     unsigned int current_path_len = 0;
@@ -2584,8 +2584,14 @@ static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, 
     unsigned int lexem_len = 0;
     zval *temp = NULL;
 
-    if (!node) return;
-    if (path_len>0) memcpy(current_path,path,path_len);
+    if (!node) { 
+        return;
+    }
+    
+    if (path_len>0) {
+        memcpy(current_path, path, path_len);
+    }
+
     if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
         lexem = node->args[0].name;
         lexem_len = node->args[0].len;
@@ -2674,7 +2680,7 @@ static inline int blitz_touch_fetch_index(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 /* }}} */
 
 /* {{{ int blitz_fetch_node_by_path() */
-static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, char *path, unsigned int path_len, zval *input_params, char **result, unsigned long *result_len TSRMLS_DC)
+static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, const char *path, unsigned int path_len, zval *input_params, char **result, unsigned long *result_len TSRMLS_DC)
 {
     tpl_node_struct *i_node = NULL;
     unsigned long result_alloc_len = 0;
@@ -2689,7 +2695,7 @@ static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, char *path, unsign
     }
 
     /* find node by path   */
-    if (SUCCESS == zend_hash_find(tpl->static_data.fetch_index,path,path_len+1,(void**)&z)) {
+    if (SUCCESS == zend_hash_find(tpl->static_data.fetch_index, path, path_len + 1, (void**)&z)) {
         i_node = tpl->static_data.nodes + Z_LVAL_PP(z);
     } else {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "cannot find context %s in template %s", path, tpl->static_data.name);
@@ -2732,7 +2738,7 @@ static inline int blitz_iterate_current(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 }
 /* }}} */
 
-static inline int blitz_prepare_iteration(blitz_tpl *tpl, char *path, int path_len, int iterate_nonexistant TSRMLS_DC) /* {{{ */
+static inline int blitz_prepare_iteration(blitz_tpl *tpl, const char *path, int path_len, int iterate_nonexistant TSRMLS_DC) /* {{{ */
 {
     int res = 0;
 
