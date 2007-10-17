@@ -2201,11 +2201,8 @@ inline int blitz_populate_root (blitz_tpl *tpl TSRMLS_DC) {
 /* }}} */
 
 /* {{{ blitz_exec_template */
-int blitz_exec_template (
-    blitz_tpl *tpl,
-    zval *id,
-    unsigned char **result,
-    unsigned long *result_len TSRMLS_DC) {
+int blitz_exec_template(blitz_tpl *tpl, zval *id, unsigned char **result, unsigned long *result_len TSRMLS_DC)
+{
     unsigned long result_alloc_len = 0;
 
     /* quick return if there was no nodes */
@@ -2218,10 +2215,7 @@ int blitz_exec_template (
     /* build result, initial alloc of twice bigger than body */
     *result_len = 0;
     result_alloc_len = 2*tpl->static_data.body_len; 
-    *result = (char*)ecalloc(result_alloc_len,sizeof(char));
-    if (!*result) {
-        return 0;
-    }
+    *result = (char*)ecalloc(result_alloc_len, sizeof(char));
 
     if (0 == zend_hash_num_elements(Z_ARRVAL_P(tpl->iterations))) {
         blitz_populate_root(tpl TSRMLS_CC);
@@ -3443,11 +3437,13 @@ PHP_FUNCTION(blitz_block) {
     /* copy params array to current iteration */
     if (input_arr && zend_hash_num_elements(Z_ARRVAL_P(input_arr))>0) {
         if (tpl->last_iteration && *tpl->last_iteration) {
+            zval_dtor(*(tpl->last_iteration));
             **(tpl->last_iteration) = *input_arr;
             zval_copy_ctor(*tpl->last_iteration);
             INIT_PZVAL(*tpl->last_iteration);
         } else {
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: last_iteration is empty, it's a bug\n"); 
+            RETURN_FALSE;
         }
     }
 
