@@ -1714,6 +1714,7 @@ inline int blitz_exec_predefined_method (
                 *p_result = (char*)memcpy(*p_result,Z_STRVAL_PP(z),buf_len);
                 *result_len += buf_len;
                 p_result+=*result_len;
+                (*result)[*result_len] = '\0';
             }
         } else { /* argument is string or number */
             buf_len = (unsigned long)arg->len;
@@ -1721,6 +1722,7 @@ inline int blitz_exec_predefined_method (
             *p_result = (char*)memcpy(*p_result,node->args[i_arg].name,buf_len);
             *result_len += buf_len;
             p_result+=*result_len;
+            (*result)[*result_len] = '\0';
         }
     } else if (node->type == BLITZ_NODE_TYPE_INCLUDE) {
         char *filename = node->args[0].name;
@@ -1739,6 +1741,7 @@ inline int blitz_exec_predefined_method (
             *p_result = (char*)memcpy(*p_result,inner_result,inner_result_len);
             *result_len += inner_result_len;
             p_result+=*result_len;
+            (*result)[*result_len] = '\0';
         }
 
     } else if (node->type == BLITZ_NODE_TYPE_WRAPPER) {
@@ -1783,6 +1786,7 @@ inline int blitz_exec_predefined_method (
             *p_result = (char*)memcpy(*p_result, str, str_len);
             *result_len += str_len;
             p_result+=*result_len;
+            (*result)[*result_len] = '\0';
         } else {
             return 0;
         }
@@ -1874,6 +1878,7 @@ inline int blitz_exec_user_method (
         *p_result = (char*)memcpy(*p_result,Z_STRVAL_P(retval), buf_len);
         *result_len += buf_len;
         p_result+=*result_len;
+        (*result)[*result_len] = '\0';
     }
 
     zval_ptr_dtor(&zmethod);
@@ -1919,6 +1924,7 @@ inline void blitz_exec_var (
         p_result = (char*)memcpy(p_result, predefined_buf, buf_len);
         *result_len += buf_len;
         p_result+=*result_len;
+        (*result)[*result_len] = '\0';
     } else {
         if ( (params && (SUCCESS == zend_hash_find(Z_ARRVAL_P(params), lexem, lexem_len_p1, (void**)&zparam)))
             ||
@@ -1943,6 +1949,7 @@ inline void blitz_exec_var (
 
             *result_len += buf_len;
             p_result+=*result_len;
+            (*result)[*result_len] = '\0';
         }
     }
 }
@@ -1987,6 +1994,7 @@ inline void blitz_exec_var_path (
 
     *result_len += buf_len;
     p_result+=*result_len;
+    (*result)[*result_len] = '\0';
 
 }
 /* }}} */
@@ -2126,6 +2134,7 @@ int blitz_exec_nodes (
             p_result = (char*)memcpy(p_result, tpl->static_data.body + last_close, buf_len); 
             *result_len += buf_len;
             p_result+=*result_len;
+            (*result)[*result_len] = '\0';
         }
 
         if (node->lexem && !node->has_error) {
@@ -2167,6 +2176,7 @@ int blitz_exec_nodes (
         p_result = (char*)memcpy(p_result, tpl->static_data.body + last_close, buf_len);
         *result_len += buf_len;
         p_result+=*result_len;
+        (*result)[*result_len] = '\0';
     }
 
     if (BLITZ_DEBUG)
