@@ -2939,6 +2939,7 @@ static PHP_FUNCTION(blitz_init)
     if (filename) {
         /* analyse template  */
         if (!blitz_analyse(tpl TSRMLS_CC)) {
+            blitz_free_tpl(tpl);
             RETURN_FALSE;
         }
     }
