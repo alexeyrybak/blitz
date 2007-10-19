@@ -1,8 +1,14 @@
 ===================================================================================================
+0.5.7 version 18 Oct 2007
+===================================================================================================
+Bug & memleak fixes by Antony Dovgal 
+
+===================================================================================================
 0.5.7-devel version 15 Oct 2007
 ===================================================================================================
 Code clean-up: a part of "static" template structure (which doesn't depend on iterations) was
-put into a separate attrubute calles static_data. This will help with caching issues in the future.
+put into a separate attrubute called "static_data". This will help with caching issues in the
+future.
 
 ===================================================================================================
 0.5.6 version 24 Sent 2007
