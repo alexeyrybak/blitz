@@ -3166,7 +3166,7 @@ static PHP_FUNCTION(blitz_parse)
     zval *id, **desc, *input_arr = NULL;
     blitz_tpl *tpl;
     char *result;
-    unsigned long result_len;
+    unsigned long result_len = 0;
     int res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
