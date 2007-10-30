@@ -2941,6 +2941,11 @@ static PHP_FUNCTION(blitz_init)
         RETURN_FALSE;
     }
 
+    if (getThis() && zend_hash_exists(Z_OBJPROP_P(getThis()), "tpl", sizeof("tpl"))) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "The object has already been initialized");
+        RETURN_FALSE;
+    }
+
     /* initialize template  */
     if (!(tpl = blitz_init_tpl(filename, filename_len, NULL, NULL TSRMLS_CC))) {
         RETURN_FALSE;
