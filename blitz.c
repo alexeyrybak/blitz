@@ -1708,19 +1708,23 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, tpl_node_struct *
         char *inner_result = NULL;
         unsigned long inner_result_len = 0;
         blitz_tpl *itpl = NULL;
+        int res;
 
         if (!blitz_include_tpl_cached(tpl, filename, filename_len, iteration_params, &itpl TSRMLS_CC)) {
             return 0;
         }
 
         /* parse */
-        if (blitz_exec_template(itpl,id,&inner_result,&inner_result_len TSRMLS_CC)) {
+        if ((res = blitz_exec_template(itpl,id,&inner_result,&inner_result_len TSRMLS_CC))) {
             BLITZ_REALLOC_RESULT(inner_result_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
             *p_result = (char*)memcpy(*p_result,inner_result,inner_result_len);
             *result_len += inner_result_len;
             p_result+=*result_len;
             (*result)[*result_len] = '\0';
-            efree(inner_result);
+
+            if (res == 1) {
+                efree(inner_result);
+            }
         }
 
     } else if (node->type == BLITZ_NODE_TYPE_WRAPPER) {
