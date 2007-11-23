@@ -19,7 +19,22 @@ background-color: #eeeeee
 <p>Downloads: <a href="http://sourceforge.net/projects/blitz-templates/">sourceforge</a>, sources <a href="http://alexeyrybak.com/blitz/">homepage</a>, <a href="http://alexeyrybak.com/blitz/win32-binaries/">win32 binaries</a><br>
 Other languages: <a href="http://alexeyrybak.com/blitz/blitz_ru.html">russian</a>
 
+<p>Blitz project is in a quite active development stage, new releases may appear 
+once a week. If you want to <b>get new release announcements</b> - please 
+<a href="http://freshmeat.net/subscribe/63347/?url=%2Fprojects%2Fblitz-templates%2F">subscribe at freashmeat</a> 
+or <a href="http://sourceforge.net/export/rss2_projfiles.php?group_id=188147">sourceforge file releases RSS</a>. 
+If you like this project ant want to help it - i'm always open for any constructive suggestions.
+We're still looking for people who could help us with international translation 
+(mostly <b>German, Spanish and French</b>). Please, contact me if you could help.
+
 <p><b>Document by: Alexey Rybak, Lioubov Vereschagina, Vladimir Krivosheev</b>
+<br>Feedback: contact developers and users through the mailing list (blitz-subscribe aT alexeyrybak d0t com) or visit the <a href="http://alexeyrybak.com/blitz/bt/">BugTraker</a>
+
+<br><br>This is full documentation. 
+Blitz also has a very short <a href="http://alexeyrybak.com/blitz/quick_geek.html">geek tutorial</a> 
+which can save you time.
+
+<br><br>
 
 <table border=0>
 <tr><td>
@@ -29,7 +44,7 @@ Other languages: <a href="http://alexeyrybak.com/blitz/blitz_ru.html">russian</a
 <li><a href="#bench">Performance benchmarks</a>
 <li><a href="#install">Installation</a>
 <li><a href="#config">Configuration</a>
-<li><a href="#basics">Basics: variables, methods, contexts</a>
+<li><a href="#basics">Basics: variables, methods, contexts, loops, conditions</a>
 <li><a href="#templateAPI">Template API</a>
 <ul>
 <li><a href="#templateAPI.if"><b>if</b></a> — conditional output
@@ -42,9 +57,12 @@ Other languages: <a href="http://alexeyrybak.com/blitz/blitz_ru.html">russian</a
 <ul>
 <li><a href="#controllerAPI.block"><b>block</b></a> — set current context and iterate it
 <li><a href="#controllerAPI.clean"><b>clean</b></a> — clean up context: reset iterations and/or variables
-<li><a href="#controllerAPI.context"><b>context</b></a> — set current context
-<li><a href="#controllerAPI.di"><b>dumpIterations (dump_iterations)</b></a> — dump all iterations (debug)
-<li><a href="#controllerAPI.ds"><b>dumpStruct (dump_struct)</b></a> — dump template structure (debug)
+<li><a href="#controllerAPI.context"><b>context</b></a> — set current context (and return previous)
+<li><a href="#controllerAPI.context"><b>getContext (get_context)</b></a> — get current context
+<li><a href="#controllerAPI.di"><b>dumpIterations (dump_iterations)</b></a> — dump all template iterations
+<li><a href="#controllerAPI.gsgi"><b>getIterations (get_iterations)</b></a> — get all template iterations as array
+<li><a href="#controllerAPI.ds"><b>dumpStruct (dump_struct)</b></a> — dump template structure
+<li><a href="#controllerAPI.gsgi"><b>getStruct (get_struct)</b></a> — get template structure as array
 <li><a href="#controllerAPI.fetch"><b>fetch</b></a> — build and fetch the result for context
 <li><a href="#controllerAPI.hc"><b>hasContext (has_context)</b></a> — check if context exists
 <li><a href="#controllerAPI.include"><b>include</b></a> — include another template
@@ -52,9 +70,13 @@ Other languages: <a href="http://alexeyrybak.com/blitz/blitz_ru.html">russian</a
 <li><a href="#controllerAPI.load"><b>load</b></a> — load template body from a PHP string variable
 <li><a href="#controllerAPI.parse"><b>parse</b></a> — build and return the result
 <li><a href="#controllerAPI.set"><b>set</b></a> — set variables or iterations
-<li><a href="#controllerAPI.sg"><b>setGlobal (set_global)</b></a> — set global variables
+<li><a href="#controllerAPI.sg"><b>setGlobals (set_globals)</b></a> — set global variables
+<li><a href="#controllerAPI.getglobals"><b>getGlobals (get_globals)</b></a> — get global variables as array
 </ul>
 </ul>
+
+<p>Note: depending on your religious views you may use either CamelCaps or under_bars coding style.
+For any doSomething blitz can do_something as well.
 
 </td>
 <td valign=top align=center>
@@ -82,9 +104,9 @@ Other languages: <a href="http://alexeyrybak.com/blitz/blitz_ru.html">russian</a
 
 Most of templating strategies cannot prevent appearance of spaghetti-mess-of-code which is obviously quite unpleasant to dig in. 
 The most important goal of blitz was to help building fast and clear presentation level code for very 
-big applications with extremely complex presentation logic (with a lof if customized user pages, web 2.0 stuff and so on).
+big applications with extremely complex presentation logic (with a lot of customized user pages, web 2.0 stuff and so on).
 
-<p>General Blitz concept is: view-level of the web application can be based on two components: <b>view controllers</b>, custom PHP-objects encapsulating most of view logic with no HTML-code inside, and weekly active <b>templates</b>, with all of the HTML-code, templating variables and weak logic, including <b>user method calls</b>, <b>includes</b> and <b>simple conditional output</b>. The idea of weak logic comes from a very simple approach,  worked out from big internet systems development. To prevent a spaghetti mess and being able to maintain and make changes into you project not in death stress...
+<p>General Blitz concept is: view-level of the web application can be based on two components: <b>view controllers</b>, custom PHP-objects encapsulating most of view logic with no HTML-code inside, and weakly active <b>templates</b>, with all of the HTML-code, templating variables and weak logic, including <b>user method calls</b>, <b>includes</b> and <b>simple conditional output</b>. The idea of weak logic comes from a very simple approach,  worked out from big internet systems development. To prevent a spaghetti mess and being able to maintain and make changes into you project not in death stress...
 <ul>
 <li> ... your PHP code (even at the presentation level) should not be mixed with HTML and your HTML code should not be mixed with PHP. Blitz makes developers to separate PHP code into template controller files. And blitz makes developers to separate HTML code into template files. No PHP is allowed in templates and no HTML is needed in PHP code.
 <li> ... sometimes it's very handy to use some logic in templates, but then you have a risk of getting another kind of spaghetti -  template-logic mess with HTML (well, like Smarty-spaghetti in some projects) instead of PHP-spaghetti. These situaltions are both equally ugly. Blitz allows to use weak logic code in templates, but this logic is simple enough to keep the code in a readable state.
@@ -114,8 +136,8 @@ The first example has no contexts. We will use one template controller and 4 tem
 </pre>
 </div>
 
-<p> Here {{ $title }} is a trivial variable output and <b>include</b> is an include operation, available in templates. We will omit header and footer details - just note that they 
-are parsed and <b>included</b> from our main template. <b>list_news</b> is a custom method provided by a <b>template controller</b>:
+<p> Here {{ $title }} is a trivial variable output and <b>include</b> is an include operation, available in templates. We will omit header and footer details - just note that they  are parsed and <b>included</b> from our main template. <b>list_news</b> is a custom method provided by a <b>template controller</b>:
+
 <div class=grey>
 <pre>
 /* controller class */
@@ -155,10 +177,11 @@ echo $T->parse();
 
 <p>Here View is main template controller class, derived from the parent class Blitz, defined in extension. 
 We initialise controller, set the data and call parse method, provided by the parent. 
-Main template has a <b>user method call</b> - {{ list_news }}. 
+Main template has a <b>user method call</b> - {{ list_news() }}. 
 This method is provided by a template controller. It builds a list of news by passing news data 
-for each of the item simply joining the results. The returned 
-variable is a string of resulting HTML code to be put instead of {{ list_news }} in main.tpl.The include method is provided by the parent.
+for each of the item simply joining the results. Note that you need to use {{ list_news() }} with brackets,
+{{ list_news }} is equivalent to {{ $list_news }}. The returned variable is a string of resulting HTML code
+to be put instead of {{ list_news() }} in main.tpl.The include method is provided by the parent.
 
 <p>Here is the item template, new_list_item.tpl:
 
@@ -235,7 +258,7 @@ You use the most effective way (from the perfomance view), and if it is handy en
 Otherwise try Blitz. Perhaps you will be nicely surprised ;)
 
 <h3>Warning</h3>
-<i>Blitz project status is half-experimental, but starting with 0.4.3 version it's quite stable and can be used in production code.
+<i>Blitz project status is half-experimental, but starting with 0.5.7 version it's quite stable and can be used in production code.
 However 100 % stability and backward compatibility are not guaranteed till version 1.0</i>
 
 <a id="bench"></a>
@@ -246,24 +269,42 @@ The only one right way of doing that is to build your application using several 
 under the real conditions. Shall it be noted that nobody do that? On the other hand results of any artificial or synthetic tests 
 should be used very carefully. Nevertheless, results of two synthetic tests are listed here. 
 
-<p>The first is a <a href="http://test.country-info.ru/bench/">classic one</a>, measures the speed 
+<p>The first is a <a href="http://template-bench.iliakantor.ru/">classic one</a>, measures the speed 
 of cycle template iterations. This test is very  simple and can be used only to classify engine
 as “normal”, “slow” or “grotty”. The number of iterations and variables was taken by default (9 variables, 50 iterations), 
 the results of this test is listed in Table 1. It is easy to see that Blitz is not an outsider at least.
 
 <p><b>Table 1. Classic and very simple benchmarks</b>
 
-<table border="1" width=600><colgroup><col /><col /><col /><col /></colgroup><thead><tr><th colspan="4">server (A): XEON*2 2,4GHz (HT on) 2GB; linux php-4.3.10(fgci) zps nginx; blitz, php_templates: so-modules, CFLAGS: -g3 -O2</th></tr><tr><th>¹</th><th>Engine name</th><th>Time</th><th>Percentage</th></tr></thead><tbody><tr><td>1</td><td>php</td><td>0.000544</td><td>100%</td></tr><tr><td>2</td><td>blitz</td><td>0.001008</td><td>185%</td></tr><tr><td>3</td><td>php_templates</td><td>0.001812</td><td>333%</td></tr><tr><td>4</td><td>smarty (compiled)</td><td>0.002006</td><td>369%</td></tr><tr><td>5</td><td>str_replace</td><td>0.003713</td><td>683%</td></tr><tr><td>6</td><td>phemplate</td><td>0.004514</td><td>830%</td></tr><tr><td>7</td><td>fasttemplate</td><td>0.006835</td><td>1256%</td></tr><tr><td>8</td><td>vtemplate</td><td>0.009565</td><td>1758%</td></tr><tr><td>9</td><td>ultratemplate</td><td>0.012993</td><td>2388%</td></tr><tr><td>10</td><td>templatepower</td><td>0.017056</td><td>3135%</td></tr><tr><td>11</td><td>bugitemplate</td><td>0.019989</td><td>3674%</td></tr><tr><td>12</td><td>phplib</td><td>0.028053</td><td>5157%</td></tr><tr><td>13</td><td>profTemplate</td><td>0.043104</td><td>7924%</td></tr><tr><td>14</td><td>xtemplate</td><td>0.048799</td><td>8970%</td></tr></tbody></table>
+<pre>
+1	blitz                   0.000224 100%
+2	php                     0.000351 157%
+3	vsprintf                0.000706 315%
+4	php_templates           0.00076  339%
+5	smarty                  0.001485 663%
+6	str_replace             0.001523 680%
+7	phemplate               0.002603 1162%
+8	fasttemplate            0.005027 2244%
+9	xslt                    0.006355 2837%
+10	Sigma                   0.007495 3346%
+11	IT                      0.008885 3967%
+12	vtemplate               0.009021 4027%
+13	ultratemplate           0.012261 5474%
+14	bugitemplate            0.017534 7828%
+15	phplib                  0.018989 8477%
+16	templatepower           0.020982 9367%
+17	tinybutstrong           0.025323 11305%
+18	xtemplate               0.0436   19464%
 
-<table border="1" width=600><colgroup><col /><col /><col /><col /></colgroup><thead><tr><th colspan="4">server (B): PC PIV 2,8GHz (HT off) 1GB; linux-2.6.8 php-4.3.10 (Apache/1.3.33 static) zps; blitz, php_templates: so-modules, CFLAGS -g -O2</th></tr><tr><th>¹</th><th>Engine name</th><th>Time</th><th>Percentage</th></tr></thead><tbody><tr><td>1</td><td>php</td><td>0.00045</td><td>100%</td></tr><tr><td>2</td><td>blitz</td><td>0.000834</td><td>185%</td></tr><tr><td>3</td><td>php_templates</td><td>0.001595</td><td>354%</td></tr><tr><td>4</td><td>smarty (compiled)</td><td>0.001694</td><td>376%</td></tr><tr><td>5</td><td>str_replace</td><td>0.00373</td><td>829%</td></tr><tr><td>6</td><td>phemplate</td><td>0.004215</td><td>937%</td></tr><tr><td>7</td><td>fasttemplate</td><td>0.006139</td><td>1364%</td></tr><tr><td>8</td><td>vtemplate</td><td>0.008755</td><td>1946%</td></tr><tr><td>9</td><td>ultratemplate</td><td>0.012747</td><td>2833%</td></tr><tr><td>10</td><td>templatepower</td><td>0.018678</td><td>4151%</td></tr><tr><td>11</td><td>bugitemplate</td><td>0.019286</td><td>4286%</td></tr><tr><td>12</td><td>phplib</td><td>0.025478</td><td>5662%</td></tr><tr><td>13</td><td>profTemplate</td><td>0.045148</td><td>10033%</td></tr><tr><td>14</td><td>xtemplate</td><td>0.048137</td><td>10697%</td></tr></tbody></table>
+Server: Linux 2.6.22-vs2.3.0.28-gentoo #1 SMP Mon Oct 22 14:11:34 MSD
+2007 x86_64 Intel(R) Xeon(R) CPU 5130 @ 2.00GHz GenuineIntel GNU/Linux
 
-<p>The very big difference in performance result for PHP comparing with the other engines is explained very simple.
-All PHP code is packed in one file, while for the others there are at least two files — PHP controller and template file, which is parsed by controller. 
-And most of engines has it's own library files to be included - so the execution of a very simple code is much slower than execution of a simple PHP script.
+Thanx to Ilya Kantor who provided these tests
+</pre>
 
-<p>Several well-known template engines like madtemplate, PEAR::Sigma and PEAR::HTML_Template_IT were not  included in results of this test.
-However, AFAIK these projects cannot pretend to be in top five of the list. You can try <a href="http://test.country-info.ru/bench/">on-line tests</a> 
-to verify that, or you can <a href="http://test.country-info.ru/bench.zip">download</a> the benchmarking code and obtain all the results by yourself.
+<p>You can try <a href="http://template-bench.iliakantor.ru/">on-line tests</a> to verify that, or you can <a href="http://test.country-info.ru/bench.zip">download</a> the benchmarking code and obtain all the results by yourself.
+If you didn't find your favourite engine in the list - you can download the test, add your engine and contact Ilya to upgrade
+online test.
 
 <p>The second test is much closer to the real world conditions. A page of several non-trivial parts is built by a webserver, 
 and the performance is benchmarked using the standard apache ab utility. 
@@ -290,17 +331,22 @@ but included into the tests just because it is obviously the fastest one.
 </ul>
 
 <p>The results of this test can be found below.
+
+<p><img src="lebowski-bench-big.gif" border=0>
+
 <p><b>Table 2. The much closer to the real world conditions test</b>
-		
+
+<p>Server: PC PIV 2,8GHz (HT off) 1GB; linux-2.6.8 php-4.3.10 (Apache/1.3.33 static) zps; blitz, php_templates: so-modules, CFLAGS -g -O2
+
 <table border="1" width=400><colgroup><col /><col /></colgroup>
 <thead>
-<tr><th colspan="2">server (B), see table 1, ab -n5000 -c30, ZPS on</th></tr>
+<tr><th colspan="2">ab -n5000 -c30, ZPS on</th></tr>
 <tr><th>method</th><th>requests per second</th></tr>
 </thead>
 
 <tbody>
-<tr><td>ugly PHP mess</td><td>1080</td></tr>
-<tr><td>Blitz</td><td>801</td></tr>
+<tr><td>PHP mess</td><td>1080</td></tr>
+<tr><td>blitz</td><td>801</td></tr>
 <tr><td>PHP includes</td><td>737</td></tr>
 <tr><td>php_templates</td><td>610</td></tr>
 <tr><td>Smarty</td><td>600</td></tr>
@@ -313,17 +359,16 @@ but included into the tests just because it is obviously the fastest one.
 <br>
 <table border="1" width=400><colgroup><col /><col /></colgroup>
 <thead>
-<tr><th colspan="2">server (B), see table 1, ab -n5000 -c30, ZPS off</th></tr>
+<tr><th colspan="2">ab -n5000 -c30, ZPS off</th></tr>
 <tr><th>method</th><th>requests per second</th></tr>
 </thead>
 <tbody>
 
-<tr><td>ugly php mess</td><td>630</td></tr>
-<tr><td>blitz ctx</td><td>554</td></tr>
-<tr><td>Blitz includes</td><td>430</td></tr>
+<tr><td>PHPmess</td><td>630</td></tr>
+<tr><td>blitz</td><td>554</td></tr>
 <tr><td>php_templates</td><td>430</td></tr>
-<tr><td>php includes</td><td>260</td></tr>
-<tr><td>smarty </td><td>115</td></tr>
+<tr><td>PHP includes</td><td>260</td></tr>
+<tr><td>Smarty </td><td>115</td></tr>
 <tr><td>XTemplate</td><td>91</td></tr>
 <tr><td>Sigma</td><td>65</td></tr>
 <tr><td>FastTemplate</td><td>67</td></tr>
@@ -369,6 +414,7 @@ tar zxvf blitz.tar.gz
 cd blitz
 phpize
 ./configure
+make
 make install
 </pre>
 
@@ -379,35 +425,26 @@ Running the tests you will get something like this:
 fisher@fisher:~/prj/blitz> ./run-tests.sh
 =====================================================================
 CWD         : /home/fisher/prj/blitz/tests
-PHP         : /usr/local/bin/php5
+PHP         : /usr/local/bin/php
 PHP_SAPI    : cli
-PHP_VERSION : 5.2.0
-ZEND_VERSION: 2.2.0
+PHP_VERSION : 4.3.10
+ZEND_VERSION: 1.3.0
 PHP_OS      : Linux - Linux fisher 2.6.11.4-20a-smp #1 SMP Wed Mar 23 21:52:37 UTC 2005 i686
-INI actual  : /home/php-5.2.0/lib/php.ini
+INI actual  : /usr/local/lib/php.ini
 More .INIs  :
 Extra dirs  :
 =====================================================================
 Running selected tests.
-PASS block [block.phpt]
-PASS clean [clean.phpt]
 PASS contexts [context.phpt]
-PASS date output wrapper [date.phpt]
 PASS errors and warnings: syntax [errors1.phpt]
 PASS errors and warnings: execution [errors2.phpt]
-PASS escape output wrapper [escape.phpt]
 PASS fetch#1 [fetch1.phpt]
 PASS fetch#2 [fetch2.phpt]
 PASS fetch#3 [fetch3.phpt]
-PASS get context [get_context.phpt]
 PASS has context [has_context.phpt]
 PASS predefined methods: if [if.phpt]
-PASS controller include method [include-method.phpt]
 PASS predefined methods: include [include.phpt]
-PASS include with context iteration [include_ctx.phpt]
-PASS multiple include cache test [include_multi.phpt]
 PASS ini-values settings test [ini.phpt]
-PASS nonexistant path iteration [iterate_nonexistant.phpt]
 PASS user-defined methods [method.phpt]
 PASS method call from inner include [mfi.phpt]
 PASS mix #1 [mix1.phpt]
@@ -416,26 +453,10 @@ PASS mix #3 [mix3.phpt]
 PASS mix #4 [mix4.phpt]
 PASS mix #5 [mix5.phpt]
 PASS mix #6 [mix6.phpt]
-PASS numerical and non-numerical keys in the iteration set [non_num_iter.phpt]
-PASS parse with iteration set [parse_with_iterations.phpt]
-PASS relative path (blitz.path) [path.phpt]
-PASS partial php_templates syntax compability [phpt_compability.phpt]
-PASS predefined loop variables: $_total, $_num, $_even, $_odd, $_first, $_last [predefined.phpt]
+PASS expect regexp test [regex.phpt]
 PASS returning non-strings from user methods [return_non_string.phpt]
 PASS set and get [set_and_get.phpt]
-PASS mixed set [set_mixed.phpt]
-PASS variables [var.phpt]
-PASS {{ $hash.sub.key }} syntax [var_path.phpt]
-=====================================================================
-Number of tests :   37                37
-Tests skipped   :    0 (  0.0%) --------
-Tests warned    :    0 (  0.0%) (  0.0%)
-Tests failed    :    0 (  0.0%) (  0.0%)
-Tests passed    :   37 (100.0%) (100.0%)
----------------------------------------------------------------------
-Time taken      :    1 seconds
-=====================================================================
-</pre>
+PASS variables [var.phpt]</pre>
 
 <p>If Blitz was build as shared module you will probably need to edit your php.ini and include Blitz in extension list: 
 <pre>
@@ -505,15 +526,42 @@ Variables test: var_18 and var_19, iteration number: 9
 </pre>
 </div>
 
+<p> You may use things like {{ $object.property }} or {{ $hash.key }} or even 
+{{ $object.hash.key }} with many other variations. For example:
+<div class=grey>
+<b>test.php</b>
+<pre>
+class Dummy {
+    var $girl;
+    function Dummy($name) {
+        $this->girl = array('name' => $name);
+    }
+}
+
+$T = new Blitz();
+$T->load('My {{ $me.girl.name }} is over the ocean'."\n");
+$T->set(array('me'=> new Dummy('Bonnie')));
+
+echo $T->parse();
+</pre>
+</div>
+
+<div class=grey>
+<p><b>Output:</b><br>
+My Bonnie is over the ocean
+</pre>
+</div>
+
 <h3>User methods</h3>
 
-<p>The idea of user methods is very simple: your controller class has some method, wich can be used in a template file. 
+<p>User methods are just "callbacks". The idea of user methods is very simple: your controller
+class has some method, wich can be used in a template file. 
 You need to extend basic Blitz class to do this - here is the example:
 
 <div class=grey>
 <b>main.tpl</b>
 <pre>
-user method call test: {{ my_test() }}
+user method call test: {{ my_test(); }}
 </div>
 </pre>
 
@@ -535,13 +583,18 @@ echo $T->parse();
 <div class=grey>
 <p><b>Output</b>
 <pre>
-user method call test: user method called (blitztemplate,5)
+user method call test: user method called (View,5)
 </pre>
+
+Note that {{ my_test }} code without blackets is equivalent to {{ $my_test }}, and my_test methow will not be called.
+
 </div>
 
-<h3>Contexts</h3>
+<h3>Contexts, Loops, Conditions</h3>
 
-<p>Contexts were added to Blitz v 0.4, the basis of contexts idea was taken from php_templates. 
+<p><i>To understand the power of Blitz you must understand contexts and iterations. It's not trivial, but it's very powerfull. </i>
+
+<p>Contexts were added to Blitz v 0.4, the basis of contexts idea was taken from <a href="http://sourceforge.net/projects/php-templates/">php_templates</a>, but some context logic was revised. 
 Here goes a brief explanation of what contexts are. Usually we have "plain" templates. 
 These templates have variables or some operators or calls - but any block of programming code in template will be executed.
 Contexts are subtemplates, their code is used on demand. Having the php-code 
@@ -684,7 +737,49 @@ row #4
 
 <p>The block() method is a usefull substitution of iterate() plus set() series, these both are used together very often.
 Parent context variables "are not seen" in children contexts by default, so you need to "pass" these variables 
-to children contexts as well. Or you can use setGlobal method instead of set to have true global template varibles.
+to children contexts as well. Or you can use setGlobals method instead of set to have true global template varibles.
+
+<p>There are several <b>predefined varibles</b> in every context:
+<ul>
+<li>$_total is the total number of item in a list
+<li>$_num is the current number of item (starting from 1) 
+<li>$_first is 1 when it's first item, 0 - otherwise
+<li>$_last is 1 when it's last item, 0 - otherwise
+<li>$_odd is 1 when item is odd 
+<li>$_even is 1 when item is even 
+</ul>
+
+Shortly, 
+<div class=grey>
+<pre>
+$T = new Blitz();
+$T->load("{{ if(\$_first, 'hello, world!\n') }} ".
+    '{{ $_num }}. I am {{ if($_even, "even", "odd") }} of {{ $_total }}'.
+    "{{ if(\$_last, '\ngood bye, world!') }}\n");
+
+$i = 0;
+while($i++<7) {
+    $T->iterate();
+}
+
+echo $T->parse();
+</pre>
+</div>
+
+<div class=grey>
+<p><b>output</b><br>
+<pre>
+hello, world!
+ 1. I am even of 7
+ 2. I am odd of 7
+ 3. I am even of 7
+ 4. I am odd of 7
+ 5. I am even of 7
+ 6. I am odd of 7
+ 7. I am even of 7
+good bye, world!
+</pre>
+</div>
 
 <p>Next example shows how to build complex lists
 
@@ -838,7 +933,7 @@ string include ( string template_name)<br>
 
 <div class=grey>
 <p><b>1.tpl</b><br>
-Where's the {{ include('other.tpl') }} Lebowski?
+Where's the {{ include('2.tpl') }} Lebowski?
 </pre>
 </div>
 
@@ -957,10 +1052,13 @@ echo $T->parse();
 
 <ul>
 <li><a href="#controllerAPI.block"><b>block</b></a> — set current context and iterate it
-<li><a href="#controllerAPI.clean"><b>clean</b></a> — clean up context variables and/or iterations
-<li><a href="#controllerAPI.context"><b>context</b></a> — set current context
-<li><a href="#controllerAPI.di"><b>dumpIterations (dump_iterations)</b></a> — dump all iterations (debug)
-<li><a href="#controllerAPI.ds"><b>dumpStruct (dump_struct)</b></a> — dump template structure (debug)
+<li><a href="#controllerAPI.clean"><b>clean</b></a> — clean up context: reset iterations and/or variables
+<li><a href="#controllerAPI.context"><b>context</b></a> — set current context (and return previous)
+<li><a href="#controllerAPI.context"><b>getContext (get_context)</b></a> — get current context
+<li><a href="#controllerAPI.di"><b>dumpIterations (dump_iterations)</b></a> — dump all template iterations
+<li><a href="#controllerAPI.gsgi"><b>getIterations (get_iterations)</b></a> — get all template iterations as array
+<li><a href="#controllerAPI.ds"><b>dumpStruct (dump_struct)</b></a> — dump template structure
+<li><a href="#controllerAPI.gsgi"><b>getStruct (get_struct)</b></a> — get template structure as array
 <li><a href="#controllerAPI.fetch"><b>fetch</b></a> — build and fetch the result for context
 <li><a href="#controllerAPI.hc"><b>hasContext (has_context)</b></a> — check if context exists
 <li><a href="#controllerAPI.include"><b>include</b></a> — include another template
@@ -968,7 +1066,8 @@ echo $T->parse();
 <li><a href="#controllerAPI.load"><b>load</b></a> — load template body from a PHP string variable
 <li><a href="#controllerAPI.parse"><b>parse</b></a> — build and return the result
 <li><a href="#controllerAPI.set"><b>set</b></a> — set variables or iterations
-<li><a href="#controllerAPI.sg"><b>setGlobal (set_global)</b></a> — set global variables
+<li><a href="#controllerAPI.sg"><b>setGlobals (set_globals)</b></a> — set global variables
+<li><a href="#controllerAPI.sg"><b>getGlobals (get_globals)</b></a> — get global variables as array
 </ul>
 
 <a id="controllerAPI.block"></a>
@@ -1087,26 +1186,22 @@ context cleaning ()
 </div>
 
 <a id="controllerAPI.context"></a>
-<h3>context</h3>
+<h3>context, getContext</h3>
 
 (blitz >= 0.4)<br>
 context — set current context<br>
-bool context ( string context_path )<br>
+bool context (string context_path )<br>
+getContext — get current context<br>
+string getContext (void)<br>
 
 <div class=grey>
 <p><b>main.tpl</b><br>
 <pre>
 {{BEGIN user}}
-	{{BEGIN hello}}
-		Hello, user!
-	{{END}}
-	{{BEGIN goodbye}}
-		Goodbye, user!
-	{{END}}
+	{{BEGIN hello}}Hello, user!{{END}}
+	{{BEGIN goodbye}}Goodbye, user!{{END}}
 {{END}}
-{{BEGIN world}}
-	Hello, world!
-{{END}}
+{{BEGIN world}}Hello, world!{{END}}
 </pre>
 </div>
 
@@ -1114,7 +1209,8 @@ bool context ( string context_path )<br>
 <p><b>php code</b><br>
 <pre>
 $Template = new Blitz('main.tpl');
-$Template->context('user');
+echo 'previous context was: '$Template->context('user')."\n";
+echo 'current context is: '$Template->getContext()."\n";
 $Template->block('hello');
 $Template->block('goodbye');
 $Template->block('../world');
@@ -1125,7 +1221,13 @@ echo $Template->parse();
 <div class=grey>
 <p><b>output</b><br>
 <pre>
-Hello, user! Goodbye, user! Hello, world!
+previous context was: /
+current context is: /user
+
+	Hello, user!
+	Goodbye, user!
+
+Hello, world!
 </pre>
 </div>
 
@@ -1497,7 +1599,7 @@ bool load ( string tpl )
 <p><b>php code</b><br>
 <pre>
 
-$body = &lt;&lt;&lt;BODY
+$body = <<<BODY
 hello, {{ \$who }}!
 {{ bye; }}
 
@@ -1633,11 +1735,13 @@ instead of lot of context/iterate/set calls. Sometimes it is very useful (with P
 and in most of the cases it's very fast (see blitz ctx arrays in benchmarks above).
 
 <a id="controllerAPI.sg"></a>
-<h3>setGlobal (set_global)</h3>
-
-(blitz >= 0.4)
-setGlobal — set global variables<br>
-bool setGlobal ( array parameters )<br>
+<h3>setGlobals (set_globals), getGlobals (get_globals)</h3>
+old names are: setGlobal/set_global - they still work<br>
+(blitz >= 0.4)<br>
+setGlobals — set global variables<br>
+bool setGlobals (array parameters)<br>
+getGlobals — get global variables as array<br>
+array getGlobals (void)<br>
 
 <div class=grey>
 <p><b>main.tpl</b><br>
@@ -1656,9 +1760,10 @@ I am {{$global}} variable.
 <pre>
 $Template = new Blitz('main.tpl');
 $Template->set(array('local' => 'local (root)'));
-$Template->set_global(array('global' => 'global'));
+$Template->set_globals(array('global' => 'global'));
 $Template->block('context', array('local' => 'local (context)'));
 echo $Template->parse();
+var_dump($Template->getGlobals());
 </pre>
 </div>
 
@@ -1670,6 +1775,67 @@ I am global variable.
 
 	I am local (context) variable.
 	I am global variable.
+array(1) {
+  ["global"]=>
+  string(6) "global"
+}
+
+</pre>
+</div>
+
+<a id="controllerAPI.gsgi"></a>
+<h3>getStruct (get_struct), getIterations(get_iterations)</h3>
+getStruct — get template structure as array<br>
+array getStruct(void)<br>
+getIterations — get template iterations as array<br>
+array getIterations(void)
+
+<div class=grey>
+<p><b>php code</b><br>
+<pre>
+$Template = new Blitz();
+$Template->load('{{ $var }} {{ BEGIN root }} {{ $root_var }} {{ END }}');
+$Template->set(array('var' => 'value'));
+$Template->iterate();
+$Template->set(
+    array(
+        'root' => array(
+            'root_var' => 'root_value'
+        )
+    )
+);
+
+var_dump($Template->getStruct());
+var_dump($Template->getIterations());
+</pre>
+</div>
+
+<div class=grey>
+<p><b>output</b><br>
+<pre>
+array(3) {
+  [0]=>
+  string(4) "/var"
+  [1]=>
+  string(6) "/root/"
+  [2]=>
+  string(14) "/root/root_var"
+}
+array(2) {
+  [0]=>
+  array(1) {
+    ["var"]=>
+    string(5) "value"
+  }
+  [1]=>
+  array(1) {
+    ["root"]=>
+    array(1) {
+      ["root_var"]=>
+      string(10) "root_value"
+    }
+  }
+}
 </pre>
 </div>
 
