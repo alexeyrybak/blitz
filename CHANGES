@@ -1,4 +1,13 @@
 ===================================================================================================
+0.5.8 version 23 Nov 2007
+===================================================================================================
+- bug#83 fixed, double free on include (tony)
+- disallow double Blitz object initialization, test added (tony)
+- english documentation was updated: sample fixes, getGlobals, getContext,
+  getIterations, getStruct, predefined variables in loops $_even/$_odd/etc, 
+  $object.property/$hash.key variables (fisher)
+
+===================================================================================================
 0.5.7 version 18 Oct 2007
 ===================================================================================================
 Bug & memleak fixes by Antony Dovgal 
