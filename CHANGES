@@ -1,4 +1,15 @@
 ===================================================================================================
+0.5.9 version 10 Jan 2008
+===================================================================================================
+- "safety" patch by Konstantin Baryshnikov (ticket #85)
+    - blitz.disable_include = 1 disables include in templates (0 by default)
+    - disallow calling internal methods from templates i.e. {{ parse() }}
+- variables can be used without var_prefix in method calls (ticket #91)
+  i.e. {{ do(something) }} is equal to {{ do($something) }}
+- fixed boolean argument in if statement
+- minor changes in docs
+
+===================================================================================================
 0.5.8 version 23 Nov 2007
 ===================================================================================================
 - bug#83 fixed, double free on include (tony)

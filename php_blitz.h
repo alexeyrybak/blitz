@@ -41,6 +41,7 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char *phpt_ctx_left;
     char *phpt_ctx_right;
     char *path;
+    char disable_include;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS
@@ -127,6 +128,9 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_FLAG_FETCH_INDEX_BUILT    1
 #define BLITZ_FLAG_GLOBALS_IS_OTHER     2
 #define BLITZ_FLAG_ITERATION_IS_OTHER   4
+#define BLITZ_FLAG_CALLED_USER_METHOD   8
+
+#define BLITZ_CALLED_USER_METHOD(v) (((v)->flags & BLITZ_FLAG_CALLED_USER_METHOD) == BLITZ_FLAG_CALLED_USER_METHOD)
 
 // blitz tags
 #define BLITZ_TAG_POS_OPEN                      1
@@ -456,6 +460,20 @@ typedef struct _blitz_tpl {
             value = tpl->loop_stack[tpl->loop_stack_level].total;                                                      \
         }                                                                                                              \
     }
+
+#define BLITZ_STRING_IS_TRUE(s, l) \
+    (l == 4) && ( \
+        (s[0] == 't' && s[1] == 'r' && s[2] == 'u' && s[3] == 'e') \
+        || \
+        (s[0] == 'T' && s[1] == 'R' && s[2] == 'U' && s[3] == 'E') \
+    )
+
+#define BLITZ_STRING_IS_FALSE(s, l) \
+    (l == 5) && ( \
+        (s[0] == 'f' && s[1] == 'a' && s[2] == 'l' && s[3] == 's' && s[4] == 'e') \
+        || \
+        (s[0] == 'F' && s[1] == 'A' && s[2] == 'L' && s[3] == 'S' && s[4] == 'E') \
+    )
 
 #define TIMER(ts,tz,tdata,tnum)                         \
     gettimeofday(&(ts),&(tz));                          \
