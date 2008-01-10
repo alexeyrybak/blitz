@@ -19,20 +19,20 @@ background-color: #eeeeee
 <p>Downloads: <a href="http://sourceforge.net/projects/blitz-templates/">sourceforge</a>, sources <a href="http://alexeyrybak.com/blitz/">homepage</a>, <a href="http://alexeyrybak.com/blitz/win32-binaries/">win32 binaries</a><br>
 Other languages: <a href="http://alexeyrybak.com/blitz/blitz_ru.html">russian</a>
 
-<p>Blitz project is in a quite active development stage, new releases may appear 
-once a week. If you want to <b>get new release announcements</b> - please 
+<p>Stability status: 0.5.7 or higher is recommended. Current 0.5.* branch is "frozen", there
+is no active development, bug-fixing only. If you want to <b>get new release announcements</b> - please 
 <a href="http://freshmeat.net/subscribe/63347/?url=%2Fprojects%2Fblitz-templates%2F">subscribe at freashmeat</a> 
 or <a href="http://sourceforge.net/export/rss2_projfiles.php?group_id=188147">sourceforge file releases RSS</a>. 
-If you like this project ant want to help it - i'm always open for any constructive suggestions.
+If you like this project ant want to help it - I'm always open for any constructive suggestions.
+To send a bug use our <a href="http://alexeyrybak.com/blitz/bt/">BugTraker</a> please.
 We're still looking for people who could help us with international translation 
-(mostly <b>German, Spanish and French</b>). Please, contact me if you could help.
+(mostly <b>German, Spanish and French</b>). Please, contact me at <img src="contact.png"> if you could help.
 
 <p><b>Document by: Alexey Rybak, Lioubov Vereschagina, Vladimir Krivosheev</b>
-<br>Feedback: contact developers and users through the mailing list (blitz-subscribe aT alexeyrybak d0t com) or visit the <a href="http://alexeyrybak.com/blitz/bt/">BugTraker</a>
 
 <br><br>This is full documentation. 
-Blitz also has a very short <a href="http://alexeyrybak.com/blitz/quick_geek.html">geek tutorial</a> 
-which can save you time.
+Blitz also has a <a href="http://alexeyrybak.com/blitz/quick_geek.html">VERY SHORT GEEK TUTORIAL</a> 
+which can SAVE YOUR TIME.
 
 <br><br>
 
@@ -44,7 +44,7 @@ which can save you time.
 <li><a href="#bench">Performance benchmarks</a>
 <li><a href="#install">Installation</a>
 <li><a href="#config">Configuration</a>
-<li><a href="#basics">Basics: variables, methods, contexts, loops, conditions</a>
+<li><a href="#basics">Basics: variables, methods, contexts</a>
 <li><a href="#templateAPI">Template API</a>
 <ul>
 <li><a href="#templateAPI.if"><b>if</b></a> — conditional output
@@ -106,7 +106,7 @@ Most of templating strategies cannot prevent appearance of spaghetti-mess-of-cod
 The most important goal of blitz was to help building fast and clear presentation level code for very 
 big applications with extremely complex presentation logic (with a lot of customized user pages, web 2.0 stuff and so on).
 
-<p>General Blitz concept is: view-level of the web application can be based on two components: <b>view controllers</b>, custom PHP-objects encapsulating most of view logic with no HTML-code inside, and weakly active <b>templates</b>, with all of the HTML-code, templating variables and weak logic, including <b>user method calls</b>, <b>includes</b> and <b>simple conditional output</b>. The idea of weak logic comes from a very simple approach,  worked out from big internet systems development. To prevent a spaghetti mess and being able to maintain and make changes into you project not in death stress...
+<p>General Blitz concept is: view-level of the web application can be based on two components: <b>view controllers</b>, custom PHP-objects encapsulating most of view logic with no HTML-code inside, and weekly active <b>templates</b>, with all of the HTML-code, templating variables and weak logic, including <b>user method calls</b>, <b>includes</b> and <b>simple conditional output</b>. The idea of weak logic comes from a very simple approach,  worked out from big internet systems development. To prevent a spaghetti mess and being able to maintain and make changes into you project not in death stress...
 <ul>
 <li> ... your PHP code (even at the presentation level) should not be mixed with HTML and your HTML code should not be mixed with PHP. Blitz makes developers to separate PHP code into template controller files. And blitz makes developers to separate HTML code into template files. No PHP is allowed in templates and no HTML is needed in PHP code.
 <li> ... sometimes it's very handy to use some logic in templates, but then you have a risk of getting another kind of spaghetti -  template-logic mess with HTML (well, like Smarty-spaghetti in some projects) instead of PHP-spaghetti. These situaltions are both equally ugly. Blitz allows to use weak logic code in templates, but this logic is simple enough to keep the code in a readable state.
@@ -526,32 +526,6 @@ Variables test: var_18 and var_19, iteration number: 9
 </pre>
 </div>
 
-<p> You may use things like {{ $object.property }} or {{ $hash.key }} or even 
-{{ $object.hash.key }} with many other variations. For example:
-<div class=grey>
-<b>test.php</b>
-<pre>
-class Dummy {
-    var $girl;
-    function Dummy($name) {
-        $this->girl = array('name' => $name);
-    }
-}
-
-$T = new Blitz();
-$T->load('My {{ $me.girl.name }} is over the ocean'."\n");
-$T->set(array('me'=> new Dummy('Bonnie')));
-
-echo $T->parse();
-</pre>
-</div>
-
-<div class=grey>
-<p><b>Output:</b><br>
-My Bonnie is over the ocean
-</pre>
-</div>
-
 <h3>User methods</h3>
 
 <p>User methods are just "callbacks". The idea of user methods is very simple: your controller
@@ -590,7 +564,7 @@ Note that {{ my_test }} code without blackets is equivalent to {{ $my_test }}, a
 
 </div>
 
-<h3>Contexts, Loops, Conditions</h3>
+<h3>Contexts</h3>
 
 <p><i>To understand the power of Blitz you must understand contexts and iterations. It's not trivial, but it's very powerfull. </i>
 
@@ -738,48 +712,6 @@ row #4
 <p>The block() method is a usefull substitution of iterate() plus set() series, these both are used together very often.
 Parent context variables "are not seen" in children contexts by default, so you need to "pass" these variables 
 to children contexts as well. Or you can use setGlobals method instead of set to have true global template varibles.
-
-<p>There are several <b>predefined varibles</b> in every context:
-<ul>
-<li>$_total is the total number of item in a list
-<li>$_num is the current number of item (starting from 1) 
-<li>$_first is 1 when it's first item, 0 - otherwise
-<li>$_last is 1 when it's last item, 0 - otherwise
-<li>$_odd is 1 when item is odd 
-<li>$_even is 1 when item is even 
-</ul>
-
-Shortly, 
-<div class=grey>
-<pre>
-$T = new Blitz();
-$T->load("{{ if(\$_first, 'hello, world!\n') }} ".
-    '{{ $_num }}. I am {{ if($_even, "even", "odd") }} of {{ $_total }}'.
-    "{{ if(\$_last, '\ngood bye, world!') }}\n");
-
-$i = 0;
-while($i++<7) {
-    $T->iterate();
-}
-
-echo $T->parse();
-</pre>
-</div>
-
-<div class=grey>
-<p><b>output</b><br>
-<pre>
-hello, world!
- 1. I am even of 7
- 2. I am odd of 7
- 3. I am even of 7
- 4. I am odd of 7
- 5. I am even of 7
- 6. I am odd of 7
- 7. I am even of 7
-good bye, world!
-</pre>
-</div>
 
 <p>Next example shows how to build complex lists
 
