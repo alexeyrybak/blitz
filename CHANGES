@@ -6,7 +6,7 @@
     - disallow calling internal methods from templates i.e. {{ parse() }}
 - variables can be used without var_prefix in method calls (ticket #91)
   i.e. {{ do(something) }} is equal to {{ do($something) }}
-- fixed boolean argument in if statement
+- fixed boolean predicate in if statement
 - minor changes in docs
 
 ===================================================================================================

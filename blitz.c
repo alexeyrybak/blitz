@@ -1,13 +1,15 @@
 /*
   +----------------------------------------------------------------------+
-  | Authors: Alexey Rybak <alexey.rybak@gmail.com>,                      |
-  |          downloads and online documentation:                         |
-  |              - http://alexeyrybak.com/blitz/                         |
-  |              - http://sourceforge.net/projects/blitz-templates/      |
+  | Blitz Templates                                                      |
   |                                                                      |
+  | Downloads and online documentation:                                  |
+  |     http://alexeyrybak.com/blitz/                                    |
+  |     http://sourceforge.net/projects/blitz-templates/                 |
+  |                                                                      |
+  | Author                                                               |
+  |     Alexey Rybak <alexey.rybak@gmail.com>                            |
   | Template analyzing is partially based on php_templates code by       |
   |     Maxim Poltarak (http://php-templates.sf.net)                     |
-  |                                                                      |
   | Bug & memleak fixes and other patches by                             |
   |     Antony Dovgal <tony at daylessday dot org>                       |
   |     Konstantin Baryshnikov <konstantin@symbi.info>                   |
@@ -2955,10 +2957,6 @@ static PHP_FUNCTION(blitz_init)
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|s", &filename, &filename_len)) {
         return;
-    }
-
-    if (BLITZ_CALLED_USER_METHOD(tpl)) {
-        RETURN_FALSE;
     }
 
     if (filename_len >= MAXPATHLEN) {
