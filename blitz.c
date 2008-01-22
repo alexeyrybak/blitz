@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.5.9"
+#define BLITZ_VERSION_STRING "0.5.10"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -512,7 +512,7 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
     zval *temp = NULL;
 
     /* try to find already parsed tpl index */
-    if (SUCCESS == zend_hash_find(tpl->ht_tpl_name, filename, filename_len, (void **)&desc)) {
+    if (SUCCESS == zend_hash_find(tpl->ht_tpl_name, (char *)filename, filename_len, (void **)&desc)) {
         *itpl = tpl->itpl_list[Z_LVAL_PP(desc)];
         if (iteration_params) {
             (*itpl)->iterations = iteration_params;
@@ -556,7 +556,7 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
     tpl->itpl_list[itpl_idx] = *itpl;
     MAKE_STD_ZVAL(temp);
     ZVAL_LONG(temp, itpl_idx);
-    zend_hash_update(tpl->ht_tpl_name, filename, filename_len, &temp, sizeof(zval *), NULL);
+    zend_hash_update(tpl->ht_tpl_name, (char *)filename, filename_len, &temp, sizeof(zval *), NULL);
     tpl->itpl_list_len++;
 
     return 1;
@@ -848,7 +848,8 @@ static inline void blitz_parse_call (
         }
     } else if (BLITZ_IS_ALPHA(*c)) { /* scan function */
         if (BLITZ_DEBUG) php_printf("D1: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
-        BLITZ_SCAN_ALNUM(c,p,i_pos,i_symb);
+        is_path = 0;
+        BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
         if (BLITZ_DEBUG) php_printf("D2: pos=%u, i_pos=%u, c=%c\n", pos, i_pos, *c);
         pos+=i_pos-1;
         c = text + pos;
@@ -900,7 +901,7 @@ static inline void blitz_parse_call (
                     /* for the partial support of php_templates, functions without brackets are treated as parameters. */
                     /* see details in php_blitz.h */
                     if (BLITZ_SUPPORT_PHPT_TAGS_PARTIALLY && (BLITZ_SUPPORT_PHPT_NOBRAKET_FUNCTIONS_ARE_VARS || is_phpt_tag)) {
-                        node->type = BLITZ_NODE_TYPE_VAR;
+                        node->type = is_path ? BLITZ_NODE_TYPE_VAR_PATH : BLITZ_NODE_TYPE_VAR;
                     } else { /* case insensitivity for methods */
                         zend_str_tolower(node->lexem,i_pos);
                     }
@@ -972,18 +973,18 @@ static inline void blitz_parse_call (
                         i_len = i_pos;
                         if (i_pos!=0) ok = 1;
                     } else if (BLITZ_IS_ALPHA(symb)){
-                        BLITZ_SCAN_ALNUM(c,p,i_pos,i_symb);
+                        is_path = 0;
+                        BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
                         i_len = i_pos;
                         i_type = BLITZ_ARG_TYPE_BOOL;
                         if (i_pos!=0) {
                             ok = 1;
-                            /* FIXME */
                             if (BLITZ_STRING_IS_TRUE(token, i_len)) {
                                 *ptr_token = 't';
                             } else if (BLITZ_STRING_IS_FALSE(token, i_len)){
                                 *ptr_token = 'f';
                             } else { /* treat this just as variable used without var prefix */
-                                i_type = BLITZ_ARG_TYPE_VAR;
+                                i_type = is_path ? BLITZ_ARG_TYPE_VAR_PATH : BLITZ_ARG_TYPE_VAR;
                             }
                         }
                     }
@@ -1917,9 +1918,9 @@ static inline void blitz_exec_var(blitz_tpl *tpl, const char *lexem, zval *param
         p_result+=*result_len;
         (*result)[*result_len] = '\0';
     } else {
-        if ( (params && (SUCCESS == zend_hash_find(Z_ARRVAL_P(params), lexem, lexem_len_p1, (void**)&zparam)))
+        if ( (params && (SUCCESS == zend_hash_find(Z_ARRVAL_P(params), (char *)lexem, lexem_len_p1, (void**)&zparam)))
             ||
-            (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, lexem, lexem_len_p1, (void**)&zparam))) )
+            (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, (char *)lexem, lexem_len_p1, (void**)&zparam))) )
         {
             if (Z_TYPE_PP(zparam) != IS_STRING) {
                 zval p;
@@ -2723,7 +2724,7 @@ static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, const char *path, 
     }
 
     /* find node by path   */
-    if (SUCCESS == zend_hash_find(tpl->static_data.fetch_index, path, path_len + 1, (void**)&z)) {
+    if (SUCCESS == zend_hash_find(tpl->static_data.fetch_index, (char *)path, path_len + 1, (void**)&z)) {
         i_node = tpl->static_data.nodes + Z_LVAL_PP(z);
     } else {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "cannot find context %s in template %s", path, tpl->static_data.name);
