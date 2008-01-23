@@ -2354,7 +2354,7 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
             memcpy(key, p-j, key_len);
             key[key_len] = '\x0';
 
-            if (BLITZ_DEBUG) php_printf("[debug] move to:%s\n",key);
+            if (BLITZ_DEBUG) php_printf("[debug] going move to:%s\n",key);
 
             zend_hash_internal_pointer_end(Z_ARRVAL_PP(tmp));
             if (SUCCESS != zend_hash_get_current_data(Z_ARRVAL_PP(tmp), (void **) &tmp)) {
@@ -2377,6 +2377,13 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
                 }
             }
 
+            if (Z_TYPE_PP(tmp) != IS_ARRAY) {
+                php_error_docref(NULL TSRMLS_CC, E_WARNING,
+                    "OPERATION ERROR: unable to iterate context \"%s\" in \"%s\" "
+                    "because parent iteration was not set as array of arrays before. "
+                    "Correct your previous iteration sets.", key, path);
+                return 0;
+            }
 
             if (SUCCESS != zend_hash_find(Z_ARRVAL_PP(tmp),key,key_len+1,(void **)&tmp)) {
                 zval *empty_array;
@@ -2421,13 +2428,13 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
                 if (SUCCESS != zend_hash_get_current_data(Z_ARRVAL_PP(tmp), (void **) &tmp)) {
                     return 0;
                 }
-
             }
 
             if (Z_TYPE_PP(tmp) != IS_ARRAY) {
                 php_error_docref(NULL TSRMLS_CC, E_WARNING, 
-                    "OPERATION ERROR: unable to iterate \"%s\" (sub-path of \"%s\"), "
-                    "it was set as \"scalar\" value - check your iteration params", key, path);
+                    "OPERATION ERROR: unable to iterate context \"%s\" in \"%s\" "
+                    "because it was set as \"scalar\" value before. "
+                    "Correct your previous iteration sets.", key, path);
                 return 0;
             }
 
@@ -2966,7 +2973,7 @@ static PHP_FUNCTION(blitz_init)
     }
 
     if (getThis() && zend_hash_exists(Z_OBJPROP_P(getThis()), "tpl", sizeof("tpl"))) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "The object has already been initialized");
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "ERROR: the object has already been initialized");
         RETURN_FALSE;
     }
 
@@ -3390,7 +3397,8 @@ static PHP_FUNCTION(blitz_block) {
             zval_copy_ctor(*tpl->last_iteration);
             INIT_PZVAL(*tpl->last_iteration);
         } else {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: last_iteration is empty, it's a bug\n"); 
+            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+                "INTERNAL ERROR: last_iteration is empty, it's a bug. Send the test case to developer, please.\n"); 
             RETURN_FALSE;
         }
     }
