@@ -1,4 +1,14 @@
 ===================================================================================================
+0.5.10 version 24 Jan 2008
+===================================================================================================
+- fixed segfault on specific iteration sequences which use a mix of normal
+  and simplified forms of set params (ticket #95)
+- make non-prefixed path varibles like obj.property or arr.key work correctly
+  in method calls (ticket #92)
+- minor fixes to remove compilation warnings
+- minor fixes in error messages
+
+===================================================================================================
 0.5.9 version 10 Jan 2008
 ===================================================================================================
 - "safety" patch by Konstantin Baryshnikov (ticket #85)
