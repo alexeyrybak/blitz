@@ -3,12 +3,14 @@ double Blitz object initialization
 --FILE--
 <?php
 
-$t=new Blitz(); 
-$t->load("{{Blitz()}}"); 
-$t->parse();
+include('common.inc');
+
+$T=new Blitz(); 
+$T->load("{{Blitz()}}"); 
+$T->parse();
 
 echo "Done\n";
 ?>
---EXPECTF--	
-Warning: blitz::blitz(): The object has already been initialized in %s on line %d
+--EXPECT--	
+the object has already been initialized
 Done

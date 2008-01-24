@@ -14,7 +14,7 @@ var_dump($t->parse());
 
 echo "Done\n";
 ?>
---EXPECTF--	
+--EXPECT--	
 string(26) " >this template is empty
 <"
 Done
