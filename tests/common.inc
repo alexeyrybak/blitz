@@ -1,6 +1,6 @@
 <?php
 
-if (!function_exists('blitz'))
+if (!class_exists('blitz'))
     dl('blitz.so');
 
 $pwd = dirname(__FILE__)."/";
