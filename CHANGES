@@ -1,4 +1,14 @@
 ===================================================================================================
+0.5.11 version 28 Feb 2008
+===================================================================================================
+fixed bugs:
+- dynamic included file contexts do not parse (ticket #112)
+- cannot successfully load php string from blitz subclass (ticket #111)
+- including template with filename as name of variable {{ include($var) }} (ticket #104)
+- string variables '0' or "0" are not false (ticket #99)
+- unzipped source should be blitz-[$VERSION], not blitz (ticket #106)
+
+===================================================================================================
 0.5.10 version 25 Jan 2008
 ===================================================================================================
 - fixed segfault on specific iteration sequences which use a mix of normal

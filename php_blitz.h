@@ -238,6 +238,7 @@ typedef struct _blitz_tpl {
     zval **current_iteration;  /* current iteraion values */
     zval **last_iteration;     /* latest iteration - used in combined iterate+set methods  */
     zval **current_iteration_parent; /* list of current context iterations (current_iteration is last element in this list) */
+    zval **caller_iteration;  /* caller iteraion */
     char *current_path;
     char *tmp_buf;
     HashTable *ht_tpl_name; /* index template_name -> itpl_list number */
@@ -245,6 +246,7 @@ typedef struct _blitz_tpl {
     unsigned int itpl_list_alloc;
     unsigned int itpl_list_len;
     unsigned int loop_stack_level;
+    struct _blitz_tpl *tpl_parent; /* parent template for included */
     blitz_loop_stack_item loop_stack[BLITZ_LOOP_STACK_MAX]; 
 } blitz_tpl;
 
@@ -361,19 +363,26 @@ typedef struct _blitz_tpl {
 #define BLITZ_CALL_ERROR_IF          2
 #define BLITZ_CALL_ERROR_INCLUDE     3
 
-
 #define BLITZ_ZVAL_NOT_EMPTY(z, res)                                                              \
     switch (Z_TYPE_PP(z)) {                                                                       \
         case IS_BOOL: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
-        case IS_STRING: res = (0 == Z_STRLEN_PP(z)) ? 0 : 1; break;                               \
+        case IS_STRING:                                                                           \
+            if (0 == Z_STRLEN_PP(z)) {                                                            \
+                res = 0;                                                                          \
+            } else if ((1 == Z_STRLEN_PP(z)) && (Z_STRVAL_PP(z)[0] == '0')) {                     \
+                res = 0;                                                                          \
+            } else {                                                                              \
+                res = 1;                                                                          \
+            }                                                                                     \
+            break;                                                                                \
         case IS_LONG: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
         case IS_DOUBLE: res = (.0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                \
         default: res = 0; break;                                                                  \
-    } 
+    }
 
 #define BLITZ_ARG_NOT_EMPTY(a,ht,res)                                                             \
-    if((a).type & BLITZ_ARG_TYPE_STR) {                                                           \
-        (res) = ((a).len>0) ? 1 : 0;                                                              \
+    if ((a).type & BLITZ_ARG_TYPE_STR) {                                                          \
+        (res) = ((((a).len == 1) && ((a).name[0] != '0')) || (a).len>0) ? 1 : 0;                  \
     } else if ((a).type == BLITZ_ARG_TYPE_NUM) {                                                  \
         (res) = (0 == strncmp((a).name,"0",1)) ? 0 : 1;                                           \
     } else if (((a).type == BLITZ_ARG_TYPE_VAR) && ht) {                                          \
