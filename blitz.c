@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.5.11"
+#define BLITZ_VERSION_STRING "0.5.12"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -58,6 +58,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, tpl_node_struct *nodes, unsigned int
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
     unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC);
 static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC);
+static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC);
 
 static int le_blitz;
 
@@ -137,6 +138,8 @@ PHP_INI_BEGIN()
         OnUpdateString, path, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.disable_include", "0", PHP_INI_ALL,
         OnUpdateBool, disable_include, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.remove_spaces_around_context_tags", "0", PHP_INI_ALL,
+        OnUpdateBool, remove_spaces_around_context_tags, zend_blitz_globals, blitz_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -597,7 +600,7 @@ static void php_blitz_dump_struct_plain(blitz_tpl *tpl) /* {{{ */
     php_printf("== PLAIN STRUCT (%ld nodes):",(unsigned long)tpl->static_data.n_nodes);
     for (i=0; i<tpl->static_data.n_nodes; ++i) {
         node = & tpl->static_data.nodes[i];
-        php_printf("\n%s[%d] (%ld(%ld), %ld(%ld)); ",
+        php_printf("\n%s[%d]; pos: (%ld(%ld), %ld(%ld)); ",
             node->lexem,
             node->type,
             node->pos_begin, node->pos_begin_shift,
@@ -1174,7 +1177,6 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
         &n_open, &pos, &pos_size, &pos_alloc_size TSRMLS_CC
     );
 
-
     /* find close node positions */
     body = tpl->static_data.body;
     blitz_bm_search (
@@ -1182,7 +1184,6 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
         (unsigned char *)tpl->static_data.config->close_node, tpl->static_data.config->l_close_node, BLITZ_TAG_POS_CLOSE,
         &n_close, &pos, &pos_size, &pos_alloc_size TSRMLS_CC
     );
-
 
     if (BLITZ_SUPPORT_PHPT_TAGS_PARTIALLY) {
         body = tpl->static_data.body;
@@ -1268,7 +1269,7 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
         }
 
         if (i_type != (i_type & expect_type_mask)) {
-            /* compability with HTML comments  */
+            /* compatibility with HTML comments  */
             /* 1) all unexpected errors after "<!--" tag are ignored (BLITZ_TAG_POS_PHPT_CTX_LEFT) */
             /* 2) all unexpected errors for "-->" tag are ignored (BLITZ_TAG_POS_PHPT_CTX_RIGHT) */
             if (i_prev_type == BLITZ_TAG_POS_PHPT_CTX_LEFT) {
@@ -1392,10 +1393,10 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
                 } else if (i_node->type == BLITZ_NODE_TYPE_END) {
                     /* end: remove node from stack, finalize node: set true close positions and new type */
                     if (pp_node_stack && *pp_node_stack) {
-                        /* */
-                        /*    {{ begin    a }}                 bla       {{                  end a }} */
-                        /*   ^--pos_begin      ^--pos_begin_shift        ^--pos_end_shift            ^--pos_end */
-                        /* */
+                        /**************************************************************************/
+                        /*    {{ begin   a }}         bla       {{             end a }}           */
+                        /*    ^--pos_begin   ^--pos_begin_shift ^--pos_end_shift       ^--pos_end */
+                        /**************************************************************************/
                         parent = *pp_node_stack;
                         parent->pos_end_shift = current_open;
                         parent->pos_end = current_close + l_close_node;
@@ -1444,6 +1445,9 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     }
 
     tpl->static_data.n_nodes = n_nodes;
+    if (BLITZ_G(remove_spaces_around_context_tags))
+        blitz_remove_spaces_around_context_tags(tpl TSRMLS_CC);
+
     efree(pos);
 	
 	if (node_stack) {
@@ -1453,6 +1457,110 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     return 1;
 }
 /* }}} */
+
+/* {{{ void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl) */
+static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC) {
+    char *pc = NULL;
+    char c = 0;
+    char got_end_back = 0, got_end_fwd = 0;
+    unsigned int shift = 0, shift_tmp = 0, n_nodes = 0, i = 0;
+    tpl_node_struct *i_node = NULL;
+
+    n_nodes = tpl->static_data.n_nodes;
+    // fix whitespaces
+    for (i=0; i<n_nodes; i++) {
+        got_end_back = 0;
+        got_end_fwd = 0;
+
+        i_node = tpl->static_data.nodes + i;
+        if (i_node->type != BLITZ_NODE_TYPE_CONTEXT)
+            continue;
+
+        // begin tag: scan back to the endline or any nonspace symbol
+        shift = i_node->pos_begin;
+        pc = tpl->static_data.body + shift;
+        while (shift) {
+            shift--;
+            pc--;
+            c = *pc;
+            if (c == '\n') {
+                got_end_back = 1;
+                break;
+            } else if (c != ' ' && c != '\t' && c != '\r') {
+                break;
+            }
+        }
+        
+        if (got_end_back || (0 == shift)) { // got the line end or just moved to the very beginning
+            shift_tmp = shift;
+
+            // begin tag: scan forward to the endline or any nonspace symbol
+            shift = tpl->static_data.body_len - i_node->pos_begin_shift + 1;
+            pc = tpl->static_data.body + i_node->pos_begin_shift - 1;
+            while (shift) {
+                shift--;
+                pc++;
+                c = *pc;
+                if (c == '\n') {
+                    got_end_fwd = 1;
+                    break;
+                } else if (c != ' ' && c != '\t' && c != '\r') {
+                    break;
+                }
+            }
+
+            if (got_end_fwd || (0 == shift)) { // got the line end or just moved to the very end
+                i_node->pos_begin = shift_tmp;
+                i_node->pos_begin_shift = tpl->static_data.body_len - shift;
+            }
+        }
+
+        got_end_back = 0;
+        got_end_fwd = 0;
+
+        // end tag: scan back to the endline or any nonspace symbol
+        shift = i_node->pos_end_shift;
+        pc = tpl->static_data.body + shift;
+        while (shift) {
+            shift--;
+            pc--;
+            c = *pc;
+            if (c == '\n') {
+                got_end_back = 1;
+                break;
+            } else if (c != ' ' && c != '\t' && c != '\r') {
+                break;
+            }
+        }
+
+        if (got_end_back || (0 == shift)) { // got the line end or just moved to the very beginning
+            shift_tmp = shift;
+
+            // end tag: scan forward to the endline or any nonspace symbol
+            shift = tpl->static_data.body_len - i_node->pos_end + 1;
+            pc = tpl->static_data.body + i_node->pos_end - 1;
+            while (shift) {
+                shift--;
+                pc++;
+                c = *pc;
+                if (c == '\n') {
+                    got_end_fwd = 1;
+                    break;
+                } else if (c != ' ' && c != '\t' && c != '\r') {
+                    break;
+                }
+            }
+
+            if (got_end_fwd || (0 == shift)) { // got the line end or just moved to the very end
+                i_node->pos_end_shift = shift_tmp;
+                i_node->pos_end = tpl->static_data.body_len - shift;
+            }
+        }
+    }
+
+}
+/* }}} */
+
 
 /* {{{ int blitz_exec_wrapper() */
 static inline int blitz_exec_wrapper(char **result, int *result_len, unsigned long flags, int args_num, char **args, int *args_len, char *tmp_buf TSRMLS_DC)

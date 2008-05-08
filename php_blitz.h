@@ -48,6 +48,7 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char *phpt_ctx_right;
     char *path;
     char disable_include;
+    char remove_spaces_around_context_tags;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS
@@ -351,6 +352,10 @@ typedef struct _blitz_tpl {
         ++(pos);                                                                             \
     }                                                                                        \
     *(p) = '\x0';
+
+//#define BLITZ_SCAN_SPACES_BACK
+
+
 
 #define BLITZ_CALL_STATE_NEXT_ARG    1
 #define BLITZ_CALL_STATE_FINISHED    2
