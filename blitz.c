@@ -1462,7 +1462,7 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC) {
     char *pc = NULL;
     char c = 0;
-    char got_end_back = 0, got_end_fwd = 0;
+    char got_end_back = 0, got_end_fwd = 0, got_non_space = 0;
     unsigned int shift = 0, shift_tmp = 0, n_nodes = 0, i = 0;
     tpl_node_struct *i_node = NULL;
 
@@ -1471,6 +1471,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
     for (i=0; i<n_nodes; i++) {
         got_end_back = 0;
         got_end_fwd = 0;
+        got_non_space = 0;
 
         i_node = tpl->static_data.nodes + i;
         if (i_node->type != BLITZ_NODE_TYPE_CONTEXT)
@@ -1487,11 +1488,12 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                 got_end_back = 1;
                 break;
             } else if (c != ' ' && c != '\t' && c != '\r') {
+                got_non_space = 1;
                 break;
             }
         }
         
-        if (got_end_back || (0 == shift)) { // got the line end or just moved to the very beginning
+        if (got_end_back || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very beginning
             shift_tmp = shift;
 
             // begin tag: scan forward to the endline or any nonspace symbol
@@ -1505,11 +1507,12 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                     got_end_fwd = 1;
                     break;
                 } else if (c != ' ' && c != '\t' && c != '\r') {
+                    got_non_space = 1;
                     break;
                 }
             }
 
-            if (got_end_fwd || (0 == shift)) { // got the line end or just moved to the very end
+            if (got_end_fwd || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very end
                 i_node->pos_begin = shift_tmp;
                 i_node->pos_begin_shift = tpl->static_data.body_len - shift;
             }
@@ -1517,6 +1520,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
 
         got_end_back = 0;
         got_end_fwd = 0;
+        got_non_space = 0;
 
         // end tag: scan back to the endline or any nonspace symbol
         shift = i_node->pos_end_shift;
@@ -1529,11 +1533,12 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                 got_end_back = 1;
                 break;
             } else if (c != ' ' && c != '\t' && c != '\r') {
+                got_non_space = 1;
                 break;
             }
         }
 
-        if (got_end_back || (0 == shift)) { // got the line end or just moved to the very beginning
+        if (got_end_back || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very beginning
             shift_tmp = shift;
 
             // end tag: scan forward to the endline or any nonspace symbol
@@ -1547,11 +1552,12 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                     got_end_fwd = 1;
                     break;
                 } else if (c != ' ' && c != '\t' && c != '\r') {
+                    got_non_space = 1;
                     break;
                 }
             }
 
-            if (got_end_fwd || (0 == shift)) { // got the line end or just moved to the very end
+            if (got_end_fwd || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very end
                 i_node->pos_end_shift = shift_tmp;
                 i_node->pos_end = tpl->static_data.body_len - shift;
             }
