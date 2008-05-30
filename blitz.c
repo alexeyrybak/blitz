@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.5.12"
+#define BLITZ_VERSION_STRING "0.5.13"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -3202,7 +3202,6 @@ static PHP_FUNCTION(blitz_dump_struct)
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     php_blitz_dump_struct(tpl);
 
@@ -3217,7 +3216,6 @@ static PHP_FUNCTION(blitz_get_struct)
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     array_init(return_value);
     php_blitz_get_path_list(tpl, return_value);
@@ -3231,7 +3229,6 @@ static PHP_FUNCTION(blitz_dump_iterations)
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     php_printf("ITERATION DUMP (4 parts)\n");
     php_printf("(1) iterations:\n");
@@ -3261,7 +3258,6 @@ static PHP_FUNCTION(blitz_get_iterations)
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (tpl->iterations) {
         *return_value = *tpl->iterations; 
@@ -3284,7 +3280,6 @@ static PHP_FUNCTION(blitz_set_global)
     unsigned long index;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"a",&input_arr)) {
         return;
@@ -3326,7 +3321,6 @@ static PHP_FUNCTION(blitz_get_globals)
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     array_init(return_value);
     zend_hash_copy(Z_ARRVAL_P(return_value), tpl->hash_globals, (copy_ctor_func_t) zval_add_ref, NULL, sizeof(zval *));
@@ -3342,7 +3336,6 @@ static PHP_FUNCTION(blitz_has_context)
     int path_len, norm_len = 0, current_len = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &path, &path_len)) {
         return;
@@ -3417,7 +3410,6 @@ static PHP_FUNCTION(blitz_context)
     int current_len, norm_len = 0, path_len, res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &path, &path_len)) {
         return;
@@ -3453,7 +3445,6 @@ static PHP_FUNCTION(blitz_get_context) {
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
     RETVAL_STRING(tpl->current_path, 1);
 }
 /* }}} */
@@ -3468,7 +3459,6 @@ static PHP_FUNCTION(blitz_iterate)
     int iterate_nonexistant = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"|sz",&path, &path_len, &p_iterate_nonexistant)) {
         return;
@@ -3494,7 +3484,6 @@ static PHP_FUNCTION(blitz_set)
     int res;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "a", &input_arr)) {
         return;
@@ -3520,7 +3509,6 @@ static PHP_FUNCTION(blitz_block) {
     int res = 0;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (BLITZ_CALLED_USER_METHOD(tpl)) RETURN_FALSE;
 
     if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC,"z|zz", &p1, &p2, &p_iterate_nonexistant)) {
         return;
