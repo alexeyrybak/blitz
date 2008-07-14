@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.5.13"
+#define BLITZ_VERSION_STRING "0.6.1"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -597,7 +597,8 @@ static void php_blitz_dump_struct_plain(blitz_tpl *tpl) /* {{{ */
     unsigned long i = 0, j = 0;
     tpl_node_struct *node = NULL;
 
-    php_printf("== PLAIN STRUCT (%ld nodes):",(unsigned long)tpl->static_data.n_nodes);
+    php_printf("== BODY\n%s\n", tpl->static_data.body);
+    php_printf("== PLAIN STRUCT (%ld nodes, l=%ld):",(unsigned long)tpl->static_data.n_nodes, (unsigned long)tpl->static_data.body_len);
     for (i=0; i<tpl->static_data.n_nodes; ++i) {
         node = & tpl->static_data.nodes[i];
         php_printf("\n%s[%d]; pos: (%ld(%ld), %ld(%ld)); ",
@@ -885,25 +886,33 @@ static inline void blitz_parse_call (
                     state = BLITZ_CALL_STATE_NEXT_ARG;
 
                     /* predefined method? */
-                    if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_IF_S)) {
+                    if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
                         node->type = BLITZ_NODE_TYPE_IF;
-                    } else if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_INCLUDE_S)) {
+                    } else if (BLITZ_STRING_IS_INCLUDE(node->lexem, node->lexem_len)) {
                         node->type = BLITZ_NODE_TYPE_INCLUDE;
-                    } else if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_WRAPPER_ESCAPE_S)) {
+                    } else if (BLITZ_STRING_IS_ESCAPE(node->lexem, node->lexem_len)) {
                         node->type = BLITZ_NODE_TYPE_WRAPPER;
                         node->flags = BLITZ_NODE_TYPE_WRAPPER_ESCAPE;
-                    } else if (0 == strcmp((char *)main_token,BLITZ_NODE_TYPE_WRAPPER_DATE_S)) {
+                    } else if (BLITZ_STRING_IS_DATE(node->lexem, node->lexem_len)) {
                         node->type = BLITZ_NODE_TYPE_WRAPPER;
                         node->flags = BLITZ_NODE_TYPE_WRAPPER_DATE;
                     } 
                 }
             } else {
                 ok = 1;
-                if (BLITZ_TAG_IS_BEGIN(main_token)) {
+                if (BLITZ_STRING_IS_BEGIN(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS; 
                     state = BLITZ_CALL_STATE_BEGIN;
                     node->type = BLITZ_NODE_TYPE_BEGIN;
-                } else if (BLITZ_TAG_IS_END(main_token)) {
+                } else if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
+                    INIT_CALL_ARGS;
+                    state = BLITZ_CALL_STATE_IF;
+                    node->type = BLITZ_NODE_TYPE_IF_NF;
+                } else if (BLITZ_STRING_IS_UNLESS(node->lexem, node->lexem_len)) {
+                    INIT_CALL_ARGS;
+                    state = BLITZ_CALL_STATE_IF;
+                    node->type = BLITZ_NODE_TYPE_UNLESS_NF;
+                } else if (BLITZ_STRING_IS_END(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS; 
                     state = BLITZ_CALL_STATE_END;
                     node->type = BLITZ_NODE_TYPE_END;
@@ -913,7 +922,7 @@ static inline void blitz_parse_call (
                     if (BLITZ_SUPPORT_PHPT_TAGS_PARTIALLY && (BLITZ_SUPPORT_PHPT_NOBRAKET_FUNCTIONS_ARE_VARS || is_phpt_tag)) {
                         node->type = is_path ? BLITZ_NODE_TYPE_VAR_PATH : BLITZ_NODE_TYPE_VAR;
                     } else { /* case insensitivity for methods */
-                        zend_str_tolower(node->lexem,i_pos);
+                        zend_str_tolower(node->lexem, node->lexem_len);
                     }
                     state = BLITZ_CALL_STATE_FINISHED;
                 }
@@ -951,6 +960,28 @@ static inline void blitz_parse_call (
                     state = BLITZ_CALL_STATE_FINISHED;
                     if (BLITZ_DEBUG) php_printf("STATE_END: pos=%u, c=%c, next_state = %d\n", pos, *c, state);
                     break;
+               case BLITZ_CALL_STATE_IF:
+                    BLITZ_SKIP_BLANK(c,i_pos,pos);
+                    is_path = i_len = i_pos = i_type = ok = 0;
+                    p = token;
+                    symb = *c;
+                    if (var_prefix && (symb == var_prefix)) {
+                        ++c; ++pos;
+                    }
+                    BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
+                    if (i_pos) {
+                        ok = 1;
+                        i_type = is_path ? BLITZ_ARG_TYPE_VAR_PATH : BLITZ_ARG_TYPE_VAR;
+                        i_len = i_pos;
+                        pos += i_pos;
+                        c = text + pos;
+                        ADD_CALL_ARGS(token, i_len, i_type);
+                        if (BLITZ_DEBUG) php_printf("STATE_IF: %u, %u; c = %c\n", pos, len_text, *c);
+                        state = BLITZ_CALL_STATE_FINISHED;
+                    } else {
+                        state = BLITZ_CALL_STATE_ERROR;
+                    }
+                    break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
                     symb = *c;
@@ -959,9 +990,8 @@ static inline void blitz_parse_call (
                     i_type = 0;
 
                     if (BLITZ_DEBUG) php_printf("STATE_NEXT_ARG: %u, %u; c = %c\n", pos, len_text, *c);
-                    if (symb == var_prefix) {
+                    if (var_prefix && (symb == var_prefix)) {
                         ++c; ++pos;
-                        /*BLITZ_SCAN_ALNUM(c,p,i_pos,i_symb); */
                         is_path = 0;
                         BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
                         if (i_pos!=0) ok = 1;
@@ -1203,6 +1233,7 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
         );
         n_close += n_phpt_close;
     }
+    tpl->static_data.body[tpl->static_data.body_len] = '\x0';
 
     qsort(pos, pos_size, sizeof(tag_pos), BLITZ_POS_COMPARE);
 
@@ -1355,7 +1386,7 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
                 i_node->pos_begin_shift = 0;
                 i_node->pos_end_shift = 0;
                 /* if it's a context node - build tree  */
-                if (i_node->type == BLITZ_NODE_TYPE_BEGIN) {
+                if (i_node->type == BLITZ_NODE_TYPE_BEGIN || i_node->type == BLITZ_NODE_TYPE_IF_NF || i_node->type == BLITZ_NODE_TYPE_UNLESS_NF) {
                     /* stack: allocate here (no mallocs for simple templates) */
                     if (!node_stack) {
                         /* allocate memory for node stack to build tree */
@@ -1400,7 +1431,13 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
                         parent = *pp_node_stack;
                         parent->pos_end_shift = current_open;
                         parent->pos_end = current_close + l_close_node;
-                        parent->type = BLITZ_NODE_TYPE_CONTEXT;
+                        if (BLITZ_NODE_TYPE_BEGIN == parent->type) {
+                            parent->type = BLITZ_NODE_TYPE_CONTEXT;
+                        } else if (BLITZ_NODE_TYPE_IF_NF == parent->type) {
+                            parent->type = BLITZ_NODE_TYPE_IF_CONTEXT;
+                        } else if (BLITZ_NODE_TYPE_UNLESS_NF == parent->type) {
+                            parent->type = BLITZ_NODE_TYPE_UNLESS_CONTEXT;
+                        }
                         --pp_node_stack;
                         parent = *pp_node_stack;
 						++n_nodes;
@@ -1445,8 +1482,9 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     }
 
     tpl->static_data.n_nodes = n_nodes;
-    if (BLITZ_G(remove_spaces_around_context_tags))
+    if (BLITZ_G(remove_spaces_around_context_tags)) {
         blitz_remove_spaces_around_context_tags(tpl TSRMLS_CC);
+    }
 
     efree(pos);
 	
@@ -1474,30 +1512,37 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
         got_non_space = 0;
 
         i_node = tpl->static_data.nodes + i;
-        if (i_node->type != BLITZ_NODE_TYPE_CONTEXT)
+        if (i_node->type != BLITZ_NODE_TYPE_CONTEXT 
+            && i_node->type != BLITZ_NODE_TYPE_IF_CONTEXT 
+            && i_node->type != BLITZ_NODE_TYPE_UNLESS_CONTEXT)
+        {
             continue;
+        }
 
         // begin tag: scan back to the endline or any nonspace symbol
         shift = i_node->pos_begin;
+        if (shift) shift--;
         pc = tpl->static_data.body + shift;
         while (shift) {
-            shift--;
-            pc--;
             c = *pc;
             if (c == '\n') {
+                if (shift) shift++;
                 got_end_back = 1;
                 break;
             } else if (c != ' ' && c != '\t' && c != '\r') {
                 got_non_space = 1;
                 break;
             }
+            shift--;
+            pc--;
         }
-        
+
         if (got_end_back || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very beginning
             shift_tmp = shift;
+            got_non_space = 0;
 
             // begin tag: scan forward to the endline or any nonspace symbol
-            shift = tpl->static_data.body_len - i_node->pos_begin_shift + 1;
+            shift = tpl->static_data.body_len - i_node->pos_begin_shift - 1;
             pc = tpl->static_data.body + i_node->pos_begin_shift - 1;
             while (shift) {
                 shift--;
@@ -1514,7 +1559,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
 
             if (got_end_fwd || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very end
                 i_node->pos_begin = shift_tmp;
-                i_node->pos_begin_shift = tpl->static_data.body_len - shift;
+                i_node->pos_begin_shift = tpl->static_data.body_len - shift - 1;
             }
         }
 
@@ -1525,6 +1570,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
         // end tag: scan back to the endline or any nonspace symbol
         shift = i_node->pos_end_shift;
         pc = tpl->static_data.body + shift;
+
         while (shift) {
             shift--;
             pc--;
@@ -1540,9 +1586,10 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
 
         if (got_end_back || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very beginning
             shift_tmp = shift;
+            got_non_space = 0;
 
             // end tag: scan forward to the endline or any nonspace symbol
-            shift = tpl->static_data.body_len - i_node->pos_end + 1;
+            shift = tpl->static_data.body_len - i_node->pos_end;
             pc = tpl->static_data.body + i_node->pos_end - 1;
             while (shift) {
                 shift--;
@@ -1551,19 +1598,18 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                 if (c == '\n') {
                     got_end_fwd = 1;
                     break;
-                } else if (c != ' ' && c != '\t' && c != '\r') {
+                } else if (c != ' ' && c != '\t' && c != '\r' && c != '\x0') {
                     got_non_space = 1;
                     break;
                 }
             }
 
             if (got_end_fwd || (0 == got_non_space && 0 == shift)) { // got the line end or just moved to the very end
-                i_node->pos_end_shift = shift_tmp;
+                i_node->pos_end_shift = shift_tmp + 1;
                 i_node->pos_end = tpl->static_data.body_len - shift;
             }
         }
     }
-
 }
 /* }}} */
 
@@ -2155,13 +2201,57 @@ static void blitz_exec_context (blitz_tpl *tpl, tpl_node_struct *node, zval *par
     char *key = NULL;
     unsigned int key_len = 0;
     unsigned long key_index = 0;
-    int check_key = 0;
+    int check_key = 0, not_empty = 0, is_condition = 0;
     zval **ctx_iterations = NULL;
     zval **ctx_data = NULL;
     call_arg *arg = node->args;
 
     if (BLITZ_DEBUG) php_printf("context:%s\n",node->args->name);
-    if (parent_params && (zend_hash_find(Z_ARRVAL_P(parent_params), arg->name, 1 + arg->len, (void**)&ctx_iterations) != FAILURE)) {
+
+    if (!parent_params) return; 
+
+    check_key = zend_hash_find(Z_ARRVAL_P(parent_params), arg->name, 1 + arg->len, (void**)&ctx_iterations);
+    if (check_key == FAILURE) {
+        if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
+            return;
+        } else {
+            not_empty = 0;
+        }
+    } else {
+        BLITZ_ZVAL_NOT_EMPTY(ctx_iterations, not_empty);
+    }
+
+    is_condition = (BLITZ_NODE_TYPE_IF_CONTEXT == node->type) ? 2 : 
+        ((BLITZ_NODE_TYPE_UNLESS_CONTEXT == node->type) ? 1 : 0);
+
+    if (BLITZ_DEBUG) {
+        php_printf("will exec context (type=%u) with iterations:\n", node->type);
+        php_var_dump(ctx_iterations, 0 TSRMLS_CC);
+        php_printf("is_condition = %u, not_empty = %u\n", is_condition, not_empty);
+    }
+
+    if (is_condition)
+    {
+        // exec the node only when 2[IF_CONTEXT]-1 == 1[NOT_EMPTY] or 1[UNLESS_CONTEXT]-1 == 0[EMPTY]
+        if (is_condition - 1 != not_empty) 
+            return;
+
+        tpl_node_struct *subnodes = NULL;
+        unsigned int n_subnodes = 0;
+        if (BLITZ_DEBUG) php_printf("will walk through iterations\n");
+        if (node->children) {
+            subnodes = *node->children;
+            n_subnodes = node->n_children;
+        }
+        // run nodes over parent_params
+        blitz_exec_nodes(tpl,subnodes,n_subnodes,id,
+            result,result_len,result_alloc_len,
+            node->pos_begin_shift,
+            node->pos_end_shift,
+            parent_params TSRMLS_CC
+        );
+        return;
+    } else {
         if (BLITZ_DEBUG) php_printf("data found in parent params:%s\n",arg->name);
         if (Z_TYPE_PP(ctx_iterations) == IS_ARRAY && zend_hash_num_elements(Z_ARRVAL_PP(ctx_iterations))) {
             tpl_node_struct *subnodes = NULL;
@@ -2282,6 +2372,8 @@ static int blitz_exec_nodes(blitz_tpl *tpl, tpl_node_struct *nodes, unsigned int
                     BLITZ_LOOP_MOVE_FORWARD(tpl);
                     blitz_exec_context(tpl, node, parent_params, id, result, result_len, result_alloc_len TSRMLS_CC);
                     BLITZ_LOOP_MOVE_BACK(tpl);
+                } else if (node->type == BLITZ_NODE_TYPE_IF_CONTEXT || node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT) {
+                    blitz_exec_context(tpl, node, parent_params, id, result, result_len, result_alloc_len TSRMLS_CC);
                 } else {
                     zval *iteration_params = parent_params ? parent_params : NULL;
                     if (BLITZ_IS_PREDEF_METHOD(node->type)) {

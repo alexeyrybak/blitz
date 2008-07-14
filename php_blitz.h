@@ -88,54 +88,90 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_NODE_TYPE_PREDEF_MASK		28
 #define BLITZ_IS_PREDEF_METHOD(type)	(type & BLITZ_NODE_TYPE_PREDEF_MASK)
-#define BLITZ_NODE_TYPE_IF_S			"if"
-#define BLITZ_NODE_TYPE_INCLUDE_S		"include"
-#define BLITZ_NODE_TYPE_BEGIN_S			"begin"
-#define BLITZ_NODE_TYPE_BEGIN_SU		"BEGIN"
-#define BLITZ_NODE_TYPE_END_S  			"end"
-#define BLITZ_NODE_TYPE_END_SU 			"END"
 
-#define BLITZ_TAG_IS_BEGIN(s)                               \
-    (((0 == strcmp((char *)s,BLITZ_NODE_TYPE_BEGIN_SU))        \
-          || (0 == strcmp((char *)s,BLITZ_NODE_TYPE_BEGIN_S))))
+#define BLITZ_STRING_IS_BEGIN(s, len)                                                       \
+    ((5 == len) &&                                                                          \
+        (('B' == s[0] && 'E' == s[1] && 'G' == s[2] && 'I' == s[3] && 'N' == s[4])          \
+        ||                                                                                  \
+        ('b' == s[0] && 'e' == s[1] && 'g' == s[2] && 'i' == s[3] && 'n' == s[4]))          \
+    )
+    
 
-#define BLITZ_TAG_IS_END(s)                                 \
-    (((0 == strcmp((char *)s,BLITZ_NODE_TYPE_END_SU))          \
-          || (0 == strcmp((char *)s,BLITZ_NODE_TYPE_END_S))))
+#define BLITZ_STRING_IS_END(s, len)                                                         \
+    ((3 == len) &&                                                                          \
+        (('E' == s[0] && 'N' == s[1] && 'D' == s[2])                                        \
+        ||                                                                                  \
+        ('e' == s[0] && 'n' == s[1] && 'd' == s[2]))                                        \
+    )
 
-#define BLITZ_TAG_IS_BEGIN_OR_END(s)                        \
-    ((BLITZ_TAG_IS_BEGIN(s) || BLITZ_TAG_IS_END(s)))
+#define BLITZ_STRING_IS_IF(s, len)                                                          \
+    ((2 == len) &&                                                                          \
+        (('I' == s[0] && 'F' == s[1])                                                       \
+        ||                                                                                  \
+        ('i' == s[0] && 'f' == s[1]))                                                       \
+    )
 
-#define BLITZ_WRAPPER_MAX_ARGS          3
-#define BLITZ_NODE_TYPE_WRAPPER_ESCAPE_S  "escape"
-#define BLITZ_NODE_TYPE_WRAPPER_DATE_S    "date"
+#define BLITZ_STRING_IS_UNLESS(s, len)                                                                   \
+    ((6 == len) &&                                                                                       \
+        (('U' == s[0] && 'N' == s[1] && 'L' == s[2] && 'E' == s[3] && 'S' == s[4] && 'S' == s[5])        \
+        ||                                                                                               \
+        ('u' == s[0] && 'n' == s[1] && 'l' == s[2] && 'e' == s[3] && 's' == s[4] && 's' == s[5]))        \
+    )
 
-#define BLITZ_NODE_TYPE_IF              (1<<2 | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_INCLUDE         (2<<2 | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_BEGIN           (3<<2 | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
-#define BLITZ_NODE_TYPE_END             (4<<2 | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
-#define BLITZ_NODE_TYPE_CONTEXT         (5<<2 | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_WRAPPER         (6<<2 | BLITZ_TYPE_METHOD)
+#define BLITZ_STRING_IS_INCLUDE(s, len)                                                                                 \
+    ((7 == len) &&                                                                                                      \
+        (('I' == s[0] && 'N' == s[1] && 'C' == s[2] && 'L' == s[3] && 'U' == s[4] && 'D' == s[5] && 'E' == s[6])        \
+        ||                                                                                                              \
+        ('i' == s[0] && 'n' == s[1] && 'c' == s[2] && 'l' == s[3] && 'u' == s[4] && 'd' == s[5] && 'e' == s[6]))        \
+    )
 
-#define BLITZ_NODE_TYPE_VAR             (1<<2 | BLITZ_TYPE_VAR)
-#define BLITZ_NODE_TYPE_VAR_PATH        (2<<2 | BLITZ_TYPE_VAR)
+#define BLITZ_STRING_IS_ESCAPE(s, len)                                                              \
+    ((6 == len) &&                                                                                  \
+        (('E' == s[0] && 'S' == s[1] && 'C' == s[2] && 'A' == s[3] && 'P' == s[4] && 'E' == s[5])   \
+        ||                                                                                          \
+        ('e' == s[0] && 's' == s[1] && 'c' == s[2] && 'a' == s[3] && 'p' == s[4] && 'e' == s[5]))   \
+    )
 
-#define BLITZ_NODE_TYPE_WRAPPER_ESCAPE  1
-#define BLITZ_NODE_TYPE_WRAPPER_DATE    2
-#define BLITZ_NODE_TYPE_WRAPPER_UPPER   3
-#define BLITZ_NODE_TYPE_WRAPPER_LOWER   4
-#define BLITZ_NODE_TYPE_WRAPPER_TRIM    5
+#define BLITZ_STRING_IS_DATE(s, len)                                                        \
+    ((4 == len) &&                                                                          \
+        (('D' == s[0] && 'A' == s[1] && 'T' == s[2] && 'E' == s[3])                         \
+        ||                                                                                  \
+        ('d' == s[0] && 'a' == s[1] && 't' == s[2] && 'e' == s[3]))                         \
+    )
 
-#define BLITZ_ITPL_ALLOC_INIT			4	
+#define BLITZ_WRAPPER_MAX_ARGS                  3
 
-#define BLITZ_TMP_BUF_MAX_LEN           1024
-#define BLITZ_CONTEXT_PATH_MAX_LEN      1024
-#define BLITZ_FILE_PATH_MAX_LEN         1024
+#define BLITZ_NODE_TYPE_IF                      (1<<2  | BLITZ_TYPE_METHOD)
+#define BLITZ_NODE_TYPE_INCLUDE                 (2<<2  | BLITZ_TYPE_METHOD)
+#define BLITZ_NODE_TYPE_BEGIN                   (3<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
+#define BLITZ_NODE_TYPE_END                     (4<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
+#define BLITZ_NODE_TYPE_CONTEXT                 (5<<2  | BLITZ_TYPE_METHOD)
+#define BLITZ_NODE_TYPE_WRAPPER                 (6<<2  | BLITZ_TYPE_METHOD)
 
-#define BLITZ_FLAG_FETCH_INDEX_BUILT    1
-#define BLITZ_FLAG_GLOBALS_IS_OTHER     2
-#define BLITZ_FLAG_ITERATION_IS_OTHER   4
-#define BLITZ_FLAG_CALLED_USER_METHOD   8
+#define BLITZ_NODE_TYPE_IF_NF                   (7<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_IF_CONTEXT */
+#define BLITZ_NODE_TYPE_UNLESS_NF               (8<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_UNLESS_CONTEXT */
+#define BLITZ_NODE_TYPE_IF_CONTEXT              (9<<2  | BLITZ_TYPE_METHOD)
+#define BLITZ_NODE_TYPE_UNLESS_CONTEXT          (10<<2 | BLITZ_TYPE_METHOD)
+
+#define BLITZ_NODE_TYPE_VAR                     (1<<2  | BLITZ_TYPE_VAR)
+#define BLITZ_NODE_TYPE_VAR_PATH                (2<<2  | BLITZ_TYPE_VAR)
+
+#define BLITZ_NODE_TYPE_WRAPPER_ESCAPE          1
+#define BLITZ_NODE_TYPE_WRAPPER_DATE            2
+#define BLITZ_NODE_TYPE_WRAPPER_UPPER           3
+#define BLITZ_NODE_TYPE_WRAPPER_LOWER           4
+#define BLITZ_NODE_TYPE_WRAPPER_TRIM            5
+
+#define BLITZ_ITPL_ALLOC_INIT			        4
+
+#define BLITZ_TMP_BUF_MAX_LEN                   1024
+#define BLITZ_CONTEXT_PATH_MAX_LEN              1024
+#define BLITZ_FILE_PATH_MAX_LEN                 1024
+
+#define BLITZ_FLAG_FETCH_INDEX_BUILT            1
+#define BLITZ_FLAG_GLOBALS_IS_OTHER             2
+#define BLITZ_FLAG_ITERATION_IS_OTHER           4
+#define BLITZ_FLAG_CALLED_USER_METHOD           8
 
 #define BLITZ_CALLED_USER_METHOD(v) (((v)->flags & BLITZ_FLAG_CALLED_USER_METHOD) == BLITZ_FLAG_CALLED_USER_METHOD)
 
@@ -362,6 +398,7 @@ typedef struct _blitz_tpl {
 #define BLITZ_CALL_STATE_HAS_NEXT    3 
 #define BLITZ_CALL_STATE_BEGIN       4
 #define BLITZ_CALL_STATE_END         5
+#define BLITZ_CALL_STATE_IF          6
 #define BLITZ_CALL_STATE_ERROR       0
 
 #define BLITZ_CALL_ERROR             1
@@ -382,6 +419,8 @@ typedef struct _blitz_tpl {
             break;                                                                                \
         case IS_LONG: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
         case IS_DOUBLE: res = (.0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                \
+        case IS_ARRAY: res = (0 == zend_hash_num_elements(Z_ARRVAL_PP(z))) ? 0 : 1; break;        \
+                                                                                                  \
         default: res = 0; break;                                                                  \
     }
 

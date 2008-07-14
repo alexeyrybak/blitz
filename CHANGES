@@ -1,4 +1,23 @@
 ===================================================================================================
+0.6.1 version 14 july 2008
+===================================================================================================
+Finally new 0.6 branch was started. Blitz will have a number of "heavy" features suggested
+by users during last years. Well, better late than never! 
+- IF/UNLESS multi-line blocks were added. The primary goal was to help users with usual
+  header/footer/empty pattern. Now one can just use the following syntax:
+  {{ IF list }}
+  <table>
+  {{ BEGIN list }}
+      <tr><td>{{ $some }}</td></tr>
+  {{ END }}
+  </table>
+  {{ END }}
+  {{ UNLESS list }}
+      Fuck it, Dude, let's go bowling
+  {{ END }}
+- fixed bug with removing spaces around context tags (ticket #181)
+
+===================================================================================================
 0.5.13 version 30 may 2008
 ===================================================================================================
 - internal methods policy was corrected, only two methods are restricted in user methods and
