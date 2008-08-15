@@ -389,9 +389,6 @@ typedef struct _blitz_tpl {
     }                                                                                        \
     *(p) = '\x0';
 
-//#define BLITZ_SCAN_SPACES_BACK
-
-
 
 #define BLITZ_CALL_STATE_NEXT_ARG    1
 #define BLITZ_CALL_STATE_FINISHED    2

@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.1"
+#define BLITZ_VERSION_STRING "0.6.2"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -2205,24 +2205,31 @@ static void blitz_exec_context (blitz_tpl *tpl, tpl_node_struct *node, zval *par
     zval **ctx_iterations = NULL;
     zval **ctx_data = NULL;
     call_arg *arg = node->args;
+    zval **z = NULL;
 
     if (BLITZ_DEBUG) php_printf("context:%s\n",node->args->name);
 
     if (!parent_params) return; 
 
-    check_key = zend_hash_find(Z_ARRVAL_P(parent_params), arg->name, 1 + arg->len, (void**)&ctx_iterations);
-    if (check_key == FAILURE) {
-        if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
-            return;
-        } else {
-            not_empty = 0;
+    is_condition = (BLITZ_NODE_TYPE_IF_CONTEXT == node->type) ? 2 :
+        ((BLITZ_NODE_TYPE_UNLESS_CONTEXT == node->type) ? 1 : 0);
+
+    if (is_condition && arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
+        if (blitz_fetch_var_by_path(&z, arg->name, arg->len, parent_params, tpl->hash_globals TSRMLS_CC)) {
+            BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
         }
     } else {
-        BLITZ_ZVAL_NOT_EMPTY(ctx_iterations, not_empty);
+        check_key = zend_hash_find(Z_ARRVAL_P(parent_params), arg->name, 1 + arg->len, (void**)&ctx_iterations);
+        if (check_key == FAILURE) {
+            if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
+                return;
+            } else {
+                not_empty = 0;
+            }
+        } else {
+            BLITZ_ZVAL_NOT_EMPTY(ctx_iterations, not_empty);
+        }
     }
-
-    is_condition = (BLITZ_NODE_TYPE_IF_CONTEXT == node->type) ? 2 : 
-        ((BLITZ_NODE_TYPE_UNLESS_CONTEXT == node->type) ? 1 : 0);
 
     if (BLITZ_DEBUG) {
         php_printf("will exec context (type=%u) with iterations:\n", node->type);
@@ -2232,12 +2239,13 @@ static void blitz_exec_context (blitz_tpl *tpl, tpl_node_struct *node, zval *par
 
     if (is_condition)
     {
+        tpl_node_struct *subnodes = NULL;
+        unsigned int n_subnodes = 0;
+
         // exec the node only when 2[IF_CONTEXT]-1 == 1[NOT_EMPTY] or 1[UNLESS_CONTEXT]-1 == 0[EMPTY]
         if (is_condition - 1 != not_empty) 
             return;
 
-        tpl_node_struct *subnodes = NULL;
-        unsigned int n_subnodes = 0;
         if (BLITZ_DEBUG) php_printf("will walk through iterations\n");
         if (node->children) {
             subnodes = *node->children;

@@ -1,4 +1,11 @@
 ===================================================================================================
+0.6.2 version 15 august 2008
+===================================================================================================
+- Path-variables ($object.property and $hash.key) in IF/UNLESS multi-line blocks were fixed and 
+  corresponding tests were improved.
+- Minor win32-compilation fixes were made.
+
+===================================================================================================
 0.6.1 version 14 july 2008
 ===================================================================================================
 Finally new 0.6 branch was started. Blitz will have a number of "heavy" features suggested

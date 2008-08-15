@@ -43,6 +43,43 @@ echo $T->parse(
         )
     )
 );
+
+unset($T);
+$body = '
+path-variables test:
+{{ IF $user.login }}
+    IF: object is OK
+{{ END }}
+{{ IF $hash.sub.key }}
+    IF: hash is OK
+{{ END }}
+{{ UNLESS $user.dummy }}
+    UNLESS: object is OK
+{{ END }}
+{{ UNLESS $hash.dummy.dummy }}
+    UNLESS: hash is OK
+{{ END }}
+';
+
+class User {
+    var $login;
+    function User() {
+        $this->login = TRUE;
+    }
+}
+
+$T = new Blitz();
+$T->load($body);
+
+echo $T->parse(
+    array(
+        0 => array(
+            'user' => new User(),
+            'hash' => array('sub' => array('key' => 1))
+        )
+    )
+);
+
 ?>
 --EXPECT--
 some began
@@ -52,3 +89,9 @@ item = hello, office zombies!
 </if>
 unless worked: sure
 some ended
+
+path-variables test:
+    IF: object is OK
+    IF: hash is OK
+    UNLESS: object is OK
+    UNLESS: hash is OK
