@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.2"
+#define BLITZ_VERSION_STRING "0.6.3"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -3089,7 +3089,7 @@ static inline int blitz_merge_iterations_by_str_keys(zval **target, zval *input 
     unsigned int key_len = 0;
     unsigned long index = 0;
 
-    if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
+    if (!input || (IS_ARRAY != Z_TYPE_P(input)) || (IS_ARRAY != Z_TYPE_PP(target))) {
         return 0;
     }
 
@@ -3198,7 +3198,9 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr TSR
         tpl->last_iteration = tpl->current_iteration;
     }
 
-    zend_hash_internal_pointer_reset(Z_ARRVAL_PP(tpl->last_iteration));
+    if (IS_ARRAY == Z_TYPE_PP(tpl->last_iteration))
+        zend_hash_internal_pointer_reset(Z_ARRVAL_PP(tpl->last_iteration));
+
     if (HASH_KEY_IS_STRING == first_key_type) {
         target_iteration = tpl->last_iteration;
         res = blitz_merge_iterations_by_str_keys(target_iteration, input_arr TSRMLS_CC);
