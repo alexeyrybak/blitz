@@ -2206,6 +2206,7 @@ static void blitz_exec_context (blitz_tpl *tpl, tpl_node_struct *node, zval *par
     zval **ctx_data = NULL;
     call_arg *arg = node->args;
     zval **z = NULL;
+    int predefined = -1;
 
     if (BLITZ_DEBUG) php_printf("context:%s\n",node->args->name);
 
@@ -2214,10 +2215,25 @@ static void blitz_exec_context (blitz_tpl *tpl, tpl_node_struct *node, zval *par
     is_condition = (BLITZ_NODE_TYPE_IF_CONTEXT == node->type) ? 2 :
         ((BLITZ_NODE_TYPE_UNLESS_CONTEXT == node->type) ? 1 : 0);
 
-    if (is_condition && arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
-        if (blitz_fetch_var_by_path(&z, arg->name, arg->len, parent_params, tpl->hash_globals TSRMLS_CC)) {
-            BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
+    if (is_condition) {
+        BLITZ_GET_PREDEFINED_VAR(tpl, arg->name, arg->len, predefined); 
+        if (predefined>0) {
+            not_empty = 1;
+        } else if (arg->type == BLITZ_ARG_TYPE_VAR) {
+            BLITZ_ARG_NOT_EMPTY(*arg,Z_ARRVAL_P(parent_params), not_empty);
+            if (not_empty == -1) {
+                BLITZ_ARG_NOT_EMPTY(*arg,tpl->hash_globals, not_empty);
+            }
+        } else if (arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
+            if (blitz_fetch_var_by_path(&z, arg->name, arg->len, parent_params, tpl->hash_globals TSRMLS_CC)) {
+                BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
+            }
+        } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
+            not_empty = (arg->name[0] == 't');
         }
+
+        if (not_empty == -1) // generally -1 means 'unknown', but it's equal to 'empty' here
+            not_empty = 0;
     } else {
         check_key = zend_hash_find(Z_ARRVAL_P(parent_params), arg->name, 1 + arg->len, (void**)&ctx_iterations);
         if (check_key == FAILURE) {
