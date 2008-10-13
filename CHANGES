@@ -1,4 +1,10 @@
 ===================================================================================================
+0.6.3 version 13 october 2008
+===================================================================================================
+- Predefined, global and boolean vars were fixed in IF/UNLESS multi-line blocks (bugs 196, 213)
+- Segfault fixed when setting array(NULL) value and setting anything else after (bug 225)
+
+===================================================================================================
 0.6.2 version 15 august 2008
 ===================================================================================================
 - Path-variables ($object.property and $hash.key) in IF/UNLESS multi-line blocks were fixed and 
