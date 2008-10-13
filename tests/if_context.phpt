@@ -21,10 +21,15 @@ unless worked: {{ var }}
 {{ END }}
 some ended
 {{ END }}
+{{ IF global_var }}
+global var is set
+{{ END }}
 BODY;
 
 $T = new Blitz();
 $T->load($body);
+
+$T->setGlobal(array('global_var' => 1));
 
 echo $T->parse(
     array(
@@ -89,6 +94,7 @@ item = hello, office zombies!
 </if>
 unless worked: sure
 some ended
+global var is set
 
 path-variables test:
     IF: object is OK
