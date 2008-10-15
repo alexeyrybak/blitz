@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.3"
+#define BLITZ_VERSION_STRING "0.6.4"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -1806,6 +1806,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, tpl_node_struct *
     zval **z = NULL;
     unsigned long buf_len = 0, new_len = 0;
     char is_var = 0, is_var_path = 0, is_found = 0;
+    char predefined_buf[BLITZ_PREDEFINED_BUF_LEN];
 
     if (node->type == BLITZ_NODE_TYPE_IF) {
         char not_empty = 0;
@@ -1844,40 +1845,51 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, tpl_node_struct *
         }
 
         arg = node->args + i_arg;
-        is_var = (arg->type == BLITZ_ARG_TYPE_VAR);
-        is_var_path = (arg->type == BLITZ_ARG_TYPE_VAR_PATH);
-        is_found = 0;
-        if (is_var || is_var_path) { /* argument is variable  */
-            if (is_var &&
-                (
-                    (SUCCESS == zend_hash_find(Z_ARRVAL_P(iteration_params),arg->name,1+arg->len,(void**)&z))
-                    || (SUCCESS == zend_hash_find(tpl->hash_globals,arg->name,1+arg->len,(void**)&z))
-                ))
-            {
-                is_found = 1;
-            }
-            else if (is_var_path 
-                && blitz_fetch_var_by_path(&z, arg->name, arg->len, iteration_params, tpl->hash_globals TSRMLS_CC))
-            {
-                is_found = 1;
-            }
+        BLITZ_GET_PREDEFINED_VAR(tpl, arg->name, arg->len, predefined);
+        if (predefined >=0) {
+            snprintf(predefined_buf, BLITZ_PREDEFINED_BUF_LEN, "%u", predefined);
+            buf_len = strlen(predefined_buf);
+            BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result, *p_result);
+            *p_result = (char*)memcpy(*p_result, predefined_buf, buf_len);
+            *result_len += buf_len;
+            p_result+=*result_len;
+            (*result)[*result_len] = '\0';
+        } else {
+            is_var = (arg->type == BLITZ_ARG_TYPE_VAR);
+            is_var_path = (arg->type == BLITZ_ARG_TYPE_VAR_PATH);
+            is_found = 0;
+            if (is_var || is_var_path) { /* argument is variable  */
+                if (is_var &&
+                    (
+                        (SUCCESS == zend_hash_find(Z_ARRVAL_P(iteration_params),arg->name,1+arg->len,(void**)&z))
+                        || (SUCCESS == zend_hash_find(tpl->hash_globals,arg->name,1+arg->len,(void**)&z))
+                    ))
+                {
+                    is_found = 1;
+                }
+                else if (is_var_path 
+                    && blitz_fetch_var_by_path(&z, arg->name, arg->len, iteration_params, tpl->hash_globals TSRMLS_CC))
+                {
+                    is_found = 1;
+                }
 
-            if (is_found) {
-                convert_to_string_ex(z);
-                buf_len = Z_STRLEN_PP(z);
+                if (is_found) {
+                    convert_to_string_ex(z);
+                    buf_len = Z_STRLEN_PP(z);
+                    BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
+                    *p_result = (char*)memcpy(*p_result,Z_STRVAL_PP(z),buf_len);
+                    *result_len += buf_len;
+                    p_result+=*result_len;
+                    (*result)[*result_len] = '\0';
+                }
+            } else { /* argument is string or number */
+                buf_len = (unsigned long)arg->len;
                 BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
-                *p_result = (char*)memcpy(*p_result,Z_STRVAL_PP(z),buf_len);
+                *p_result = (char*)memcpy(*p_result,node->args[i_arg].name,buf_len);
                 *result_len += buf_len;
                 p_result+=*result_len;
                 (*result)[*result_len] = '\0';
             }
-        } else { /* argument is string or number */
-            buf_len = (unsigned long)arg->len;
-            BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
-            *p_result = (char*)memcpy(*p_result,node->args[i_arg].name,buf_len);
-            *result_len += buf_len;
-            p_result+=*result_len;
-            (*result)[*result_len] = '\0';
         }
     } else if (node->type == BLITZ_NODE_TYPE_INCLUDE) {
         call_arg *arg = node->args; 
