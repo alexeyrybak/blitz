@@ -465,7 +465,7 @@ typedef struct _blitz_tpl {
                                                                                                   \
     if (zend_hash_find(Z_OBJPROP_P((id)), "tpl", sizeof("tpl"), (void **)&(desc)) == FAILURE) {   \
         php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
-            "INTERNAL:cannot find template descriptor (object->tpl resource)"                     \
+            "INTERNAL: template was not loaded/initialized (cannot find template descriptor)"     \
         );                                                                                        \
         RETURN_FALSE;                                                                             \
     }                                                                                             \
