@@ -97,7 +97,6 @@ ZEND_GET_MODULE(blitz)
     ++arg_id;                                                                   \
     node->n_args = arg_id;                                                     
 
-
 /* }}} */
 
 static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
@@ -112,15 +111,20 @@ static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
 
     p = (char *) (base+(size_t) mh_arg1);
 
-    if (!new_value || new_value_length != 1) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to set blitz.var_prefix (only one character is allowed, like $ or %%)");
-        return FAILURE;
+    if (new_value && new_value_length == 0) {
+        *p = '\x0';
+    } else {
+        if (!new_value || new_value_length != 1) {
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to set blitz.var_prefix (only one character is allowed, like $ or %%)");
+            return FAILURE;
+        }
+        *p = new_value[0];
     }
 
-    *p = new_value[0];
     return SUCCESS;
 }
 /* }}} */
+
 
 /* {{{ ini options */
 PHP_INI_BEGIN()
@@ -842,7 +846,7 @@ static inline void blitz_parse_call (
     i_pos = 0;
 
     /* parameter or method? */
-    if (*c == var_prefix) { /* scan parameter */
+    if (var_prefix && *c == var_prefix) { /* scan parameter */
         i_pos=0; ++c; ++pos;
         BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
         pos+=i_pos;
