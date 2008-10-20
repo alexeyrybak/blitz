@@ -1,7 +1,7 @@
 --TEST--
 conditional contexts (multi-line conditions): if/end and unless/end
 --FILE--
-<?
+<?php
 
 include('common.inc');
 ini_set('blitz.remove_spaces_around_context_tags', 1);
