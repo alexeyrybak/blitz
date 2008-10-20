@@ -22,6 +22,7 @@ echo $T->parse();
 
 ?>
 --EXPECT--
+unexpected tag (noname_loaded_from_zval: line 7, pos 3)
 <!--
     some HTML can be put in comments and it's OK
 -->
