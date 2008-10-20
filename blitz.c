@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.4"
+#define BLITZ_VERSION_STRING "0.6.5"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -310,9 +310,9 @@ static blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations, blit
 
 static inline void blitz_free_node(tpl_node_struct *node) /* {{{ */
 {
-    int i;
+    int i = 0;
 
-    for(i = 0; i < node->n_args; i++) {
+    for (i = 0; i < node->n_args; i++) {
         if (node->args[i].name) {
             efree(node->args[i].name);
         }
@@ -323,12 +323,13 @@ static inline void blitz_free_node(tpl_node_struct *node) /* {{{ */
         efree(node->lexem);
         node->lexem = NULL;
     }
+
     if (node->args) {
         efree(node->args);
         node->args = NULL;
     }
 
-    for(i = 0; i < node->n_children; i++) {
+    for (i = 0; i < node->n_children; i++) {
         blitz_free_node(node->children[i]);
     }
 
@@ -342,7 +343,7 @@ static inline void blitz_free_node(tpl_node_struct *node) /* {{{ */
 
 static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 {
-    int n_nodes=0, i=0;
+    int n_nodes = 0, i = 0;
 
     if (!tpl) {
         return;
@@ -1260,7 +1261,7 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     */
 
     /* allocate memory for nodes */
-    tpl->static_data.nodes = ecalloc(n_open, sizeof(tpl_node_struct));
+    tpl->static_data.nodes = ecalloc(n_close, sizeof(tpl_node_struct));
 
     /* set correct pairs even if template has wrong grammar */
     i = 0;
@@ -1303,7 +1304,8 @@ static inline int blitz_analyse (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
                 i_type, i_type & expect_type_mask, expect_type_mask, i_is_open);
         }
 
-        if (i_type != (i_type & expect_type_mask)) {
+        // most of errors are catched by expect_type_mask, except one case of a single last "open" tag
+        if (i_type != (i_type & expect_type_mask) || ((i == pos_size - 1) && i_is_open == 1)) {
             /* compatibility with HTML comments  */
             /* 1) all unexpected errors after "<!--" tag are ignored (BLITZ_TAG_POS_PHPT_CTX_LEFT) */
             /* 2) all unexpected errors for "-->" tag are ignored (BLITZ_TAG_POS_PHPT_CTX_RIGHT) */
