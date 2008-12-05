@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.5"
+#define BLITZ_VERSION_STRING "0.6.6"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -1827,12 +1827,14 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, tpl_node_struct *
                 not_empty = 1;
             }
         } else if (arg->type == BLITZ_ARG_TYPE_VAR) {
-            BLITZ_ARG_NOT_EMPTY(*arg,Z_ARRVAL_P(iteration_params),not_empty);
-            if (not_empty == -1) {
-                BLITZ_ARG_NOT_EMPTY(*arg,tpl->hash_globals,not_empty);
+            if (iteration_params) {
+                BLITZ_ARG_NOT_EMPTY(*arg,Z_ARRVAL_P(iteration_params),not_empty);
+                if (not_empty == -1) {
+                    BLITZ_ARG_NOT_EMPTY(*arg,tpl->hash_globals,not_empty);
+                }
             }
         } else if (arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
-            if(blitz_fetch_var_by_path(&z, arg->name, arg->len, iteration_params, tpl->hash_globals TSRMLS_CC)) {
+            if (blitz_fetch_var_by_path(&z, arg->name, arg->len, iteration_params, tpl->hash_globals TSRMLS_CC)) {
                 BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
             }
         } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
