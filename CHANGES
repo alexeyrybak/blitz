@@ -1,4 +1,14 @@
 ===================================================================================================
+0.6.6 version 11 january 2009. С новым годом!
+===================================================================================================
+- New methods "assign" and "display" were added: "assign" is just the same as "set",
+  and "display" executes template and outputs the result.
+  $View->display($vars) is equal to echo $View->parse($vars).
+- New ini-variable "blitz.warn_context_duplicates" was added. When it's set to 1 (default is 0)
+  blitz generates warnings for context name duplicates by comparing full context paths.
+- A couple of segfaults were fixed (fetch without parameters, bugs #242, #232)
+
+===================================================================================================
 0.6.5 version 21 october 2008
 ===================================================================================================
 - Segfault on some "broken" templates was fixed
@@ -12,8 +22,8 @@
 ===================================================================================================
 0.6.3 version 13 october 2008
 ===================================================================================================
-- Predefined, global and boolean vars were fixed in IF/UNLESS multi-line blocks (bugs 196, 213)
-- Segfault fixed when setting array(NULL) value and setting anything else after (bug 225)
+- Predefined, global and boolean vars were fixed in IF/UNLESS multi-line blocks (bugs #196, #213)
+- Segfault fixed when setting array(NULL) value and setting anything else after (bug #225)
 
 ===================================================================================================
 0.6.2 version 15 august 2008
