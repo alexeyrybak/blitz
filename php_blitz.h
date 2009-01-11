@@ -49,6 +49,7 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char *path;
     char disable_include;
     char remove_spaces_around_context_tags;
+    char warn_context_duplicates;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS
