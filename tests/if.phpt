@@ -1,5 +1,5 @@
 --TEST--
-predefined methods: if
+if/unless predefined methods
 --FILE--
 <?php
 include('common.inc');
@@ -15,8 +15,8 @@ $test_vars = array(
     1976
 );
 
-$if_var_TRUE = 'yes, true';
-$if_var_FALSE = 'yes, false';
+$if_var_TRUE = 'true_var';
+$if_var_FALSE = 'false_val';
 
 $T = new Blitz('if.tpl');
 $T->set_global(
@@ -36,12 +36,21 @@ echo $T->parse();
 
 ?>
 --EXPECT--
-TRUE yes, true
-FALSE yes, false
-FALSE yes, false
-FALSE yes, false
-FALSE yes, false
-TRUE yes, true
-TRUE yes, true
-TRUE yes, true
-FALSE yes, false
+if: TRUE true_var
+unless: FALSE false_val
+if: FALSE false_val
+unless: TRUE true_var
+if: FALSE false_val
+unless: TRUE true_var
+if: FALSE false_val
+unless: TRUE true_var
+if: FALSE false_val
+unless: TRUE true_var
+if: TRUE true_var
+unless: FALSE false_val
+if: TRUE true_var
+unless: FALSE false_val
+if: TRUE true_var
+unless: FALSE false_val
+if: FALSE false_val
+unless: TRUE true_var

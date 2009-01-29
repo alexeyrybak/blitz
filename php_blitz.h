@@ -142,20 +142,21 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_WRAPPER_MAX_ARGS                  3
 
-#define BLITZ_NODE_TYPE_IF                      (1<<2  | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_INCLUDE                 (2<<2  | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_BEGIN                   (3<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
-#define BLITZ_NODE_TYPE_END                     (4<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
-#define BLITZ_NODE_TYPE_CONTEXT                 (5<<2  | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_WRAPPER                 (6<<2  | BLITZ_TYPE_METHOD)
+#define BLITZ_NODE_TYPE_IF                      (1<<2  | BLITZ_TYPE_METHOD) /* {{ if($a, 'b', "c"); }} */
+#define BLITZ_NODE_TYPE_UNLESS                  (2<<2  | BLITZ_TYPE_METHOD) /* {{ unless($a, 'b', "c"); }} */
+#define BLITZ_NODE_TYPE_INCLUDE                 (3<<2  | BLITZ_TYPE_METHOD) /* {{ include('file.tpl'); }} */
+#define BLITZ_NODE_TYPE_BEGIN                   (4<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
+#define BLITZ_NODE_TYPE_END                     (5<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
+#define BLITZ_NODE_TYPE_CONTEXT                 (6<<2  | BLITZ_TYPE_METHOD) /* {{ BEGIN a }} bla-bla {{ END }} */
+#define BLITZ_NODE_TYPE_WRAPPER                 (7<<2  | BLITZ_TYPE_METHOD) /* other internal functions */
 
-#define BLITZ_NODE_TYPE_IF_NF                   (7<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_IF_CONTEXT */
-#define BLITZ_NODE_TYPE_UNLESS_NF               (8<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_UNLESS_CONTEXT */
-#define BLITZ_NODE_TYPE_IF_CONTEXT              (9<<2  | BLITZ_TYPE_METHOD)
-#define BLITZ_NODE_TYPE_UNLESS_CONTEXT          (10<<2 | BLITZ_TYPE_METHOD)
+#define BLITZ_NODE_TYPE_IF_NF                   (8<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_IF_CONTEXT */
+#define BLITZ_NODE_TYPE_UNLESS_NF               (9<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_UNLESS_CONTEXT */
+#define BLITZ_NODE_TYPE_IF_CONTEXT              (10<<2 | BLITZ_TYPE_METHOD) /* {{ IF $a }} bla-bla {{ END }} */
+#define BLITZ_NODE_TYPE_UNLESS_CONTEXT          (11<<2 | BLITZ_TYPE_METHOD) /* {{ UNLESS $a }} bla-bla {{ END }} */
 
-#define BLITZ_NODE_TYPE_VAR                     (1<<2  | BLITZ_TYPE_VAR)
-#define BLITZ_NODE_TYPE_VAR_PATH                (2<<2  | BLITZ_TYPE_VAR)
+#define BLITZ_NODE_TYPE_VAR                     (1<<2  | BLITZ_TYPE_VAR)  /* $a */
+#define BLITZ_NODE_TYPE_VAR_PATH                (2<<2  | BLITZ_TYPE_VAR)  /* $hash.key or $obj.property or $obj.property_hash.key et cetera */
 
 #define BLITZ_NODE_TYPE_WRAPPER_ESCAPE          1
 #define BLITZ_NODE_TYPE_WRAPPER_DATE            2
@@ -167,7 +168,6 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_TMP_BUF_MAX_LEN                   1024
 #define BLITZ_CONTEXT_PATH_MAX_LEN              1024
-#define BLITZ_FILE_PATH_MAX_LEN                 1024
 
 #define BLITZ_FLAG_FETCH_INDEX_BUILT            1
 #define BLITZ_FLAG_GLOBALS_IS_OTHER             2
@@ -258,7 +258,7 @@ typedef struct _blitz_loop_stack_item {
 
 // template: static data
 typedef struct _blitz_static_data {
-    char *name;
+    char name[MAXPATHLEN];
     tpl_config_struct *config;
     tpl_node_struct *nodes;
     unsigned int n_nodes;
@@ -319,6 +319,11 @@ typedef struct _blitz_tpl {
   ( ((c)>=BLITZ_ISALPHA_SMALL_MIN && (c)<=BLITZ_ISALPHA_SMALL_MAX)             \
     || ((c)>=BLITZ_ISALPHA_BIG_MIN && (c)<=BLITZ_ISALPHA_BIG_MAX)              \
     || (c) == '_'                                                              \
+  )
+
+#define BLITZ_IS_ALPHA_STRICT(c)                                               \
+  ( ((c)>=BLITZ_ISALPHA_SMALL_MIN && (c)<=BLITZ_ISALPHA_SMALL_MAX)             \
+    || ((c)>=BLITZ_ISALPHA_BIG_MIN && (c)<=BLITZ_ISALPHA_BIG_MAX)              \
   )
 
 #define BLITZ_SCAN_SINGLE_QUOTED(c,p,pos,len,ok)                               \

@@ -1,4 +1,13 @@
 ===================================================================================================
+0.6.7 version 29 january 2009
+===================================================================================================
+- Infinite include loops checking was added (bug #241)
+- blitz.path global should work fine with Windows-like systems ("C:/dir/" paths)
+- Block method now affects contexts hidden by IF/UNLESS (bug #211)
+- getStruct() returnes IF/UNLESS nodes correctly (bug #230)
+- Internal method "unless" was added - an opposite pair to "if"
+
+===================================================================================================
 0.6.6 version 11 january 2009. С новым годом!
 ===================================================================================================
 - New methods "assign" and "display" were added: "assign" is just the same as "set",

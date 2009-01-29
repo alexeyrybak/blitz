@@ -7,12 +7,12 @@
   |     http://sourceforge.net/projects/blitz-templates/                 |
   |                                                                      |
   | Author                                                               |
-  |     Alexey Rybak <alexey.rybak@gmail.com>                            |
+  |     Alexey Rybak <alexey.rybak at gmail.com>                         |
   | Template analyzing is partially based on php_templates code by       |
   |     Maxim Poltarak (http://php-templates.sf.net)                     |
   | Bug & memleak fixes and other patches by                             |
   |     Antony Dovgal <tony at daylessday dot org>                       |
-  |     Konstantin Baryshnikov <konstantin@symbi.info>                   |
+  |     Konstantin Baryshnikov <konstantin at symbi.info>                |
   +----------------------------------------------------------------------+
 */
 
@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.6"
+#define BLITZ_VERSION_STRING "0.6.7"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -149,9 +149,10 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 /* }}} */
 
-static inline int blitz_read_with_stream(blitz_tpl *tpl, char *filename TSRMLS_DC) /* {{{ */
+static inline int blitz_read_with_stream(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     php_stream *stream;
+    char *filename = tpl->static_data.name;
 
     if (php_check_open_basedir(filename TSRMLS_CC)) {
         return 0;
@@ -169,10 +170,11 @@ static inline int blitz_read_with_stream(blitz_tpl *tpl, char *filename TSRMLS_D
 }
 /* }}} */
 
-static inline int blitz_read_with_fread(blitz_tpl *tpl, const char *filename TSRMLS_DC) /* {{{ */
+static inline int blitz_read_with_fread(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     FILE *stream;
     unsigned int get_len;
+    char *filename = tpl->static_data.name;
 
     if (php_check_open_basedir(filename TSRMLS_CC)) { 
         return 0; 
@@ -197,11 +199,12 @@ static inline int blitz_read_with_fread(blitz_tpl *tpl, const char *filename TSR
 /* }}} */
 
 #if HAVE_MMAP
-static inline int blitz_read_with_mmap(blitz_tpl *tpl, const char *filename TSRMLS_DC) /* {{{ */
+static inline int blitz_read_with_mmap(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     int fd;
     struct stat stat_info;
     void *srcfile;
+    char *filename = tpl->static_data.name;
 
     if (php_check_open_basedir(filename TSRMLS_CC)){
         return 0;
@@ -239,7 +242,6 @@ static blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations, blit
 {
     blitz_tpl *tpl = ecalloc(1, sizeof(blitz_tpl));
 
-    tpl->static_data.name = NULL;
     tpl->static_data.body = NULL;
 
     tpl->flags = 0;
@@ -360,10 +362,6 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
         blitz_free_node(&tpl->static_data.nodes[i]);
 	}
 
-    if (tpl->static_data.name) {
-        efree(tpl->static_data.name);
-    }
-
     if (tpl->static_data.nodes) {
         efree(tpl->static_data.nodes);
     }
@@ -418,14 +416,16 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
 static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len, HashTable *globals, zval *iterations, blitz_tpl *tpl_parent TSRMLS_DC) /* {{{ */
 {
     int global_path_len = 0;
-    char filename_normalized[BLITZ_FILE_PATH_MAX_LEN];
 #ifdef BLITZ_USE_STREAMS
     php_stream *stream = NULL;
 #endif
     unsigned int filename_normalized_len = 0;
     unsigned int add_buffer_len = 0;
     int result = 0;
-    blitz_tpl *tpl;
+    blitz_tpl *tpl = NULL;
+    blitz_tpl *i_tpl = NULL;
+    char *s = NULL;
+    int i = 0, check_loop_max = 128;
 
     tpl = blitz_init_tpl_base(globals, iterations, tpl_parent TSRMLS_CC);
 
@@ -439,36 +439,53 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len, HashTab
 
     filename_normalized_len = filename_len;
 
-    if ('/' != filename[0] && BLITZ_G(path)[0] != 0) {
+#ifndef PHP_WIN32
+    /* "/dir" starts from root  - don't add global path */
+    if ('/' != filename[0] && BLITZ_G(path)[0] != 0) { 
+#else
+    /* "C:\dir" starts from "root" - don't add global path */
+    if (filename_len>2 && filename[1] == ':' && BLITZ_IS_ALPHA_STRICT(filename[0]) && BLITZ_G(path)[0] != 0) {
+#endif
         global_path_len = strlen(BLITZ_G(path));
 
-        if ((global_path_len + filename_len) > BLITZ_FILE_PATH_MAX_LEN) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long, increase BLITZ_MAX_FILE_PATH");
-            blitz_free_tpl(tpl); /* XXX */
+        if ((global_path_len + filename_len) > MAXPATHLEN) {
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long (limited by MAXPATHLEN)");
+            blitz_free_tpl(tpl);
             return NULL;
         }
 
-        memcpy(filename_normalized, BLITZ_G(path), global_path_len);
-        memcpy(filename_normalized + global_path_len, filename, filename_len);
+        memcpy(tpl->static_data.name, BLITZ_G(path), global_path_len);
+        memcpy(tpl->static_data.name + global_path_len, filename, filename_len);
         filename_normalized_len = filename_len + global_path_len;
-        filename_normalized[filename_normalized_len] = '\0';
+        tpl->static_data.name[filename_normalized_len] = '\0';
     } else {
-        memcpy(filename_normalized, filename, filename_len);
-        filename_normalized_len = filename_len;
-        filename_normalized[filename_normalized_len] = '\0';
+        // we need realpath to check looped includes
+        VCWD_REALPATH(filename, tpl->static_data.name);
+        filename_normalized_len = strlen(tpl->static_data.name);
     }
 
-/* 
-It seems to be 10% faster to use just fread or mmap than streams on lebowski-bench. 
-*/
+    /* check loops */
+    i_tpl = tpl;
+    while (i++ < check_loop_max) {
+        i_tpl = i_tpl->tpl_parent;
+        if (!i_tpl) break; 
+        s = i_tpl->static_data.name;
+        if (0 == strncmp(s, tpl->static_data.name, filename_normalized_len)) {
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "ERROR: include recursion detected for \"%s\"", tpl->static_data.name);
+            blitz_free_tpl(tpl);
+            return NULL;
+        }
+    }
+
+/* Seems to be 10% faster to use just fread or mmap than streams... but who cares? */
 
 #ifdef BLITZ_USE_STREAMS
-    result = blitz_read_with_stream(tpl, filename_normalized TSRMLS_CC);
+    result = blitz_read_with_stream(tpl TSRMLS_CC);
 #else
 #ifdef BLITZ_USE_MMAP
-    result = blitz_read_with_mmap(tpl, filename_normalized TSRMLS_CC);
+    result = blitz_read_with_mmap(tpl TSRMLS_CC);
 #else
-    result = blitz_read_with_fread(tpl, filename_normalized TSRMLS_CC);
+    result = blitz_read_with_fread(tpl TSRMLS_CC);
 #endif
 #endif
 
@@ -484,10 +501,6 @@ It seems to be 10% faster to use just fread or mmap than streams on lebowski-ben
 
     tpl->static_data.body = erealloc(tpl->static_data.body, tpl->static_data.body_len + add_buffer_len);
     memset(tpl->static_data.body + tpl->static_data.body_len, '\0', add_buffer_len);
-
-    tpl->static_data.name = emalloc(filename_normalized_len + 1);
-    memcpy(tpl->static_data.name, filename_normalized, filename_normalized_len);
-    tpl->static_data.name[filename_normalized_len] = '\0';
 
     return tpl;
 }
@@ -516,7 +529,7 @@ static int blitz_load_body(blitz_tpl *tpl, const char *body, int body_len TSRMLS
         memset(tpl->static_data.body + tpl->static_data.body_len, '\0', add_buffer_len);
     }
 
-    tpl->static_data.name = estrndup(name, name_len);
+    memcpy(tpl->static_data.name, name, name_len);
 
     return 1;
 }
@@ -702,26 +715,33 @@ static void blitz_get_node_paths(zval *list, tpl_node_struct *node, const char *
     unsigned long j = 0;
     char suffix[2] = "\x0";
     char path[BLITZ_CONTEXT_PATH_MAX_LEN] = "\x0";
+    unsigned int may_have_children = 0;
 
-    if (!node) {
+    if (!node) 
         return;
-    }
 
-    if (node->type == BLITZ_NODE_TYPE_BEGIN) { /* non-finalized node (end was not found, error) */
+    if (node->type == BLITZ_NODE_TYPE_BEGIN) /* non-finalized node (end was not found, error) */
         return;
-    }
 
-    if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
+    if (node->type == BLITZ_NODE_TYPE_CONTEXT || 
+        node->type == BLITZ_NODE_TYPE_IF_CONTEXT || 
+        node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT)
+    {
+        may_have_children = 1;
         suffix[0] = '/';
-        /* contexts: use context name from args instead of useless "BEGIN" */
-        sprintf(path, "%s%s%s", parent_path, node->args[0].name, suffix); 
+        
+        if (node->type == BLITZ_NODE_TYPE_CONTEXT) { /* contexts: use context name from args instead of useless "BEGIN" */
+            sprintf(path, "%s%s%s", parent_path, node->args[0].name, suffix); 
+        } else {
+            sprintf(path, "%s%s%s", parent_path, node->lexem, suffix);
+        }
         add_next_index_string(list, path, 1);
     } else if (!skip_vars) {
         sprintf(path, "%s%s%s", parent_path, node->lexem, suffix);
         add_next_index_string(list, path, 1);
     }
 
-    if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
+    if (may_have_children) {
         for (j=0;j<node->n_children;++j) {
             blitz_get_node_paths(list, node->children[j], path, skip_vars);
         }
@@ -930,6 +950,8 @@ static inline void blitz_parse_call (
                     /* predefined method? */
                     if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
                         node->type = BLITZ_NODE_TYPE_IF;
+                    } else if (BLITZ_STRING_IS_UNLESS(node->lexem, node->lexem_len)) {
+                        node->type = BLITZ_NODE_TYPE_UNLESS;
                     } else if (BLITZ_STRING_IS_INCLUDE(node->lexem, node->lexem_len)) {
                         node->type = BLITZ_NODE_TYPE_INCLUDE;
                     } else if (BLITZ_STRING_IS_ESCAPE(node->lexem, node->lexem_len)) {
@@ -1127,7 +1149,7 @@ static inline void blitz_parse_call (
 
     if (state != BLITZ_CALL_STATE_FINISHED) {
         *error = BLITZ_CALL_ERROR;
-    } else if ((node->type == BLITZ_NODE_TYPE_IF) && (node->n_args<2 || node->n_args>3)) {
+    } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && (node->n_args<2 || node->n_args>3)) {
         *error = BLITZ_CALL_ERROR_IF;
     } else if ((node->type == BLITZ_NODE_TYPE_INCLUDE) && (node->n_args!=1)) {
         *error = BLITZ_CALL_ERROR_INCLUDE;
@@ -1855,7 +1877,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, tpl_node_struct *
     char is_var = 0, is_var_path = 0, is_found = 0;
     char predefined_buf[BLITZ_PREDEFINED_BUF_LEN];
 
-    if (node->type == BLITZ_NODE_TYPE_IF) {
+    if (node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) {
         char not_empty = 0;
         int predefined = -1;
         int i_arg = 0;
@@ -1882,14 +1904,29 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, tpl_node_struct *
             not_empty = (arg->name[0] == 't');
         }
 
-        /* not_empty = [ 1: found, not empty | 0: found, empty | -1: not found, "empty" ] */
+        /* not_empty = 
+            1: found, not empty 
+            0: found, empty 
+           -1: not found, "empty" */
         if (not_empty == 1) { 
-            i_arg = 1;
+            if (node->type == BLITZ_NODE_TYPE_IF) {
+                i_arg = 1; /* if ($a, 1) or if ($a, 1, 2) and $a is not empty */
+            } else {
+                if (node->n_args == 3) { 
+                    i_arg = 2; /* unless($a, 1, 2) and $a is not empty */
+                } else {
+                    return 1;  /* unless($a, 1) and $a is not empty */
+                }
+            }
         } else {
-            if (node->n_args == 3) { /* empty && if has 3 arguments */
-                i_arg = 2;
-            } else { /* empty && if has only 2 arguments */
-                return 1;
+            if (node->type == BLITZ_NODE_TYPE_UNLESS) {
+                i_arg = 1; /* unless($a, 1) or unless($a, 1, 2) and $a is empty */
+            } else {
+                if (node->n_args == 3) { 
+                    i_arg = 2; /* if($a, 1, 2) and $a is empty */
+                } else { 
+                    return 1; /* if($a, 1) and $a is empty */
+                }
             }
         }
 
@@ -2961,14 +2998,13 @@ static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, 
     char *lexem = NULL;
     unsigned int lexem_len = 0;
     zval *temp = NULL;
+    unsigned int skip_node = 0;
 
-    if (!node) { 
+    if (!node) 
         return;
-    }
     
-    if (path_len>0) {
+    if (path_len>0)
         memcpy(current_path, path, path_len);
-    }
 
     if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
         lexem = node->args[0].name;
@@ -2976,24 +3012,28 @@ static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, 
     } else if (BLITZ_IS_VAR(node->type)) {
         lexem = node->lexem;
         lexem_len = node->lexem_len;
+    } else if ((node->type == BLITZ_NODE_TYPE_IF_CONTEXT) || (node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT)){
+        skip_node = 1;
     } else {
         return;
     }
 
-    memcpy(current_path + path_len,"/",1);
-    memcpy(current_path + path_len + 1, lexem, lexem_len);
+    if (0 == skip_node) {
+        memcpy(current_path + path_len,"/",1);
+        memcpy(current_path + path_len + 1, lexem, lexem_len);
 
-    current_path_len = strlen(current_path);
-    current_path[current_path_len] = '\x0';
+        current_path_len = strlen(current_path);
+        current_path[current_path_len] = '\x0';
 
-    if (BLITZ_DEBUG) php_printf("building index for fetch_index, path=%s\n", current_path);
+        if (BLITZ_DEBUG) php_printf("building index for fetch_index, path=%s\n", current_path);
 
-    MAKE_STD_ZVAL(temp);
-    ZVAL_LONG(temp, node->pos_in_list);
-    zend_hash_update(tpl->static_data.fetch_index, current_path, current_path_len+1, &temp, sizeof(zval *), NULL);
+        MAKE_STD_ZVAL(temp);
+        ZVAL_LONG(temp, node->pos_in_list);
+        zend_hash_update(tpl->static_data.fetch_index, current_path, current_path_len+1, &temp, sizeof(zval *), NULL);
+    }
 
     if (node->children) {
-        for (j=0;j<node->n_children;++j) {
+        for (j=0; j<node->n_children; ++j) {
            blitz_build_fetch_index_node(tpl, node->children[j], current_path, current_path_len);
         }
     }
