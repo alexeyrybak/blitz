@@ -50,6 +50,7 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char disable_include;
     char remove_spaces_around_context_tags;
     char warn_context_duplicates;
+    char check_recursion;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS

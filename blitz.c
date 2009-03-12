@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.7"
+#define BLITZ_VERSION_STRING "0.6.8"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -146,6 +146,8 @@ PHP_INI_BEGIN()
         OnUpdateBool, remove_spaces_around_context_tags, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.warn_context_duplicates", "0", PHP_INI_ALL,
         OnUpdateBool, warn_context_duplicates, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.check_recursion", "1", PHP_INI_ALL,
+        OnUpdateBool, check_recursion, zend_blitz_globals, blitz_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -425,7 +427,7 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len, HashTab
     blitz_tpl *tpl = NULL;
     blitz_tpl *i_tpl = NULL;
     char *s = NULL;
-    int i = 0, check_loop_max = 128;
+    int i = 0, check_loop_max = BLITZ_LOOP_STACK_MAX;
 
     tpl = blitz_init_tpl_base(globals, iterations, tpl_parent TSRMLS_CC);
 
@@ -465,15 +467,17 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len, HashTab
     }
 
     /* check loops */
-    i_tpl = tpl;
-    while (i++ < check_loop_max) {
-        i_tpl = i_tpl->tpl_parent;
-        if (!i_tpl) break; 
-        s = i_tpl->static_data.name;
-        if (0 == strncmp(s, tpl->static_data.name, filename_normalized_len)) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "ERROR: include recursion detected for \"%s\"", tpl->static_data.name);
-            blitz_free_tpl(tpl);
-            return NULL;
+    if (BLITZ_G(check_recursion)) {
+        i_tpl = tpl;
+        while (i++ < check_loop_max) {
+            i_tpl = i_tpl->tpl_parent;
+            if (!i_tpl) break; 
+            s = i_tpl->static_data.name;
+            if (0 == strncmp(s, tpl->static_data.name, filename_normalized_len)) {
+                php_error_docref(NULL TSRMLS_CC, E_WARNING, "ERROR: include recursion detected for \"%s\". You can disable this check setting blitz.check_recursion to 0 (please, don't do this if you don't know what you are doing)", tpl->static_data.name);
+                blitz_free_tpl(tpl);
+                return NULL;
+            }
         }
     }
 
@@ -2187,11 +2191,10 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, tpl_node_struct *node, 
         (*result)[*result_len] = '\0';
     }
 
-    zval_dtor(zmethod);
+    zval_ptr_dtor(&zmethod);
     
-    if (retval) {
-        zval_dtor(retval);
-    }
+    if (retval)
+        zval_ptr_dtor(&retval);
 
     if (pargs) {
          for(i=0; i<node->n_args; i++) {

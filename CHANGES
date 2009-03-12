@@ -1,4 +1,14 @@
 ===================================================================================================
+0.6.8 version 13 march 2009
+===================================================================================================
+- New ini-variable "blitz.check_recursion" was added. Use this setting to 
+  disable internal recursion check for recursive includes (for example, 
+  when building hierarchical comment tree using template which includes itself). See bug
+  #248 for details.
+- Segfault in nested includes with user-defined functions was fixed (in some cases there could
+  be a double free of method result at shutdown stage). See bug #245 for detais.
+
+===================================================================================================
 0.6.7 version 29 january 2009
 ===================================================================================================
 - Infinite include loops checking was added (bug #241)
