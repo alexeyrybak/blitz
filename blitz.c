@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.8"
+#define BLITZ_VERSION_STRING "0.6.9"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -772,33 +772,34 @@ static void blitz_get_path_list(blitz_tpl *tpl, zval *list, unsigned int skip_va
 
 void blitz_warn_context_duplicates(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
-    zval *path_list = NULL, *uk_path = NULL, **tmp = NULL, *dummy = NULL, *z = NULL;
+    zval *path_list = NULL;
+    HashTable uk_path;
+    zval **tmp = NULL;
+    int z = 1;
 
     MAKE_STD_ZVAL(path_list);
     array_init(path_list);
-    MAKE_STD_ZVAL(uk_path);
-    array_init(uk_path);
-    MAKE_STD_ZVAL(z);
-    ZVAL_LONG(z, 1);
+
+    zend_hash_init(&uk_path, 10, NULL, NULL, 0);
 
     blitz_get_path_list(tpl, path_list, 1);
 
     zend_hash_internal_pointer_reset(Z_ARRVAL_P(path_list));
     while (zend_hash_get_current_data_ex(Z_ARRVAL_P(path_list), (void**) &tmp, NULL) == SUCCESS) {
-        if (SUCCESS == zend_hash_find(Z_ARRVAL_P(uk_path), Z_STRVAL_PP(tmp), Z_STRLEN_PP(tmp), (void **)&dummy)) {
+        if (1 == zend_hash_exists(&uk_path, Z_STRVAL_PP(tmp), Z_STRLEN_PP(tmp))) {
             php_error_docref(NULL TSRMLS_CC, E_WARNING,
                 "WARNING: context name \"%s\" duplicate in %s",
                  Z_STRVAL_PP(tmp), tpl->static_data.name
             );
         } else {
-            zend_hash_update(Z_ARRVAL_P(uk_path), Z_STRVAL_PP(tmp), Z_STRLEN_PP(tmp), &z, sizeof(zval *), NULL);
+            zend_hash_add(&uk_path, Z_STRVAL_PP(tmp), Z_STRLEN_PP(tmp), &z, sizeof(int), NULL);
         }
 
         zend_hash_move_forward(Z_ARRVAL_P(path_list));
     }
 
-    zval_dtor(path_list);
-    zval_dtor(uk_path);
+    zval_ptr_dtor(&path_list);
+    zend_hash_destroy(&uk_path);
 
     return;
 }
