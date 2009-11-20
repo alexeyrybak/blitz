@@ -48,7 +48,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.6.9"
+#define BLITZ_VERSION_STRING "0.6.10"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -544,6 +544,7 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
     zval **desc = NULL;
     unsigned long itpl_idx = 0;
     zval *temp = NULL;
+    unsigned char has_protected_iteration = 0;
 
     /* try to find already parsed tpl index */
     if (SUCCESS == zend_hash_find(tpl->ht_tpl_name, (char *)filename, filename_len, (void **)&desc)) {
@@ -552,13 +553,17 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
             (*itpl)->iterations = iteration_params;
             (*itpl)->flags |= BLITZ_FLAG_ITERATION_IS_OTHER;
         } else {
-            if ((*itpl)->iterations && !((*itpl)->flags & BLITZ_FLAG_ITERATION_IS_OTHER)) {
+            has_protected_iteration = (*itpl)->flags & BLITZ_FLAG_ITERATION_IS_OTHER;
+
+            if ((*itpl)->iterations && !has_protected_iteration) {
                 zend_hash_clean(Z_ARRVAL_P((*itpl)->iterations));
             } else if (!(*itpl)->iterations) {
                 MAKE_STD_ZVAL((*itpl)->iterations);
                 array_init((*itpl)->iterations);
-            }
-            (*itpl)->flags ^= BLITZ_FLAG_ITERATION_IS_OTHER;
+            } 
+
+            if (!has_protected_iteration)
+                (*itpl)->flags ^= BLITZ_FLAG_ITERATION_IS_OTHER;
         }
         return 1;
     } 
@@ -3007,8 +3012,10 @@ static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, 
     if (!node) 
         return;
     
-    if (path_len>0)
+    if (path_len>0) {
         memcpy(current_path, path, path_len);
+        current_path_len = path_len;
+    }
 
     if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
         lexem = node->args[0].name;
@@ -3023,17 +3030,15 @@ static void blitz_build_fetch_index_node(blitz_tpl *tpl, tpl_node_struct *node, 
     }
 
     if (0 == skip_node) {
-        memcpy(current_path + path_len,"/",1);
+        memcpy(current_path + path_len, "/", 1);
         memcpy(current_path + path_len + 1, lexem, lexem_len);
-
         current_path_len = strlen(current_path);
         current_path[current_path_len] = '\x0';
 
         if (BLITZ_DEBUG) php_printf("building index for fetch_index, path=%s\n", current_path);
-
         MAKE_STD_ZVAL(temp);
         ZVAL_LONG(temp, node->pos_in_list);
-        zend_hash_update(tpl->static_data.fetch_index, current_path, current_path_len+1, &temp, sizeof(zval *), NULL);
+        zend_hash_update(tpl->static_data.fetch_index, current_path, current_path_len + 1, &temp, sizeof(zval *), NULL);
     }
 
     if (node->children) {
@@ -3067,7 +3072,7 @@ static int blitz_build_fetch_index(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 /*
 php_printf("fetch_index dump:\n");
 
-    HashTable *ht = tpl->fetch_index;
+    HashTable *ht = tpl->static_data.fetch_index;
     zend_hash_internal_pointer_reset(ht);
     zval *elem = NULL;
     char *key = NULL;

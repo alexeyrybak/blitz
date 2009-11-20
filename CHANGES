@@ -1,4 +1,11 @@
 ===================================================================================================
+0.6.10 version 22 nov 2009
+===================================================================================================
+FIX: hasContext() and fetch() methods correctly find contexts masked by IF/UNLESS blocks, 
+     related bugs: #255, #260
+FIX: possible double free crash for includes was fixed (bug #257)
+
+===================================================================================================
 0.6.9 version 19 oct 2009
 ===================================================================================================
 FIX: "blitz.warn_context_duplicates" checking could cause coredumps (patch by Anton Dovgal)
