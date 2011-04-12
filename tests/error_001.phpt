@@ -12,8 +12,8 @@ echo "Done\n";
 ?>
 --EXPECTF--	
 invalid method call (%serror_001.tpl: line 1, pos 1)
-invalid method call (%serror_001.tpl: line 2, pos 3)
-invalid method call (%serror_001.tpl: line 3, pos 3)
+invalid method call (%serror_001.tpl: line 2, pos 1)
+invalid method call (%serror_001.tpl: line 3, pos 1)
 object(blitz)#%d (1) {
   ["tpl"]=>
   resource(%d) of type (Blitz template)

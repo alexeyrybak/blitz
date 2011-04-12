@@ -15,12 +15,10 @@ for($i=0; $i<10; $i++) {
     }
 }
 
-$T->dump_iterations();
+var_dump($T->getIterations());
 
 ?>
 --EXPECT--
-ITERATION DUMP (4 parts)
-(1) iterations:
 array(1) {
   [0]=>
   array(1) {
@@ -50,37 +48,3 @@ array(1) {
     }
   }
 }
-(2) current path is: /root/a/b
-(3) current node data (current_iteration_parent) is:
-array(1) {
-  [0]=>
-  array(1) {
-    ["root"]=>
-    array(1) {
-      [0]=>
-      array(1) {
-        ["a"]=>
-        array(1) {
-          [0]=>
-          array(3) {
-            ["x"]=>
-            string(9) "x_value#9"
-            ["i"]=>
-            int(9)
-            ["b"]=>
-            array(1) {
-              [0]=>
-              array(1) {
-                ["y"]=>
-                string(9) "y_value#9"
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-(4) current node item data (current_iteration) is:
-empty
-

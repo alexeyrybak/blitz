@@ -7,6 +7,8 @@ include('common.inc');
 if (function_exists('date_default_timezone_set'))
     date_default_timezone_set('UTC');
 
+ini_set('date.timezone', 'UTC');
+
 $body = <<<BODY
 {{ date("%d %m %Y %H:%M:%S",\$time_num); }}
 {{ date("%d %m %Y %H:%M:%S",\$time_str); }}

@@ -7,7 +7,7 @@ include('common.inc');
 error_reporting(E_ALL);
 set_error_handler('my_error_handler');
 function my_error_handler($errno, $errstr, $errfile, $errline) {
-    $parts = split('ERROR:',$errstr);
+    $parts = explode('ERROR:',$errstr);
     echo trim($parts[1])."\n";
 }
 
@@ -32,8 +32,8 @@ echo $T->parse();
 
 ?>
 --EXPECT--
-You have a mix of numerical and non-numerical keys in the iteration set (context: test, line 3, pos 26), key was ignored
-You have a mix of numerical and non-numerical keys in the iteration set (context: test, line 3, pos 26), key was ignored
+You have a mix of numerical and non-numerical keys in the iteration set (context: test, line 3, pos 8), key was ignored
+You have a mix of numerical and non-numerical keys in the iteration set (context: test, line 3, pos 8), key was ignored
 
 blabla
 blabla  test 

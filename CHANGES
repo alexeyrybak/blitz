@@ -1,4 +1,49 @@
 ===================================================================================================
+0.7.1.10-devel 12 apr 2011. С 50-летием полёта человека в космос!
+===================================================================================================
+- FIX: all floats were "false" in conditions.
+- FIX: segfault for deep nested includes and non-zero blitz.scope_lookup_limit.
+- FIX: minor leaks in the include method.
+- FIX: timelib functions were moved away (fixes famous "undefined symbol: timelib_time_ctor" issue).
+- CHANGE: since now PHP4 is not supported anymore. This basically means that I won't break 
+  anything just to have shiny OOP shit, and everything should work as usual, but I won't test 
+  PHP4 compilation and won't fix related bugs. Nuff said.
+- CHANGE: prepared the parser to use simple expressions. Just parser, not executor.
+  This may cause strange behaviour: when you put valid expressions in IF/ELSE statements
+  they neither work as expressions nor throw warnings. How this still works: 
+  just first argument is checked to be non-empty.
+  Example: {{ IF $a < 0 }} is still equivalent to {{ IF $a }}.
+
+===================================================================================================
+0.7.1.1-devel -> 0.7.1.9-devel
+===================================================================================================
+This was very new version with a lot of changes, optimizations and cleanups. I could
+even forgot to mention something below. Please, be careful using these versions in production.
+
+- CHANGE: new parser, analyzer and executor 
+- ADD: context scope is increased now if blitz.scope_lookup_limit is set positive number.
+  This number controls the deep - number of total hash-lookups from child to parent.
+- ADD: comments were added (/* put comments in these tags */, you have to enable it
+  with blitz.enable_comments and redefine these tags using
+  blitz.tag_comment_open/blitz.tag_comment_close)
+- ADD: IF/UNLESS were extended by ELSEIF/ELSE syntax
+- ADD: More flexible method caller that allows plugins. Having {{ do($some) }} there is an 
+  internal method check. If class method with the same name exists - this method is called.
+  If not - caller executes this function as any other PHP function. Now you are totally free to use
+  any PHP function calls from Blitz templates. {{ SomeCoolPlugin::func($some) }} works as well.
+  You can use hints to tell blitz what do exactly: {{ php::do($some) }} calls php function do(),
+  {{ this::do() }} calls do() method.
+- CHANGE: blitz.remove_spaces_around_context_tags is 1 by default (this removes empty
+  lines around your tags by default, be careful)
+- CHANGE: blitz.path for Windows-like systems fixed ("C:\dir\" paths)
+- FIX: MS WINDOWS compilation
+- FIX: syntax error position was wrong for mostly all error messages 
+- CHANGE: max length of any string between open/close (limited by BLITZ_MAX_LEXEM_LEN = 128)
+  bytes (was 1024)
+- CHANGE: block nesting is limited by BLITZ_ANALIZER_NODE_STACK_LEN = 64
+- FIX: all function calls in templates are str_lower'ed correctly (was: only functions without brackets)
+
+===================================================================================================
 0.6.10 version 20 nov 2009
 ===================================================================================================
 FIX: hasContext() and fetch() methods correctly find contexts masked by IF/UNLESS blocks, 
@@ -24,7 +69,7 @@ FIX: "blitz.warn_context_duplicates" checking could cause coredumps (patch by An
 0.6.7 version 29 january 2009
 ===================================================================================================
 - Infinite include loops checking was added (bug #241)
-- blitz.path global should work fine with Windows-like systems ("C:/dir/" paths)
+- blitz.path global should work fine with Windows-like systems ("C:\dir\" paths)
 - Block method now affects contexts hidden by IF/UNLESS (bug #211)
 - getStruct() returnes IF/UNLESS nodes correctly (bug #230)
 - Internal method "unless" was added - an opposite pair to "if"
@@ -36,13 +81,6 @@ FIX: "blitz.warn_context_duplicates" checking could cause coredumps (patch by An
   and "display" executes template and outputs the result.
   $View->display($vars) is equal to echo $View->parse($vars).
 - New ini-variable "blitz.warn_context_duplicates" was added. When it's set to 1 (default is 0)
-  blitz generates warnings for context name duplicates by comparing full context paths.
-- A couple of segfaults were fixed (fetch without parameters, bugs #242, #232)
-
-===================================================================================================
-0.6.5 version 21 october 2008
-===================================================================================================
-- Segfault on some "broken" templates was fixed
 
 ===================================================================================================
 0.6.4 version 17 october 2008

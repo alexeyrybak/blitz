@@ -1,18 +1,18 @@
 /*
-  +----------------------------------------------------------------------+
+ +----------------------------------------------------------------------+
   | Blitz Templates                                                      |
-  |                                                                      |
+  +----------------------------------------------------------------------+
   | Downloads and online documentation:                                  |
   |     http://alexeyrybak.com/blitz/                                    |
   |     http://sourceforge.net/projects/blitz-templates/                 |
   |                                                                      |
-  | Author                                                               |
-  |     Alexey Rybak <alexey.rybak@gmail.com>                            |
-  | Template analyzing is partially based on php_templates code by       |
-  |     Maxim Poltarak (http://php-templates.sf.net)                     |
-  | Bug & memleak fixes and other patches by                             |
-  |     Antony Dovgal <tony at daylessday dot org>                       |
-  |     Konstantin Baryshnikov <konstantin@symbi.info>                   |
+  | Author:                                                              |
+  |     Alexey Rybak [fisher] <alexey.rybak at gmail dot com>            |
+  | Bugfixes and patches:                                                |
+  |     Antony Dovgal [tony2001] <tony at daylessday dot org>            |
+  |     Konstantin Baryshnikov [fixxxer] <konstantin at symbi dot info>  |
+  | Mailing list:                                                        |
+  |     blitz-php at googlegroups dot com                                |
   +----------------------------------------------------------------------+
 */
 
@@ -35,22 +35,31 @@ extern zend_module_entry blitz_module_entry;
 #include "TSRM.h"
 #endif
 
-// php interface
+/*****************************************************************************/
+/* php interface                                                             */
+/*****************************************************************************/
+
 PHP_MINIT_FUNCTION(blitz);
 PHP_MSHUTDOWN_FUNCTION(blitz);
 PHP_MINFO_FUNCTION(blitz);
 
 ZEND_BEGIN_MODULE_GLOBALS(blitz)
 	long  var_prefix;
-	char *node_open;
-	char *node_close;
-    char *phpt_ctx_left;
-    char *phpt_ctx_right;
+	char *tag_open;
+	char *tag_close;
+    char *tag_open_alt;
+    char *tag_close_alt;
+    char *tag_comment_open;
+    char *tag_comment_close;
+    char enable_alternative_tags;
+    char enable_comments;
     char *path;
     char disable_include;
     char remove_spaces_around_context_tags;
     char warn_context_duplicates;
     char check_recursion;
+    char *charset;
+    unsigned long scope_lookup_limit;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS
@@ -64,6 +73,8 @@ ZEND_END_MODULE_GLOBALS(blitz)
 /*****************************************************************************/
 #include <stdio.h>
 
+#define BLITZ_MAX_LIST_SIZE     65535
+
 #define BLITZ_TYPE_VAR      	1	
 #define BLITZ_TYPE_METHOD       2	
 #define BLITZ_IS_VAR(type)      (type & BLITZ_TYPE_VAR)
@@ -71,19 +82,67 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_ARG_TYPE_VAR		    1
 #define BLITZ_ARG_TYPE_VAR_PATH	    2
-#define BLITZ_ARG_TYPE_STR          4
+#define BLITZ_ARG_TYPE_STR          4 
 #define BLITZ_ARG_TYPE_NUM          8
 #define BLITZ_ARG_TYPE_BOOL         16
+#define BLITZ_ARG_TYPE_EXPR_SHIFT               128
+#define BLITZ_EXPR_OPERATOR_GE                  128
+#define BLITZ_EXPR_OPERATOR_G                   129
+#define BLITZ_EXPR_OPERATOR_LE                  130
+#define BLITZ_EXPR_OPERATOR_L                   131
+#define BLITZ_EXPR_OPERATOR_NE                  132
+#define BLITZ_EXPR_OPERATOR_E                   133
+#define BLITZ_EXPR_OPERATOR_LA                  134
+#define BLITZ_EXPR_OPERATOR_LO                  135
 
 #define BLITZ_TAG_VAR_PREFIX    		'$'
 #define BLITZ_TAG_VAR_PREFIX_S  		"$"
-#define BLITZ_TAG_OPEN_DEFAULT 			"{{"
-#define BLITZ_TAG_CLOSE_DEFAULT	 		"}}"
-#define BLITZ_TAG_PHPT_CTX_LEFT         "<!-- "
-#define BLITZ_TAG_PHPT_CTX_RIGHT        " -->"
 
-#define BLITZ_MAX_LEXEM_LEN    			1024
+/* tags to separate HTML from blitz code: all these constants must be changed synchronously! */
+
+#define BLITZ_ENABLE_ALTERNATIVE_TAGS   1
+#define BLITZ_ENABLE_COMMENTS           1 
+
+#define BLITZ_TAG_OPEN                  "{{"
+#define BLITZ_TAG_CLOSE                 "}}"
+#define BLITZ_TAG_OPEN_ALT              "<!-- "
+#define BLITZ_TAG_CLOSE_ALT             " -->"
+#define BLITZ_TAG_COMMENT_OPEN          "/*"
+#define BLITZ_TAG_COMMENT_CLOSE          "*/"
+#define BLITZ_TAG_LIST_LEN              6
+
+#define BLITZ_TAG_ID_OPEN               0
+#define BLITZ_TAG_ID_OPEN_ALT           1
+#define BLITZ_TAG_ID_CLOSE              2 
+#define BLITZ_TAG_ID_CLOSE_ALT          3
+#define BLITZ_TAG_ID_COMMENT_OPEN       4
+#define BLITZ_TAG_ID_COMMENT_CLOSE      5
+
+#define BLITZ_ALTERNATIVE_TAGS_ENABLED      1
+#define BLITZ_NOBRAKET_FUNCTIONS_ARE_VARS   1
+
+/* tag analizer states */
+#define BLITZ_ANALISER_STATE_LIST_LEN       7
+#define BLITZ_ANALISER_STATE_NONE           0 
+#define BLITZ_ANALISER_STATE_OPEN           1 + BLITZ_TAG_ID_OPEN
+#define BLITZ_ANALISER_STATE_CLOSE          1 + BLITZ_TAG_ID_CLOSE
+#define BLITZ_ANALISER_STATE_OPEN_ALT       1 + BLITZ_TAG_ID_OPEN_ALT
+#define BLITZ_ANALISER_STATE_CLOSE_ALT      1 + BLITZ_TAG_ID_CLOSE_ALT
+#define BLITZ_ANALISER_STATE_COMMENT_OPEN   1 + BLITZ_TAG_ID_COMMENT_OPEN
+#define BLITZ_ANALISER_STATE_COMMENT_CLOSE  1 + BLITZ_TAG_ID_COMMENT_CLOSE
+
+/* tag analizer actions */
+#define BLITZ_ANALISER_ACTION_NONE          0
+#define BLITZ_ANALISER_ACTION_ADD           1
+#define BLITZ_ANALISER_ACTION_IGNORE_PREV   2 
+#define BLITZ_ANALISER_ACTION_ERROR_PREV    3
+#define BLITZ_ANALISER_ACTION_IGNORE_CURR   4 
+#define BLITZ_ANALISER_ACTION_ERROR_CURR    5
+#define BLITZ_ANALISER_ACTION_ERROR_BOTH    6
+
+#define BLITZ_MAX_LEXEM_LEN    			128
 #define BLITZ_INPUT_BUF_SIZE 	   		4096
+#define BLITZ_MAX_FETCH_INDEX_KEY_SIZE  1024
 #define BLITZ_ALLOC_TAGS_STEP   		16
 #define BLITZ_CALL_ALLOC_ARG_INIT		4
 #define BLITZ_NODE_ALLOC_CHILDREN_INIT	4
@@ -98,7 +157,6 @@ ZEND_END_MODULE_GLOBALS(blitz)
         ('b' == s[0] && 'e' == s[1] && 'g' == s[2] && 'i' == s[3] && 'n' == s[4]))          \
     )
     
-
 #define BLITZ_STRING_IS_END(s, len)                                                         \
     ((3 == len) &&                                                                          \
         (('E' == s[0] && 'N' == s[1] && 'D' == s[2])                                        \
@@ -120,6 +178,20 @@ ZEND_END_MODULE_GLOBALS(blitz)
         ('u' == s[0] && 'n' == s[1] && 'l' == s[2] && 'e' == s[3] && 's' == s[4] && 's' == s[5]))        \
     )
 
+#define BLITZ_STRING_IS_ELSEIF(s, len)                                                                   \
+    ((6 == len) &&                                                                                       \
+        (('E' == s[0] && 'L' == s[1] && 'S' == s[2] && 'E' == s[3] && 'I' == s[4] && 'F' == s[5])        \
+        ||                                                                                               \
+        ('e' == s[0] && 'l' == s[1] && 's' == s[2] && 'e' == s[3] && 'i' == s[4] && 'f' == s[5]))        \
+    )
+
+#define BLITZ_STRING_IS_ELSE(s, len)                                                                     \
+    ((4 == len) &&                                                                                       \
+        (('E' == s[0] && 'L' == s[1] && 'S' == s[2] && 'E' == s[3])                                      \
+        ||                                                                                               \
+        ('e' == s[0] && 'l' == s[1] && 's' == s[2] && 'e' == s[3]))                                      \
+    )
+
 #define BLITZ_STRING_IS_INCLUDE(s, len)                                                                                 \
     ((7 == len) &&                                                                                                      \
         (('I' == s[0] && 'N' == s[1] && 'C' == s[2] && 'L' == s[3] && 'U' == s[4] && 'D' == s[5] && 'E' == s[6])        \
@@ -128,11 +200,13 @@ ZEND_END_MODULE_GLOBALS(blitz)
     )
 
 #define BLITZ_STRING_IS_ESCAPE(s, len)                                                              \
+    (((1 == len) &&                                                                                 \
+        (('q' == s[0]) || ('Q' == s[0])) ||                                                         \
     ((6 == len) &&                                                                                  \
         (('E' == s[0] && 'S' == s[1] && 'C' == s[2] && 'A' == s[3] && 'P' == s[4] && 'E' == s[5])   \
         ||                                                                                          \
         ('e' == s[0] && 's' == s[1] && 'c' == s[2] && 'a' == s[3] && 'p' == s[4] && 'e' == s[5]))   \
-    )
+    )))
 
 #define BLITZ_STRING_IS_DATE(s, len)                                                        \
     ((4 == len) &&                                                                          \
@@ -140,35 +214,67 @@ ZEND_END_MODULE_GLOBALS(blitz)
         ||                                                                                  \
         ('d' == s[0] && 'a' == s[1] && 't' == s[2] && 'e' == s[3]))                         \
     )
+#define BLITZ_PHP_NAMESPACE_SHIFT   5
+#define BLITZ_STRING_PHP_NAMESPACE(s, len)                                                  \
+    ((len >= 5) &&                                                                          \
+        (('P' == s[0]) && 'H' == s[1] && 'P' == s[2] && ':' == s[3] && ':' == s[4])         \
+        ||                                                                                  \
+        (('p' == s[0]) && 'h' == s[1] && 'p' == s[2] && ':' == s[3] && ':' == s[4])         \
+    )
+
+#define BLITZ_THIS_NAMESPACE_SHIFT  6 
+#define BLITZ_STRING_THIS_NAMESPACE(s, len)                                                             \
+    ((len >= 6) &&                                                                                      \
+        (('T' == s[0]) && 'H' == s[1] && 'I' == s[2] && 'S' == s[3] && ':' == s[4] && ':' == s[5])      \
+        ||                                                                                              \
+        (('t' == s[0]) && 'h' == s[1] && 'i' == s[2] && 's' == s[3] && ':' == s[4] && ':' == s[5])      \
+    )
 
 #define BLITZ_WRAPPER_MAX_ARGS                  3
 
-#define BLITZ_NODE_TYPE_IF                      (1<<2  | BLITZ_TYPE_METHOD) /* {{ if($a, 'b', "c"); }} */
-#define BLITZ_NODE_TYPE_UNLESS                  (2<<2  | BLITZ_TYPE_METHOD) /* {{ unless($a, 'b', "c"); }} */
-#define BLITZ_NODE_TYPE_INCLUDE                 (3<<2  | BLITZ_TYPE_METHOD) /* {{ include('file.tpl'); }} */
-#define BLITZ_NODE_TYPE_BEGIN                   (4<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
-#define BLITZ_NODE_TYPE_END                     (5<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
-#define BLITZ_NODE_TYPE_CONTEXT                 (6<<2  | BLITZ_TYPE_METHOD) /* {{ BEGIN a }} bla-bla {{ END }} */
-#define BLITZ_NODE_TYPE_WRAPPER                 (7<<2  | BLITZ_TYPE_METHOD) /* other internal functions */
+// base node types
+#define BLITZ_NODE_TYPE_COMMENT                 0
+#define BLITZ_NODE_TYPE_IF                      (1 << 2 | BLITZ_TYPE_METHOD) /* {{ if($a, 'b', "c"); }} */
+#define BLITZ_NODE_TYPE_UNLESS                  (2 << 2 | BLITZ_TYPE_METHOD) /* {{ unless($a, 'b', "c"); }} */
+#define BLITZ_NODE_TYPE_INCLUDE                 (3 << 2 | BLITZ_TYPE_METHOD) /* {{ include('file.tpl'); }} */
+#define BLITZ_NODE_TYPE_BEGIN                   (4 << 2 | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_CONTEXT */
+#define BLITZ_NODE_TYPE_END                     (5 << 2 | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
+#define BLITZ_NODE_TYPE_CONTEXT                 (6 << 2 | BLITZ_TYPE_METHOD) /* {{ BEGIN a }} bla-bla {{ END }} */
+#define BLITZ_NODE_TYPE_CONDITION               (7 << 2 | BLITZ_TYPE_METHOD) /* {{ BEGIN a }} bla-bla {{ END }} */
+// reserved +3 base types
 
-#define BLITZ_NODE_TYPE_IF_NF                   (8<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_IF_CONTEXT */
-#define BLITZ_NODE_TYPE_UNLESS_NF               (9<<2  | BLITZ_TYPE_METHOD) /* non-finalized node - will become BLITZ_NODE_TYPE_UNLESS_CONTEXT */
-#define BLITZ_NODE_TYPE_IF_CONTEXT              (10<<2 | BLITZ_TYPE_METHOD) /* {{ IF $a }} bla-bla {{ END }} */
-#define BLITZ_NODE_TYPE_UNLESS_CONTEXT          (11<<2 | BLITZ_TYPE_METHOD) /* {{ UNLESS $a }} bla-bla {{ END }} */
+#define BLITZ_NODE_TYPE_WRAPPER_ESCAPE          (11 << 2 | BLITZ_TYPE_METHOD) 
+#define BLITZ_NODE_TYPE_WRAPPER_DATE            (12 << 2 | BLITZ_TYPE_METHOD) 
+#define BLITZ_NODE_TYPE_WRAPPER_UPPER           (13 << 2 | BLITZ_TYPE_METHOD) 
+#define BLITZ_NODE_TYPE_WRAPPER_LOWER           (14 << 2 | BLITZ_TYPE_METHOD) 
+#define BLITZ_NODE_TYPE_WRAPPER_TRIM            (15 << 2 | BLITZ_TYPE_METHOD) 
+// reserved +5 wrappers
+// put all other wrappers here with codes less than BLITZ_NODE_TYPE_IF_NF, because 
+// wrapper check in blitz.c is type >= BLITZ_NODE_TYPE_WRAPPER_ESCAPE &&  type < BLITZ_NODE_TYPE_IF_NF
 
-#define BLITZ_NODE_TYPE_VAR                     (1<<2  | BLITZ_TYPE_VAR)  /* $a */
-#define BLITZ_NODE_TYPE_VAR_PATH                (2<<2  | BLITZ_TYPE_VAR)  /* $hash.key or $obj.property or $obj.property_hash.key et cetera */
+#define BLITZ_NODE_TYPE_IF_NF                   (21<< 2 | BLITZ_TYPE_METHOD) /* non-finalized -> IF_CONTEXT */
+#define BLITZ_NODE_TYPE_UNLESS_NF               (22<< 2 | BLITZ_TYPE_METHOD) /* non-finalized -> UNLESS_CONTEXT */
+#define BLITZ_NODE_TYPE_IF_CONTEXT              (23<< 2 | BLITZ_TYPE_METHOD) /* {{ IF $a }} bla-bla ... */
+#define BLITZ_NODE_TYPE_UNLESS_CONTEXT          (24<< 2 | BLITZ_TYPE_METHOD) /* {{ UNLESS $a }} bla-bla ... */
+#define BLITZ_NODE_TYPE_ELSEIF_NF               (25<< 2 | BLITZ_TYPE_METHOD) /* non-finalized -> ELSEIF_CONTEXT */
+#define BLITZ_NODE_TYPE_ELSEIF_CONTEXT          (26<< 2 | BLITZ_TYPE_METHOD) /* ... {{ ELSEIF $a }} bla-bla {{ END }} */
+#define BLITZ_NODE_TYPE_ELSE_NF                 (27<< 2 | BLITZ_TYPE_METHOD) /* non-finalized -> ELSE_CONTEXT */
+#define BLITZ_NODE_TYPE_ELSE_CONTEXT            (28<< 2 | BLITZ_TYPE_METHOD) /* ... {{ ELSE }} bla-bla {{ END }} */
 
-#define BLITZ_NODE_TYPE_WRAPPER_ESCAPE          1
-#define BLITZ_NODE_TYPE_WRAPPER_DATE            2
-#define BLITZ_NODE_TYPE_WRAPPER_UPPER           3
-#define BLITZ_NODE_TYPE_WRAPPER_LOWER           4
-#define BLITZ_NODE_TYPE_WRAPPER_TRIM            5
+#define BLITZ_NODE_TYPE_VAR                     (1<<2 | BLITZ_TYPE_VAR)  /* $a */
+#define BLITZ_NODE_TYPE_VAR_PATH                (2<<2 | BLITZ_TYPE_VAR)  /* $hash.key or $obj.property or $obj.property_hash.key et cetera */
+
+#define BLITZ_NODE_PATH_NON_UNIQUE              0
+#define BLITZ_NODE_PATH_UNIQUE                  1
 
 #define BLITZ_ITPL_ALLOC_INIT			        4
 
 #define BLITZ_TMP_BUF_MAX_LEN                   1024
 #define BLITZ_CONTEXT_PATH_MAX_LEN              1024
+
+#define BLITZ_NODE_THIS_NAMESPACE               1
+#define BLITZ_NODE_PHP_NAMESPACE                2
+#define BLITZ_NODE_UNKNOWN_NAMESPACE            3
 
 #define BLITZ_FLAG_FETCH_INDEX_BUILT            1
 #define BLITZ_FLAG_GLOBALS_IS_OTHER             2
@@ -177,98 +283,76 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_CALLED_USER_METHOD(v) (((v)->flags & BLITZ_FLAG_CALLED_USER_METHOD) == BLITZ_FLAG_CALLED_USER_METHOD)
 
-// blitz tags
-#define BLITZ_TAG_POS_OPEN                      1
-#define BLITZ_TAG_POS_CLOSE                     2
-
-// these are php_templates compability tricks.
-// when BLITZ_SUPPORT_PHPT_TAGS_PARTIALLY = 1, you can use <!-- [BEGIN|END] name !--> format.
-// set this parameter to 0 if you don't use this format - this will speed up a little
-#define BLITZ_SUPPORT_PHPT_TAGS_PARTIALLY       1 
-// when BLITZ_NOBRAKET_FUNCTIONS_ARE_VARS = 1, both {{ some }} and <!-- some --> (calls whithout brackets) are variables.
-// when BLITZ_NOBRAKET_FUNCTIONS_ARE_VARS = 0, {{ some }} is function, and <!-- some --> is variable.
-#define BLITZ_SUPPORT_PHPT_NOBRAKET_FUNCTIONS_ARE_VARS       1
-
-// php-templates tags
-// 1) partial php-templates support: 
-//    - LEFT & RIGHT CTX tags are EQUAL FOR BOTH open & close
-//    - variable LEFT & RIGHT tags are EQUAL TO BLITZ_TAG_POS_OPEN & BLITZ_TAG_POS_CLOSE
-// EXAMPLE: <!-- BEGIN php_templates_ctx !--> {{ $php_templates_variable }} <!-- END php_templates_ctx -->
-#define BLITZ_TAG_POS_PHPT_CTX_LEFT             4 
-#define BLITZ_TAG_POS_PHPT_CTX_RIGHT            8 
-// 2) full support: all php-templates tags (not implemented yet)
-#define BLITZ_TAG_POS_PHPT_VAR_LEFT             4     
-#define BLITZ_TAG_POS_PHPT_VAR_RIGHT            8
-#define BLITZ_TAG_POS_PHPT_CTX_OPEN_LEFT        16
-#define BLITZ_TAG_POS_PHPT_CTX_OPEN_RIGHT       32
-#define BLITZ_TAG_POS_PHPT_CTX_CLOSE_LEFT       64
-#define BLITZ_TAG_POS_PHPT_CTX_CLOSE_RIGHT      128
-
 #define BLITZ_LOOP_STACK_MAX    32
+#define BLITZ_SCOPE_STACK_MAX   32
 
-// tag position
+/* simple string with length */
+typedef struct {
+    char *s;
+    unsigned long len;
+} blitz_string;
+
+/* simple list */
+typedef struct {
+    char *first;
+    char *end;
+    unsigned long size;
+    unsigned long item_size;
+    unsigned long allocated;
+} blitz_list;
+
+/* tag: position and id */
 typedef struct {
     unsigned long pos;
-    unsigned char type;
+    unsigned char tag_id;
 } tag_pos;
 
-// call argument
+/* call argument */
 typedef struct {
     char *name;
     unsigned long len;
-    char type;
+    unsigned char type;
 } call_arg;
 
-// node
-typedef struct _tpl_node_struct {
+/* template node */
+typedef struct _blitz_node {
     unsigned long pos_begin;
     unsigned long pos_end;
     unsigned long pos_begin_shift;
     unsigned long pos_end_shift;
     char type;
-    unsigned long flags;
-    char has_error;
-    char *lexem; 
+    char hidden;
+    char namespace_code;
+    char lexem[BLITZ_MAX_LEXEM_LEN]; 
     unsigned long lexem_len;
     call_arg *args;
     unsigned char n_args;
-    struct _tpl_node_struct **children; 
-    unsigned int n_children;
-    unsigned int n_children_alloc;
+    struct _blitz_node *first_child;
+    struct _blitz_node *next;
     unsigned int pos_in_list;
-} tpl_node_struct;
+} blitz_node;
 
-// config
-typedef struct {
-    char *open_node;
-    char *close_node;
-    unsigned int l_open_node;
-    unsigned int l_close_node;
-    char var_prefix;
-    char *phpt_ctx_left;
-    char *phpt_ctx_right;
-    unsigned int l_phpt_ctx_left;
-    unsigned int l_phpt_ctx_right;
-} tpl_config_struct;
-
-// loop stack item
+/* loop stack item */
 typedef struct _blitz_loop_stack_item {
     unsigned int current;
     unsigned int total;
 } blitz_loop_stack_item;
 
-// template: static data
+/* template: "static" data - related to body, tags etc */
 typedef struct _blitz_static_data {
     char name[MAXPATHLEN];
-    tpl_config_struct *config;
-    tpl_node_struct *nodes;
+    struct _blitz_node *nodes;
     unsigned int n_nodes;
     char *body;
     unsigned long body_len;
     HashTable *fetch_index;
+    unsigned int tag_open_len;
+    unsigned int tag_close_len;
+    unsigned int tag_open_alt_len;
+    unsigned int tag_close_alt_len;
 } blitz_static_data;
 
-// template
+/* template: "static" and "dynamic" parts */
 typedef struct _blitz_tpl {
     struct _blitz_static_data static_data;
     char flags;
@@ -286,11 +370,39 @@ typedef struct _blitz_tpl {
     unsigned int itpl_list_len;
     unsigned int loop_stack_level;
     struct _blitz_tpl *tpl_parent; /* parent template for included */
-    blitz_loop_stack_item loop_stack[BLITZ_LOOP_STACK_MAX]; 
+    struct _blitz_loop_stack_item loop_stack[BLITZ_LOOP_STACK_MAX]; 
+    zval *scope_stack[BLITZ_SCOPE_STACK_MAX];
+    unsigned int scope_stack_pos;
 } blitz_tpl;
 
-/* call scanner */
+#define BLITZ_ANALIZER_NODE_STACK_LEN    64
+/* template analizer: node stack */
+typedef struct _blitz_analizer_stack_elem {
+    struct _blitz_node *parent;
+    struct _blitz_node *last;
+} analizer_stack_elem;
 
+/* template analizer: context */
+typedef struct _blitz_analizer_ctx {
+    unsigned int n_nodes;
+    unsigned int n_open;
+    unsigned int n_close;
+    unsigned char action;
+    unsigned char state;
+    unsigned long pos_open;
+    tag_pos *tag;
+    tag_pos *prev_tag;
+    struct _blitz_tpl *tpl;
+    struct _blitz_analizer_stack_elem node_stack[BLITZ_ANALIZER_NODE_STACK_LEN];
+    unsigned int node_stack_len;
+    struct _blitz_node *node;
+    unsigned long current_open; 
+    unsigned long current_close; 
+    unsigned long close_len; 
+    unsigned int true_lexem_len;
+} analizer_ctx;
+
+/* call scanner */
 #define BLITZ_ISNUM_MIN                48  /* '0' */
 #define BLITZ_ISNUM_MAX                57  /* '9' */
 #define BLITZ_ISALPHA_SMALL_MIN        97  /* 'a' */
@@ -385,17 +497,55 @@ typedef struct _blitz_tpl {
     }                                                                                    \
     *(p) = '\x0';
 
-
-#define BLITZ_SCAN_VAR(c,p,pos,symb,is_path)                                                 \
-    while(((symb) = *(c)) &&                                                                 \
-        (BLITZ_IS_NUMBER(symb) || BLITZ_IS_ALPHA(symb) || (symb == '.' && (is_path=1)))) {   \
-        *(p) = symb;                                                                         \
-        ++(p);                                                                               \
-        ++(c);                                                                               \
-        ++(pos);                                                                             \
-    }                                                                                        \
+#define BLITZ_SCAN_VAR(c,p,pos,symb,is_path)                                                       \
+    while(((symb) = *(c)) &&                                                                       \
+        (BLITZ_IS_NUMBER(symb) || BLITZ_IS_ALPHA(symb) || (symb == '.' && (is_path = 1)))) {       \
+        *(p) = symb;                                                                               \
+        ++(p);                                                                                     \
+        ++(c);                                                                                     \
+        ++(pos);                                                                                   \
+    }                                                                                              \
     *(p) = '\x0';
 
+#define BLITZ_SCAN_VAR_NOCOPY(c, len, symb, is_path)                                               \
+    while(((symb) = *(c)) &&                                                                       \
+        (BLITZ_IS_NUMBER(symb) || BLITZ_IS_ALPHA(symb) || (symb == '.' && (is_path = 1)))) {       \
+        ++(c);                                                                                     \
+        ++(len);                                                                                   \
+    }                                                                                              \
+
+
+#define BLITZ_SCAN_EXPR_OPERATOR(c, i_len, i_type)                                                  \
+    if (*(c) == '>') {                                                                              \
+        if (((c) + 1) && (*((c) + 1) == '=')) {                                                     \
+            i_type = BLITZ_EXPR_OPERATOR_GE;                                                        \
+            i_len = 2;                                                                              \
+        } else {                                                                                    \
+            i_type = BLITZ_EXPR_OPERATOR_G;                                                         \
+            i_len = 1;                                                                              \
+        }                                                                                           \
+    } else if (*(c) == '<') {                                                                       \
+        if (((c) + 1) && (*((c) + 1) == '=')) {                                                     \
+            i_type = BLITZ_EXPR_OPERATOR_LE;                                                        \
+            i_len = 2;                                                                              \
+        } else {                                                                                    \
+            i_type = BLITZ_EXPR_OPERATOR_L;                                                         \
+            i_len = 1;                                                                              \
+        }                                                                                           \
+    } else if ((*(c) == '!') && ((c) + 1) && (*((c) + 1) == '=')) {                                 \
+        i_type = BLITZ_EXPR_OPERATOR_NE;                                                            \
+        i_len = 2;                                                                                  \
+    } else if ((*(c) == '=') && ((c) + 1) && (*((c) + 1) == '=')) {                                 \
+        i_type = BLITZ_EXPR_OPERATOR_E;                                                             \
+        i_len = 2;                                                                                  \
+    } else if ((*(c) == '&') && ((c) + 1) && (*((c) + 1) == '&')) {                                 \
+        i_type = BLITZ_EXPR_OPERATOR_LA;                                                            \
+        i_len = 2;                                                                                  \
+                                                                                                    \
+    } else if ((*(c) == '|') && ((c) + 1) && (*((c) + 1) == '|')) {                                 \
+        i_type = BLITZ_EXPR_OPERATOR_LO;                                                            \
+        i_len = 2;                                                                                  \
+    }                                                                                               \
 
 #define BLITZ_CALL_STATE_NEXT_ARG    1
 #define BLITZ_CALL_STATE_FINISHED    2
@@ -403,6 +553,7 @@ typedef struct _blitz_tpl {
 #define BLITZ_CALL_STATE_BEGIN       4
 #define BLITZ_CALL_STATE_END         5
 #define BLITZ_CALL_STATE_IF          6
+#define BLITZ_CALL_STATE_ELSE        7
 #define BLITZ_CALL_STATE_ERROR       0
 
 #define BLITZ_CALL_ERROR             1
@@ -422,7 +573,7 @@ typedef struct _blitz_tpl {
             }                                                                                     \
             break;                                                                                \
         case IS_LONG: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
-        case IS_DOUBLE: res = (.0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                \
+        case IS_DOUBLE: res = (.0 == Z_DVAL_PP(z)) ? 0 : 1; break;                                \
         case IS_ARRAY: res = (0 == zend_hash_num_elements(Z_ARRVAL_PP(z))) ? 0 : 1; break;        \
                                                                                                   \
         default: res = 0; break;                                                                  \
@@ -503,6 +654,18 @@ typedef struct _blitz_tpl {
 
 #define BLITZ_LOOP_INIT(tpl, num)           tpl->loop_stack[tpl->loop_stack_level].total = (num);
 #define BLITZ_LOOP_INCREMENT(tpl)           tpl->loop_stack[tpl->loop_stack_level].current++
+
+#define BLITZ_SCOPE_STACK_PUSH(tpl, data)                                                         \
+    if (tpl->scope_stack_pos < BLITZ_SCOPE_STACK_MAX) {                                           \
+        tpl->scope_stack[tpl->scope_stack_pos] = data;                                            \
+        tpl->scope_stack_pos++;                                                                   \
+    }                                                                                             
+
+#define BLITZ_SCOPE_STACK_UPDATE(tpl, data)                                                       \
+    tpl->scope_stack[tpl->scope_stack_pos - 1] = data;                                            \
+
+#define BLITZ_SCOPE_STACK_SHIFT(tpl)                                                              \
+    tpl->scope_stack_pos--;                                                                       \
 
 #define BLITZ_GET_PREDEFINED_VAR(tpl, n, len, value)                                                                   \
     if (n[0] != '_') {                                                                                                 \

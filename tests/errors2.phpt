@@ -6,7 +6,7 @@ include('common.inc');
 error_reporting(E_ALL);
 set_error_handler('my_error_handler');
 function my_error_handler($errno, $errstr, $errfile, $errline) {
-    $parts = split('ERROR:',$errstr);
+    $parts = explode('ERROR:',$errstr);
     echo trim($parts[1])."\n";
 }
 
@@ -33,7 +33,7 @@ echo $C->parse();
 
 ?>
 --EXPECT--
-calling user method "test" failed, check if this method exists or parameters are valid
-calling user method "test" failed, check if this method exists or parameters are valid
+calling function "test" failed, check if this function exists or parameters are valid
+calling function "test" failed, check if this function exists or parameters are valid
 OK
 
