@@ -1,9 +1,10 @@
-<html><head></head>
+<html>
 <body>
 
 <h1>Quick Geek Blitz tutorial</h1>
 
 <pre>
+
 
 1. Hello, world!
 
@@ -12,7 +13,7 @@ Having a template.tpl file:
 
 and a script
   $T = new Blitz('template.tpl');
-  echo $T-&gt;parse(array('name' =&gt; 'world'));
+  echo $T->parse(array('name' => 'world'));
 
 you can produce probably the most dummy message in the world. 
 
@@ -21,8 +22,8 @@ you can produce probably the most dummy message in the world.
 To write tests quickly you can load text 
 strings as template body:
   $T = new Blitz();
-  $T-&gt;load('Hello, {{ $name }}!');
-  echo $T-&gt;parse(array('name' =&gt; 'world'));
+  $T->load('Hello, {{ $name }}!');
+  echo $T->parse(array('name' => 'world'));
 
 3. MVC
 
@@ -61,8 +62,8 @@ This template will produce just a "hello " string by default,
 and block will be hidden. The following code will affect the block:
 
   $T = new Blitz('some.tpl');
-  $T-&gt;block('/block', array('name' =&gt; 'Dude'));
-  echo $T-&gt;parse();
+  $T->block('/block', array('name' => 'Dude'));
+  echo $T->parse();
 
 This will output "hello  Dude ".
 Blocks are also referred as contexts. An execution of block is 
@@ -75,7 +76,7 @@ statement: {{ END block }}.
 
 Every block can be iterated several times giving a basic way to deal with lists:
   foreach (array('Dude', 'Sobchak', 'Donny') as $i_name) {
-      $T-&gt;block('/block', array('name' =&gt; $i_name);
+      $T->block('/block', array('name' => $i_name);
   }
 Being placed instead of a single block call in the p.7 example this will output
 "Hello  Dude  Donny  Sobchak "
@@ -97,11 +98,11 @@ and iterate it in a loop when needed:
   $need_comma = FALSE;
   foreach (array('Dude', 'Sobchak', 'Donny') as $i_name) {
      if ($need_comma) {
-         $T-&gt;block('/block/comma');
+         $T->block('/block/comma');
      } else 
          $need_comma = TRUE;
      }
-     $T-&gt;block('/block', array('name' =&gt; $i_name);
+     $T->block('/block', array('name' => $i_name);
   }
 
 As you can see all the logic is located in a controller code, not 
@@ -134,10 +135,10 @@ context, set and iterate. Context method takes a single argument,
 a full or relative context path, 
 and sets this path as default. All further sets and relative path 
 calculations will use this path. And iterate method just executes the block:
-  $T-&gt;context('/block');
+  $T->context('/block');
   foreach (array('Dude', 'Sobchak', 'Donny') as $i_name) {
-      $T-&gt;iterate();
-      $T-&gt;set(array('name' =&gt; $i_name));
+      $T->iterate();
+      $T->set(array('name' => $i_name));
   }
 
 This example is equivalent to the previous one.
@@ -151,14 +152,14 @@ need low-level operations with context and iterate.
 Switch on you math. Every template state can be described 
 by a specific iterations data structure. If you add the following 
 code in the end of previous example:
-$data = $T-&gt;getIterations();
+$data = $T->getIterations();
 you will get something like this in $data:
 array(
-    0 =&gt; array(
-        'block' =&gt; array(
-             0 =&gt; array('name' =&gt; 'Dude'),
-             1 =&gt; array('name' =&gt; 'Sobchak'),
-             2 =&gt; array('name' =&gt; 'Donny')
+    0 => array(
+        'block' => array(
+             0 => array('name' => 'Dude'),
+             1 => array('name' => 'Sobchak'),
+             2 => array('name' => 'Donny')
          )
     ),
 )
@@ -179,17 +180,17 @@ debug your code quickly.
 
 To get the final point of iterations see the code below:
     $data = array(
-        0 =&gt; array(
-            'block' =&gt; array(
-                 0 =&gt; array('name' =&gt; 'Dude'),
-                 1 =&gt; array('name' =&gt; 'Sobchak'),
-                 2 =&gt; array('name' =&gt; 'Donny')
+        0 => array(
+            'block' => array(
+                 0 => array('name' => 'Dude'),
+                 1 => array('name' => 'Sobchak'),
+                 2 => array('name' => 'Donny')
              )
         ),
     );
 
     $T = new Blitz('some.tpl');
-    echo $T-&gt;parse($data);
+    echo $T->parse($data);
 
 some.tpl:
 {{ BEGIN block }}{{ if($_first,'',',') }} {{ $name }} {{ END }}
@@ -205,20 +206,20 @@ clear sometimes.
 Everything is iteration. Nested blocks? Sure:
     $data = array(
         array(
-            'who' =&gt; 'soldiers',
-            'what' =&gt; array(
-                0 =&gt; array(
-                    'verb' =&gt; 'going',
-                    'details' =&gt; array(
-                        0 =&gt; array('item' =&gt; 'nowhere'),
+            'who' => 'soldiers',
+            'what' => array(
+                0 => array(
+                    'verb' => 'going',
+                    'details' => array(
+                        0 => array('item' => 'nowhere'),
                     )
                 ),
-                1 =&gt; array(
-                    'verb' =&gt; 'blinded',
-                    'details' =&gt; array(
-                        0 =&gt; array('item' =&gt; 'by'),
-                        1 =&gt; array('item' =&gt; 'their'),
-                        2 =&gt; array('item' =&gt; 'faith')
+                1 => array(
+                    'verb' => 'blinded',
+                    'details' => array(
+                        0 => array('item' => 'by'),
+                        1 => array('item' => 'their'),
+                        2 => array('item' => 'faith')
                     )
                 )
             )
@@ -226,9 +227,9 @@ Everything is iteration. Nested blocks? Sure:
     );
 
     $T = new Blitz();
-    $T-&gt;load('{{ $who }} {{ BEGIN what }}{{ $verb }} {{ BEGIN details }}{{ $item }} {{ END }}{{ END }}');
-    $T-&gt;set($data);
-    echo $T-&gt;parse();
+    $T->load('{{ $who }} {{ BEGIN what }}{{ $verb }} {{ BEGIN details }}{{ $item }} {{ END }}{{ END }}');
+    $T->set($data);
+    echo $T->parse();
 
 this will produce:
 soldiers going nowhere blinded by their faith
@@ -245,8 +246,8 @@ some.tpl:
 {{ BEGIN bye }} bye, {{ $name }} {{ END }}
 
 code:
-echo $T-&gt;fetch('/hello', array('name' =&gt; 'Lena')); // hello, Lena
-echo $T-&gt;fetch('/bye', array('name' =&gt; 'Sveta')); // bye, Sveta
+echo $T->fetch('/hello', array('name' => 'Lena')); // hello, Lena
+echo $T->fetch('/bye', array('name' => 'Sveta')); // bye, Sveta
  
 
 17. Extending templates
@@ -263,8 +264,8 @@ Just extend a blitz class and define the method:
   }
 
   $T = new View();
-  $T-&gt;load('user method call test: {{ my_test("test") }}');
-  echo $T-&gt;parse();
+  $T->load('user method call test: {{ my_test("test") }}');
+  echo $T->parse();
 
 This code will output
 user method call test: user method called (blitztemplate,5), a = test
@@ -279,7 +280,8 @@ cover lot of other things. To learn more refer to the full documentation
 from the tar ball or see it online at
 http://alexeyrybak.com/blitz/blitz_en.html.
 
-This tutorial was written for Blitz versions higher than 0.5.1. 
+
+This tutorial was written for Blitz versions higher 0.5.0. 
 If you use previous versions of Blitz the only difference is that 
 parse method can accept only global variables, no iteration set. To make 
 all of the examples works one should replace "echo parse($data);" 
@@ -291,4 +293,5 @@ Have a lot of fun!
 
 </pre>
 
-</body></html>
+</body>
+</html>

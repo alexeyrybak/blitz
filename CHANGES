@@ -1,4 +1,13 @@
 ===================================================================================================
+0.7.1.11-devel 19 apr 2011
+===================================================================================================
+- FIX: segfault for tricky nested includes (bug#284).
+- FIX: lowercasing for methods can be suppressed by a new variable blitz.lower_case_method_names. 
+  By default, blitz.lowec_case_method_names = 1 (bug#286).
+- FIX: if with empty agrument causes syntax error (bug#287).
+- CHANGE: new docs were added into the package.
+
+===================================================================================================
 0.7.1.10-devel 12 apr 2011. С 50-летием полёта человека в космос!
 ===================================================================================================
 - FIX: all floats were "false" in conditions.

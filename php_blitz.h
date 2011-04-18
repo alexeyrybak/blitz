@@ -60,6 +60,7 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char check_recursion;
     char *charset;
     unsigned long scope_lookup_limit;
+    char lower_case_method_names;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS
@@ -283,7 +284,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_CALLED_USER_METHOD(v) (((v)->flags & BLITZ_FLAG_CALLED_USER_METHOD) == BLITZ_FLAG_CALLED_USER_METHOD)
 
-#define BLITZ_LOOP_STACK_MAX    32
+#define BLITZ_LOOP_STACK_MAX    32 
 #define BLITZ_SCOPE_STACK_MAX   32
 
 /* simple string with length */
@@ -580,8 +581,12 @@ typedef struct _blitz_analizer_ctx {
     }
 
 #define BLITZ_ARG_NOT_EMPTY(a,ht,res)                                                             \
-    if ((a).type & BLITZ_ARG_TYPE_STR) {                                                          \
-        (res) = ((((a).len == 1) && ((a).name[0] != '0')) || (a).len>0) ? 1 : 0;                  \
+    if ((a).type == BLITZ_ARG_TYPE_STR) {                                                         \
+        if (((a).len == 1) && ((a).name[0] == '0')) {                                             \
+            (res) = 0;                                                                            \
+        } else {                                                                                  \
+            (res) = (a).len > 0;                                                                  \
+        }                                                                                         \
     } else if ((a).type == BLITZ_ARG_TYPE_NUM) {                                                  \
         (res) = (0 == strncmp((a).name,"0",1)) ? 0 : 1;                                           \
     } else if (((a).type == BLITZ_ARG_TYPE_VAR) && ht) {                                          \
@@ -596,8 +601,8 @@ typedef struct _blitz_analizer_ctx {
         } else {                                                                                  \
             res = 0;                                                                              \
         }                                                                                         \
-    } else if((a).type & BLITZ_ARG_TYPE_BOOL) {                                                   \
-        res = ('t' == *((a).name)) ? 1 : 0;                                                       \
+    } else if((a).type == BLITZ_ARG_TYPE_BOOL) {                                                  \
+        res = ('t' == (a).name[0]) ? 1 : 0;                                                       \
     } else {                                                                                      \
         res = 0;                                                                                  \
     }
@@ -648,7 +653,7 @@ typedef struct _blitz_analizer_ctx {
     tpl->loop_stack[tpl->loop_stack_level].total = 0;                                               
 
 #define BLITZ_LOOP_MOVE_BACK(tpl)                                                                 \
-    if (tpl->loop_stack_level>0) {                                                                \
+    if (tpl->loop_stack_level > 0) {                                                              \
         tpl->loop_stack_level--;                                                                  \
     }
 
@@ -656,7 +661,7 @@ typedef struct _blitz_analizer_ctx {
 #define BLITZ_LOOP_INCREMENT(tpl)           tpl->loop_stack[tpl->loop_stack_level].current++
 
 #define BLITZ_SCOPE_STACK_PUSH(tpl, data)                                                         \
-    if (tpl->scope_stack_pos < BLITZ_SCOPE_STACK_MAX) {                                           \
+    if (tpl->scope_stack_pos < BLITZ_SCOPE_STACK_MAX - 1) {                                       \
         tpl->scope_stack[tpl->scope_stack_pos] = data;                                            \
         tpl->scope_stack_pos++;                                                                   \
     }                                                                                             
@@ -665,10 +670,12 @@ typedef struct _blitz_analizer_ctx {
     tpl->scope_stack[tpl->scope_stack_pos - 1] = data;                                            \
 
 #define BLITZ_SCOPE_STACK_SHIFT(tpl)                                                              \
-    tpl->scope_stack_pos--;                                                                       \
+    if (tpl->scope_stack_pos > 0) {                                                               \
+        tpl->scope_stack_pos--;                                                                   \
+    }                                                                                             \
 
 #define BLITZ_GET_PREDEFINED_VAR(tpl, n, len, value)                                                                   \
-    if (n[0] != '_') {                                                                                                 \
+    if (len == 0 || n[0] != '_') {                                                                                     \
         value = -1;                                                                                                    \
     } else {                                                                                                           \
         unsigned int current = tpl->loop_stack[tpl->loop_stack_level].current;                                         \

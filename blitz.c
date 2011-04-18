@@ -54,7 +54,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.7.1.10-dev"
+#define BLITZ_VERSION_STRING "0.7.1.11-dev"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -170,6 +170,8 @@ PHP_INI_BEGIN()
         OnUpdateString, charset, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.scope_lookup_limit", "0", PHP_INI_ALL,
         OnUpdateLongLegacy, scope_lookup_limit, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.lower_case_method_names", "1", PHP_INI_ALL,
+        OnUpdateBool, lower_case_method_names, zend_blitz_globals, blitz_globals)
 
 PHP_INI_END()
 /* }}} */
@@ -989,14 +991,16 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     } else if (BLITZ_IS_ALPHA(symb)){
         is_path = 0;
         BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
-        i_len = 1;
         i_type = BLITZ_ARG_TYPE_BOOL;
-        if (i_pos!=0) {
+        i_len = i_pos;
+        if (i_pos != 0) {
             ok = 1;
             if (BLITZ_STRING_IS_TRUE(token_out, i_len)) {
                 token_out[0] = 't';
+                i_len = 1;
             } else if (BLITZ_STRING_IS_FALSE(token_out, i_len)){
                 token_out[0] = 'f';
+                i_len = 1;
             } else { /* treat this just as variable used without var prefix */
                 i_len = i_pos;
                 i_type = is_path ? BLITZ_ARG_TYPE_VAR_PATH : BLITZ_ARG_TYPE_VAR;
@@ -1133,7 +1137,9 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         } 
                     }
                 }
-                zend_str_tolower(node->lexem, node->lexem_len); /* case insensitivity for methods */
+                if (BLITZ_G(lower_case_method_names)) {
+                    zend_str_tolower(node->lexem, node->lexem_len);
+                }
             } else {
                 ok = 1;
                 if (BLITZ_STRING_IS_BEGIN(node->lexem, node->lexem_len)) {
@@ -1163,7 +1169,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     /* functions without brackets are treated as parameters */
                     if (BLITZ_NOBRAKET_FUNCTIONS_ARE_VARS) {
                         node->type = is_path ? BLITZ_NODE_TYPE_VAR_PATH : BLITZ_NODE_TYPE_VAR;
-                    } else { /* case insensitivity for methods */
+                    } else if (BLITZ_G(lower_case_method_names)) {
                         zend_str_tolower(node->lexem, node->lexem_len);
                     }
                     state = BLITZ_CALL_STATE_FINISHED;
@@ -1203,7 +1209,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     is_path = i_len = i_pos = i_type = ok = 0;
                     blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
 
-                    if (i_len) {
+                    if (i_pos) {
                         ok = 1;
                         pos += i_pos;
                         c = text + pos;
@@ -1221,7 +1227,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                             is_path = i_len = i_pos = i_type = ok = 0;
 
                             blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
-                            if (i_len) {
+                            if (i_pos) {
                                 pos += i_pos;
                                 c = text + pos;
                                 ADD_CALL_ARGS(buf, i_len, i_type);
@@ -1245,9 +1251,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     state = BLITZ_CALL_STATE_FINISHED;
                     break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
-
                     blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
-                    if (i_len) {
+                    if (i_pos) {
                         pos += i_pos;
                         c = text + pos;
                         ADD_CALL_ARGS(buf, i_len, i_type);
@@ -2305,8 +2310,8 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             if (blitz_fetch_var_by_path(&z, arg->name, arg->len, iteration_params, tpl TSRMLS_CC)) {
                 BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
             }
-        } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
-            not_empty = (arg->name[0] == 't');
+        } else {
+            BLITZ_ARG_NOT_EMPTY(*arg, NULL, not_empty);
         }
 
         /* not_empty = 
@@ -2837,7 +2842,7 @@ static void blitz_exec_if_context(blitz_tpl *tpl, unsigned long node_id, zval *p
         if (node->n_args) {
             arg = node->args;
             BLITZ_GET_PREDEFINED_VAR(tpl, arg->name, arg->len, predefined);
-            if (predefined>0) {
+            if (predefined > 0) {
                 not_empty = 1;
             } else if (arg->type == BLITZ_ARG_TYPE_VAR) {
                 if (parent_params) {
@@ -2859,8 +2864,8 @@ static void blitz_exec_if_context(blitz_tpl *tpl, unsigned long node_id, zval *p
                 if (blitz_fetch_var_by_path(&z, arg->name, arg->len, parent_params, tpl TSRMLS_CC)) {
                     BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
                 }
-            } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
-                not_empty = (arg->name[0] == 't');
+            } else {
+                BLITZ_ARG_NOT_EMPTY(*arg, NULL, not_empty);
             }
 
             if (not_empty == -1) // generally -1 means 'unknown', but it's equal to 'empty' here
