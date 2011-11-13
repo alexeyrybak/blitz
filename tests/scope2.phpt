@@ -1,7 +1,7 @@
 --TEST--
 scope lookup test #2
 --FILE--
-<?
+<?php
 
 $T = new Blitz();
 

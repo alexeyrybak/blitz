@@ -1,7 +1,7 @@
 --TEST--
 plugins
 --FILE--
-<?
+<?php
 
 class Test {
     static function say($first, $second) {
