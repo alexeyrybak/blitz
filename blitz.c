@@ -54,7 +54,7 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.7.1.12-dev"
+#define BLITZ_VERSION_STRING "0.7.1.13-dev"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
@@ -2917,9 +2917,9 @@ static inline void blitz_check_arg (
     if ((t) == BLITZ_CAST_ARG_PREDEFINED) {                                                     \
         (d) = (double)(l);                                                                      \
     } else if (z) {                                                                             \
-        if (((t) == IS_BOOL) || ((t) == IS_LONG)) {                                             \
+        if ((Z_TYPE_PP(z) == IS_BOOL) || (Z_TYPE_PP(z) == IS_LONG)) {                           \
             (d) = (double)Z_LVAL_PP(z);                                                         \
-        } else if ((t) == IS_DOUBLE) {                                                          \
+        } else if (Z_TYPE_PP(z) == IS_DOUBLE) {                                                 \
             (d) = Z_DVAL_PP(z);                                                                 \
         } else {                                                                                \
             t = BLITZ_COMPARE_UNKNOWN;                                                          \
@@ -2975,7 +2975,7 @@ static inline void blitz_check_expr (
                 c = Z_TYPE_PP(z[i]);
                 if (c == IS_STRING) {
                     c = BLITZ_COMPARE_STRING;
-                } else if ((c == IS_LONG) || (c == IS_BOOL) || (c == IS_DOUBLE) || (c == IS_STRING)) {
+                } else if ((c == IS_LONG) || (c == IS_BOOL) || (c == IS_DOUBLE)) {
                     c = BLITZ_COMPARE_DOUBLE;                
                 }
             }
@@ -3937,7 +3937,7 @@ static inline int blitz_merge_iterations_by_str_keys(zval **target, zval *input 
         }
 
         if (key && key_len) {
-            Z_ADDREF_PP(elem);
+            Z_ADDREF_P(*elem);
             zend_hash_update(Z_ARRVAL_PP(target), key, key_len, elem, sizeof(zval *), NULL);
         }
         zend_hash_move_forward(input_ht);
@@ -3970,7 +3970,7 @@ static inline int blitz_merge_iterations_by_num_keys(zval **target, zval *input 
             continue;
         }
 
-        Z_ADDREF_PP(elem);
+        Z_ADDREF_P(*elem);
         zend_hash_index_update(Z_ARRVAL_PP(target), index, elem, sizeof(zval *), NULL);
         zend_hash_move_forward(input_ht);
     }
