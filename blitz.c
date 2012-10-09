@@ -4360,6 +4360,20 @@ static PHP_FUNCTION(blitz_get_globals)
 }
 /* }}} */
 
+/* {{{ proto array Blitz->cleanGlobals(void) */
+static PHP_FUNCTION(blitz_clean_globals)
+{
+    zval *id, **desc;
+    blitz_tpl *tpl;
+
+    BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
+
+    zend_hash_clean(tpl->hash_globals);
+
+    RETURN_TRUE;
+}
+/* }}} */
+
 /* {{{ proto bool Blitz->hasContext(string context) */
 static PHP_FUNCTION(blitz_has_context)
 {
@@ -4878,6 +4892,7 @@ static const zend_function_entry blitz_functions[] = {
     PHP_FALIAS(set_global,          blitz_set_global,           NULL)
     PHP_FALIAS(set_globals,         blitz_set_global,           NULL)
     PHP_FALIAS(get_globals,         blitz_get_globals,          NULL)
+    PHP_FALIAS(clean_globals,       blitz_clean_globals,        NULL)
     PHP_FALIAS(set,                 blitz_set,                  NULL)
     PHP_FALIAS(assign,              blitz_set,                  NULL)
     PHP_FALIAS(parse,               blitz_parse,                NULL)
@@ -4896,6 +4911,7 @@ static const zend_function_entry blitz_functions[] = {
     PHP_FALIAS(setglobal,           blitz_set_global,           NULL)
     PHP_FALIAS(setglobals,          blitz_set_global,           NULL)
     PHP_FALIAS(getglobals,          blitz_get_globals,          NULL)
+    PHP_FALIAS(cleanglobals,        blitz_clean_globals,        NULL)
     PHP_FALIAS(geterror,            blitz_get_error,            NULL)
     PHP_FALIAS(get_error,           blitz_get_error,            NULL)
     {NULL, NULL, NULL}
