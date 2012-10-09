@@ -1,5 +1,60 @@
 ===================================================================================================
-0.7.1.13-devel 9 dec 2011. 
+0.8.2 version 18 june 2012.
+===================================================================================================
+- FIX: fixed parsing error with comments enabled and long custom comments tags (bug#310)
+
+===================================================================================================
+0.8.1 version 4 june 2012. Finally stable!
+===================================================================================================
+- FIX: parsing error fixed (incorrect code fragment breaks next correct one)
+- FIX: array-to-string conversion for variables doesn't add "Array" string to the output and shows 
+    human readable warning
+
+===================================================================================================
+0.7.2-devel
+===================================================================================================
+- CHANGE: return last error with new getError() method
+- CHANGE: load returns FALSE if error occured
+- CHANGE: throw exceptions with warnings when blitz.throw_exceptions = 1 (0 by default) 
+- FIX: parsing error fixed (usually affected closing tags with spaces before it)
+- FIX: global warnings clean-up
+
+===================================================================================================
+0.7.1.16-devel 9 may 2012. С праздником, товарищи! Бей фашистскую сволочь.
+===================================================================================================
+This is very first release with HTML output escaping. Please note that internal html extension was 
+improved in 5.4.0 and some features don't work in prior versions - mainly, substitution of 
+disallowed unicode chars. Thus some tests should fail if you have PHP version < 5.4.0.
+
+- CHANGE: basic filters support was added: {{ $var | filter }}, only "raw" and "escape"
+    filters are supported and only for variables [#70]
+- CHANGE: automatic output filtering is enabled with blitz.auto_escape = 1, 0 by default) [#70]
+- CHANGE: blitz.charset global was removed (engine should use default PHP charset) [#70]
+- FIX: incorrect $-prefixed variables throw errors [bug#307]
+
+===================================================================================================
+0.7.1.15-devel 21 mar 2012. С днём весеннего равноденствия!
+===================================================================================================
+- FIX: improved performance by removing unnecessary strlen call in internal 
+       blitz_exec_var and blitz_exec_var_path functions
+- FIX: fixed compilation error for PHP 5.4.*
+
+===================================================================================================
+0.7.1.14-devel 11 mar 2012. 
+    С днём работника органов наркоконтроля, и днём работников геодезии и картографии!
+===================================================================================================
+- FIX: expressions didn't work properly with globals, undefined variables and constants
+- CHANGE: VERY IMPORTANT! old setting "blitz.disable_include" (0 by default) was replaced
+  by new "blitz.enable_include" (1 by default)
+- ADD: news settings were added:
+    * blitz.enable_callbacks - enables callbacks, PHP or user-defined
+    * blitz.enable_php_callbacks - enables just PHP callbacks
+    * blitz.php_callbacks_first - set highest priority to PHP callbacks when it's unclear
+      if it's PHP callback or template object callback
+- FIX: max tag content length was increased from 128 to 512 bytes
+
+===================================================================================================
+0.7.1.13-devel 9 dec 2011.
 ===================================================================================================
 - CHANGE: various fixes for expressions support in IF/ELSEIF/ELSE/ULNESS statements.
 
@@ -13,7 +68,7 @@
 ===================================================================================================
 - FIX: segfault for tricky nested includes (bug#284).
 - FIX: lowercasing for methods can be suppressed by a new variable blitz.lower_case_method_names. 
-  By default, blitz.lowec_case_method_names = 1 (bug#286).
+  By default, blitz.lower_case_method_names = 1 (bug#286).
 - FIX: if with empty agrument causes syntax error (bug#287).
 - CHANGE: new docs were added into the package.
 

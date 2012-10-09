@@ -16,7 +16,7 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
+/* $Id: blitz.c,v 1.73 2012/06/18 15:02:58 fisher Exp $ */
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -27,12 +27,17 @@
 #endif
 
 #include "php.h"
+
+#if PHP_API_VERSION < 20100412
 #include "safe_mode.h"
+#endif
+
 #include "php_globals.h"
 #include "php_ini.h"
 #include "ext/standard/php_standard.h"
 #include "ext/standard/info.h"
 #include "ext/standard/html.h"
+#include "Zend/zend_exceptions.h"
 #include <fcntl.h>
 
 #ifdef PHP_WIN32
@@ -54,17 +59,19 @@
 #include "php_blitz.h"
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.7.1.13-dev"
+#define BLITZ_VERSION_STRING "0.8.2"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
 /* some declarations  */
+static void blitz_error (blitz_tpl *tpl TSRMLS_DC, unsigned int level, char *format, ...); 
 static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned long *result_len TSRMLS_DC);
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
     unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC);
 static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC);
 static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC);
+static inline unsigned int blitz_extract_var(blitz_tpl *tpl, char *name, unsigned long len, unsigned char is_path, zval *params, long *l, zval ***z TSRMLS_DC);
 
 static int le_blitz;
 
@@ -97,7 +104,7 @@ ZEND_GET_MODULE(blitz)
 #define ADD_CALL_ARGS(buf, i_len, i_type)                                       \
     REALLOC_ARG_IF_EXCEEDS;                                                     \
     i_arg = node->args + arg_id;                                                \
-    if (buf && i_len) {                                                         \
+    if (i_len) {                                                                \
         i_arg->name = estrndup((char *)(buf),(i_len));                          \
         i_arg->len = (i_len);                                                   \
     } else {                                                                    \
@@ -126,7 +133,7 @@ static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
         *p = '\x0';
     } else {
         if (!new_value || new_value_length != 1) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "failed to set blitz.var_prefix (only one character is allowed, like $ or %%)");
+            blitz_error(NULL TSRMLS_CC, E_WARNING, "failed to set blitz.var_prefix (only one character is allowed, like $ or %%)");
             return FAILURE;
         }
         *p = new_value[0];
@@ -138,6 +145,8 @@ static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
 
 /* {{{ ini options */
 PHP_INI_BEGIN()
+    STD_PHP_INI_ENTRY("blitz.throw_exceptions", "0", PHP_INI_ALL,
+        OnUpdateBool, throw_exceptions, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.var_prefix", BLITZ_TAG_VAR_PREFIX_S, PHP_INI_ALL,
         OnUpdateVarPrefixHandler, var_prefix, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.tag_open", BLITZ_TAG_OPEN, PHP_INI_ALL, 
@@ -158,25 +167,64 @@ PHP_INI_BEGIN()
         OnUpdateBool, enable_comments, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.path", "", PHP_INI_ALL,
         OnUpdateString, path, zend_blitz_globals, blitz_globals)
-    STD_PHP_INI_ENTRY("blitz.disable_include", "0", PHP_INI_ALL,
-        OnUpdateBool, disable_include, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.remove_spaces_around_context_tags", "1", PHP_INI_ALL,
         OnUpdateBool, remove_spaces_around_context_tags, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.warn_context_duplicates", "0", PHP_INI_ALL,
         OnUpdateBool, warn_context_duplicates, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.check_recursion", "1", PHP_INI_ALL,
         OnUpdateBool, check_recursion, zend_blitz_globals, blitz_globals)
-    STD_PHP_INI_ENTRY("blitz.charset", "", PHP_INI_ALL,
-        OnUpdateString, charset, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.scope_lookup_limit", "0", PHP_INI_ALL,
         OnUpdateLongLegacy, scope_lookup_limit, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.lower_case_method_names", "1", PHP_INI_ALL,
         OnUpdateBool, lower_case_method_names, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.enable_include", "1", PHP_INI_ALL,
+        OnUpdateBool, enable_include, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.enable_callbacks", "1", PHP_INI_ALL,
+        OnUpdateBool, enable_callbacks, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.enable_php_callbacks", "1", PHP_INI_ALL,
+        OnUpdateBool, enable_php_callbacks, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.php_callbacks_first", "1", PHP_INI_ALL,
+        OnUpdateBool, php_callbacks_first, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.auto_escape", "0", PHP_INI_ALL,
+        OnUpdateBool, auto_escape, zend_blitz_globals, blitz_globals)
 
 PHP_INI_END()
 /* }}} */
 
-static inline unsigned int blitz_realloc_list(blitz_list *list, unsigned long new_size) { /* {{{ */
+static void blitz_error (blitz_tpl *tpl TSRMLS_DC, unsigned int level, char *format, ...) { /* {{{ */
+    char *msg = NULL;
+    unsigned char free_msg = 0;
+
+    va_list arg;
+    va_start(arg, format);
+
+    if (tpl) {
+        if (tpl->error) {
+            efree(tpl->error);
+        }
+
+        vspprintf(&tpl->error, BLITZ_ERROR_MAX_LEN, format, arg);
+        msg = tpl->error;
+    } else {
+        vspprintf(&msg, BLITZ_ERROR_MAX_LEN, format, arg);
+        free_msg = 1;
+    }
+
+    va_end(arg);
+
+    php_error_docref(NULL TSRMLS_CC, level, "%s", msg);
+
+    if (BLITZ_G(throw_exceptions) && level == E_WARNING) {
+        zend_throw_exception_ex(zend_exception_get_default(TSRMLS_C), 0 TSRMLS_CC, "%s", msg);
+    }
+
+    if (free_msg) {
+        efree(msg);
+    }
+}
+/* }}} */
+
+static inline unsigned int blitz_realloc_list (blitz_list *list, unsigned long new_size) { /* {{{ */
     void *p = NULL;
     unsigned long allocated = 0;
     if (new_size < list->allocated)
@@ -238,13 +286,13 @@ static inline int blitz_read_with_fread(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 
     /* VCWD_FOPEN() fixes problems with relative paths in multithreaded environments */
     if (!(stream = VCWD_FOPEN(filename, "rb"))) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open file \"%s\"", filename);
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "unable to open file \"%s\"", filename);
         return 0;
     }
 
     tpl->static_data.body = (char*)emalloc(BLITZ_INPUT_BUF_SIZE);
     tpl->static_data.body_len = 0;
-    while ((get_len = fread(tpl->static_data.body+tpl->static_data.body_len, 1, BLITZ_INPUT_BUF_SIZE, stream)) > 0) {
+    while ((get_len = fread(tpl->static_data.body + tpl->static_data.body_len, 1, BLITZ_INPUT_BUF_SIZE, stream)) > 0) {
         tpl->static_data.body_len += get_len;
         tpl->static_data.body = (char*)erealloc(tpl->static_data.body, tpl->static_data.body_len + BLITZ_INPUT_BUF_SIZE);
     }
@@ -270,6 +318,9 @@ static blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations, blit
     static_data->tag_close_len = strlen(BLITZ_G(tag_close));
     static_data->tag_open_alt_len = strlen(BLITZ_G(tag_open_alt));
     static_data->tag_close_alt_len = strlen(BLITZ_G(tag_close_alt));
+    static_data->tag_comment_open_len = strlen(BLITZ_G(tag_comment_open));
+    static_data->tag_comment_close_len = strlen(BLITZ_G(tag_comment_close));
+
 
     tpl->loop_stack_level = 0;
 
@@ -291,6 +342,7 @@ static blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations, blit
         tpl->tpl_parent = NULL;
     }
 
+    tpl->error = NULL;
     tpl->current_iteration = NULL;
     tpl->caller_iteration = NULL;
     tpl->last_iteration = NULL;
@@ -408,6 +460,10 @@ static void blitz_free_tpl(blitz_tpl *tpl) /* {{{ */
         tpl->current_path = NULL;
     }
 
+    if (tpl->error) {
+        efree(tpl->error);
+    }
+
     efree(tpl);
 }
 /* }}} */
@@ -416,7 +472,6 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len,
     HashTable *globals, zval *iterations, blitz_tpl *tpl_parent TSRMLS_DC) /* {{{ */
 {
     int global_path_len = 0;
-    php_stream *stream = NULL;
     unsigned int filename_normalized_len = 0;
     unsigned int add_buffer_len = 0;
     int result = 0;
@@ -448,7 +503,7 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len,
         global_path_len = strlen(BLITZ_G(path));
 
         if ((global_path_len + filename_len) > MAXPATHLEN) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long (limited by MAXPATHLEN)");
+            blitz_error(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: file path is too long (limited by MAXPATHLEN)");
             blitz_free_tpl(tpl);
             return NULL;
         }
@@ -462,7 +517,7 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len,
         VCWD_REALPATH(filename, tpl->static_data.name);
         filename_normalized_len = strlen(tpl->static_data.name);
         if (filename_normalized_len == 0) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to open file \"%s\" (realpath failed)", filename);
+            blitz_error(NULL TSRMLS_CC, E_WARNING, "unable to open file \"%s\" (realpath failed)", filename);
             return NULL;
         }
 
@@ -477,7 +532,7 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len,
             if (!i_tpl) break; 
             s = i_tpl->static_data.name;
             if (0 == strncmp(s, tpl->static_data.name, filename_normalized_len)) {
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, 
+                blitz_error(NULL TSRMLS_CC, E_WARNING, 
                     "ERROR: include recursion detected for \"%s\". You can disable this check setting blitz.check_recursion to 0 (please, don't do this if you don't know what you are doing)",
                     tpl->static_data.name
                 );
@@ -501,7 +556,10 @@ static blitz_tpl *blitz_init_tpl(const char *filename, int filename_len,
     static_data = & tpl->static_data;
     add_buffer_len = MAX(
         MAX(static_data->tag_open_len, static_data->tag_close_len), 
-        MAX(static_data->tag_open_alt_len, static_data->tag_close_alt_len) 
+        MAX(
+            MAX(static_data->tag_open_alt_len, static_data->tag_close_alt_len),
+            MAX(static_data->tag_comment_open_len, static_data->tag_comment_close_len)
+        )
     );
 
     tpl->static_data.body = erealloc(tpl->static_data.body, tpl->static_data.body_len + add_buffer_len);
@@ -526,7 +584,10 @@ static int blitz_load_body(blitz_tpl *tpl, const char *body, int body_len TSRMLS
     if (tpl->static_data.body_len) {
         add_buffer_len = MAX(
             MAX(tpl->static_data.tag_open_len, tpl->static_data.tag_close_len),
-            MAX(tpl->static_data.tag_open_alt_len, tpl->static_data.tag_close_alt_len)
+            MAX(
+                MAX(tpl->static_data.tag_open_alt_len, tpl->static_data.tag_close_alt_len),
+                MAX(tpl->static_data.tag_comment_open_len, tpl->static_data.tag_comment_close_len)
+            )
         );
 
         tpl->static_data.body = emalloc(tpl->static_data.body_len + add_buffer_len);
@@ -570,7 +631,7 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
     }
 
     if (filename_len >= MAXPATHLEN) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Filename exceeds the maximum allowed length of %d characters", MAXPATHLEN);
+        blitz_error(NULL TSRMLS_CC, E_WARNING, "Filename exceeds the maximum allowed length of %d characters", MAXPATHLEN);
         return 0;
     }
 
@@ -614,7 +675,7 @@ static void blitz_resource_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC) /* {{{ */
 
 static void php_blitz_init_globals(zend_blitz_globals *blitz_globals) /* {{{ */
 {
-    memset(blitz_globals, 0, sizeof(blitz_globals));
+    memset(blitz_globals, 0, sizeof(zend_blitz_globals));
     blitz_globals->var_prefix = BLITZ_TAG_VAR_PREFIX;
     blitz_globals->tag_open = BLITZ_TAG_OPEN;
     blitz_globals->tag_close = BLITZ_TAG_CLOSE;
@@ -622,7 +683,10 @@ static void php_blitz_init_globals(zend_blitz_globals *blitz_globals) /* {{{ */
     blitz_globals->tag_close_alt = BLITZ_TAG_CLOSE_ALT;
     blitz_globals->enable_alternative_tags = 1;
     blitz_globals->enable_comments = 0;
-    blitz_globals->disable_include = 0;
+    blitz_globals->enable_include = 1;
+    blitz_globals->enable_callbacks = 1;
+    blitz_globals->enable_php_callbacks = 1;
+    blitz_globals->php_callbacks_first = 1;
     blitz_globals->path = "";
     blitz_globals->remove_spaces_around_context_tags = 1;
     blitz_globals->warn_context_duplicates = 0;
@@ -630,16 +694,17 @@ static void php_blitz_init_globals(zend_blitz_globals *blitz_globals) /* {{{ */
     blitz_globals->tag_comment_open = BLITZ_TAG_COMMENT_OPEN;
     blitz_globals->tag_comment_close = BLITZ_TAG_COMMENT_CLOSE;
     blitz_globals->scope_lookup_limit = 0;
+    blitz_globals->auto_escape = 0;
+    blitz_globals->throw_exceptions = 0;
 }
 /* }}} */
 
 static void blitz_get_node_paths(zval *list, blitz_node *node, const char *parent_path, unsigned int skip_vars, unsigned int with_type) /* {{{ */
 {
 
-    unsigned long j = 0;
     char suffix[2] = "\x0";
     char path[BLITZ_CONTEXT_PATH_MAX_LEN] = "\x0";
-    unsigned int may_have_children = 0, do_add = 0;
+    unsigned int may_have_children = 0;
     blitz_node *i_node = NULL;
 
     if (!node) 
@@ -755,9 +820,7 @@ static void php_blitz_dump_node(blitz_node *node, unsigned int *p_level) /* {{{ 
 
 static void php_blitz_dump_struct(blitz_tpl *tpl) /* {{{ */
 {
-    unsigned long i = 0;
     unsigned int level = 0;
-    unsigned int last_close = 0;
     blitz_node *node = NULL;
 
     php_printf("== TREE STRUCT (%ld nodes):",(unsigned long)tpl->static_data.n_nodes);
@@ -780,9 +843,6 @@ void blitz_warn_context_duplicates(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     HashTable uk_path;
     zval **path = NULL, **path_type = NULL;
     int z = 1;
-    char *key;
-    unsigned int key_len;
-    unsigned long key_index;
 
     MAKE_STD_ZVAL(path_list);
     array_init(path_list);
@@ -802,7 +862,7 @@ void blitz_warn_context_duplicates(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
         }
 
         if (zend_hash_exists(&uk_path, Z_STRVAL_PP(path), Z_STRLEN_PP(path))) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "WARNING: context name \"%s\" duplicate in %s",
                  Z_STRVAL_PP(path), tpl->static_data.name
             );
@@ -828,7 +888,6 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
     unsigned long pos = 0, pos_check_max = 0;
     unsigned char c = 0, p = 0, tag_id = 0, idx_tag_id = 0, found = 0, skip_steps = 0;
     unsigned char *pc = NULL;
-    unsigned long i = 0;
     unsigned int tag_min_len = 0;
     unsigned char check_map[256];
     blitz_string *t = NULL;
@@ -877,26 +936,29 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
             tag_min_len = list_tag[tag_id].len;
         }
 
-        pc = list_tag[tag_id].s;
+        pc = (unsigned char *) list_tag[tag_id].s;
         while (*pc) {
             check_map[*pc] = 1;
             pc++;
         }
     }
 
-    pc = body->s;
+    pc = (unsigned char *) body->s;
     c = *pc;
     pos = 0;
     skip_steps = 0;
     pos_check_max = body->len - tag_min_len;
     while (c) {
         c = *pc;
+        if (BLITZ_DEBUG) php_printf("moving at symbol: %c\n", c);
         found = 0;
-        for (idx_tag_id = 0; idx_tag_id < tag_list_len; idx_tag_id++) {
+        idx_tag_id = 0;
+        while (idx_tag_id < tag_list_len) {
             tag_id = idx_tag[idx_tag_id]; // loop through index, some tags can be disabled
             t = list_tag + tag_id;
             p = current_tag_pos[tag_id];
             if (c == t->s[p]) {
+                if (BLITZ_DEBUG) php_printf("checking tag_id = %d...\n", tag_id);
                 found = 1;
                 p++;
                 if (p == t->len) {
@@ -917,8 +979,11 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
             } else {
                 if (p > 0) {
                     current_tag_pos[tag_id] = 0;
+                    continue; // check the same tag from beginning
                 }
             }
+
+            idx_tag_id++;
         }
 
         if (found == 0) {
@@ -953,7 +1018,6 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     char *c = text;
     char *p = NULL;
     char symb = 0, i_symb = 0, is_path = 0;
-    char state = BLITZ_CALL_STATE_ERROR;
     char ok = 0;
     unsigned int pos = 0, i_pos = 0, i_len = 0;
     unsigned char i_type;
@@ -967,7 +1031,6 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     symb = *c;
     i_len = i_pos = ok = 0;
     p = token_out;
-    
 
     if (BLITZ_DEBUG) php_printf("[F] blitz_parse_arg: %u\n", *c);
 
@@ -1031,13 +1094,11 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     char state = BLITZ_CALL_STATE_ERROR;
     char ok = 0;
     unsigned int pos = 0, i_pos = 0, i_len = 0;
-    char was_escaped;
     char buf[BLITZ_MAX_LEXEM_LEN];
     char n_arg_alloc = 0;
     unsigned char i_type = 0;
     unsigned char arg_id = 0;
     call_arg *i_arg = NULL;
-    unsigned char bool_char = 0;
     char *p_end = NULL;
     char has_namespace = 0;
     register unsigned char shift = 0, i = 0, j = 0;
@@ -1045,8 +1106,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     BLITZ_SKIP_BLANK(c,i_pos,pos);
 
     if (BLITZ_DEBUG) {
-        char *tmp = estrndup((char *)text, len_text);
-        tmp[len_text-1] = '\x0';
+        char *tmp = estrndup((char *)text, len_text + 1);
+        tmp[len_text] = '\x0';
         php_printf("*** FUNCTION *** blitz_parse_call, started at pos=%u, c=%c\n", pos, *c);
         php_printf("text: %s\n", tmp);
         efree(tmp);
@@ -1055,6 +1116,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     /* init node */
     blitz_free_node(node);
     node->type = BLITZ_TYPE_METHOD;
+    node->escape_mode = BLITZ_ESCAPE_DEFAULT;
 
     *true_lexem_len = 0; /* used for parameters only */
 
@@ -1067,6 +1129,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
         if (i_pos != 0) {
             memcpy(node->lexem, text + pos, i_pos);
             node->lexem_len = i_pos;
+            node->lexem[i_pos] = '\x0';
             *true_lexem_len = i_pos;
             if (is_path) {
                 node->type = BLITZ_NODE_TYPE_VAR_PATH;
@@ -1090,6 +1153,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
 
             memcpy(node->lexem, text + pos, i_pos);
             node->lexem_len = i_pos;
+            node->lexem[i_pos] = '\x0';
             node->type = BLITZ_TYPE_METHOD;
             *true_lexem_len = i_pos;
             pos += i_pos;
@@ -1105,7 +1169,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     shift = BLITZ_THIS_NAMESPACE_SHIFT;
                     node->namespace_code = BLITZ_NODE_THIS_NAMESPACE;
                 } else {
-                    node->namespace_code = BLITZ_NODE_UNKNOWN_NAMESPACE;
+                    node->namespace_code = BLITZ_NODE_CUSTOM_NAMESPACE;
                 }
                 if (shift) {
                     i = 0;
@@ -1114,8 +1178,9 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         node->lexem[i++] = node->lexem[j++];
                     }
                     node->lexem_len = node->lexem_len - shift;
+                    node->lexem[node->lexem_len] = '\x0';
                 }
-                if (BLITZ_DEBUG) php_printf("REDUCED STATIC CALL: %s, len=%u, namespace_code=%u\n", 
+                if (BLITZ_DEBUG) php_printf("REDUCED STATIC CALL: %s, len=%lu, namespace_code=%u\n", 
                     node->lexem, node->lexem_len, node->namespace_code);
             }
 
@@ -1284,18 +1349,6 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         state = BLITZ_CALL_STATE_ERROR;
                     }
                     break;
-                case BLITZ_CALL_STATE_FINISHED:
-                    BLITZ_SKIP_BLANK(c,i_pos,pos);
-                    if (*c == ';') {
-                        ++c; ++pos;
-                    }
-                    BLITZ_SKIP_BLANK(c,i_pos,pos);
-                    if (pos < len_text) { /* when close tag contains whitespaces SKIP_BLANK will make pos>=len_text */
-                        if (BLITZ_DEBUG) php_printf("%u <> %u => error state\n", pos, len_text);
-                        state = BLITZ_CALL_STATE_ERROR;
-                    }
-                    ok = 0;
-                    break;
                 default:
                     ok = 0;
                     break;
@@ -1303,13 +1356,40 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
         }
     }
 
+    if (state == BLITZ_CALL_STATE_FINISHED) {
+        BLITZ_SKIP_BLANK(c, i_pos, pos);
+        if (*c == ';') {
+            ++c; ++pos;
+        } else if (*c == '|') {
+            ++c; ++pos;
+            BLITZ_SKIP_BLANK(c, i_pos, pos);
+            i_pos = 0;
+            p = buf;
+            BLITZ_SCAN_ALNUM(c, p, i_pos, i_symb);
+
+            // dirty hack to support "raw" or "escape" filters
+            // FIXME: change the parser so we can use something generic like {{ $var | bla("params", $p) }}
+            if (i_pos == 3 && buf[0] == 'r' && buf[1] == 'a' && buf[2] == 'w') {
+                node->escape_mode = BLITZ_ESCAPE_NO;
+            } else if (i_pos == 6 && buf[0] == 'e' && buf[1] == 's' && buf[2] == 'c' && buf[3] == 'a' && buf[4] == 'p' && buf[5] == 'e') {
+                node->escape_mode = BLITZ_ESCAPE_YES;
+            }
+            pos += i_pos;
+        }
+        BLITZ_SKIP_BLANK(c, i_pos, pos);
+        if (pos < len_text) { /* when close tag contains whitespaces SKIP_BLANK will make pos>=len_text */
+            if (BLITZ_DEBUG) php_printf("%u <> %u => error state\n", pos, len_text);
+            state = BLITZ_CALL_STATE_ERROR;
+        }
+    }
+
     if (state != BLITZ_CALL_STATE_FINISHED) {
         *error = BLITZ_CALL_ERROR;
-    } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && (node->n_args<2 || node->n_args>3)) {
+    } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && (node->n_args<2 || node->n_args > 3)) {
         *error = BLITZ_CALL_ERROR_IF;
-    } else if ((node->type == BLITZ_NODE_TYPE_INCLUDE) && (node->n_args!=1)) {
+    } else if ((node->type == BLITZ_NODE_TYPE_INCLUDE) && (node->n_args != 1)) {
         *error = BLITZ_CALL_ERROR_INCLUDE;
-    }
+    } 
 
     /* FIXME: check arguments for wrappers (escape, date, trim) */
 }
@@ -1365,7 +1445,7 @@ static inline void blitz_analizer_warn_unexpected_tag (blitz_tpl *tpl, unsigned 
     char *template_name = tpl->static_data.name;
     char *body = tpl->static_data.body;
 
-    php_error_docref(NULL TSRMLS_CC, E_WARNING,
+    blitz_error(tpl TSRMLS_CC, E_WARNING,
         "SYNTAX ERROR: unexpected %s (%s: line %lu, pos %lu)",
         human_tag_name[tag_id], template_name,
         get_line_number(body,pos), get_line_pos(body,pos)
@@ -1432,6 +1512,7 @@ static inline int blitz_analizer_create_parent(analizer_ctx *ctx, unsigned int g
     i_node->pos_end = current_close + close_len;
     i_node->pos_end_shift = 0;
     i_node->lexem_len = ctx->true_lexem_len;
+    i_node->lexem[i_node->lexem_len] = '\x0';
 
     stack_head = ctx->node_stack + ctx->node_stack_len;
 
@@ -1446,7 +1527,7 @@ static inline int blitz_analizer_create_parent(analizer_ctx *ctx, unsigned int g
     stack_head->last = i_node;
 
     if (ctx->node_stack_len >= BLITZ_ANALIZER_NODE_STACK_LEN) {
-        php_error_docref(NULL TSRMLS_CC, E_ERROR,
+        blitz_error(NULL TSRMLS_CC, E_WARNING,
             "INTERNAL ERROR: analizer stack length (%u) was exceeded when parsing template (%s: line %lu, pos %lu), recompile blitz with different BLITZ_ANALIZER_NODE_STACK_LEN or just don't use so complex templates", BLITZ_ANALIZER_NODE_STACK_LEN, ctx->tpl->static_data.name, 
             get_line_number(ctx->tpl->static_data.body, current_open), get_line_pos(ctx->tpl->static_data.body, current_open)
         );
@@ -1470,7 +1551,7 @@ static inline int blitz_analizer_create_parent(analizer_ctx *ctx, unsigned int g
 static inline void blitz_analizer_finalize_parent(analizer_ctx *ctx, unsigned int attach TSRMLS_DC)
 {
     analizer_stack_elem *stack_head = NULL;
-    blitz_node *i_node = ctx->node, *parent = NULL, *last = NULL;
+    blitz_node *i_node = ctx->node, *parent = NULL;
     blitz_tpl *tpl = NULL;
     char *body = NULL;
     unsigned long current_open = ctx->current_open;
@@ -1540,7 +1621,7 @@ static inline void blitz_analizer_finalize_parent(analizer_ctx *ctx, unsigned in
         i_node->hidden = 1;
         tpl = ctx->tpl;
         body = tpl->static_data.body;
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,
+        blitz_error(tpl TSRMLS_CC, E_WARNING,
             "SYNTAX ERROR: end with no begin (%s: line %lu, pos %lu)",
             tpl->static_data.name, get_line_number(body,current_open),get_line_pos(body, current_open)
         );
@@ -1562,8 +1643,8 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
     blitz_tpl *tpl = NULL;
     char *plex = NULL;
     blitz_node *i_node = NULL;
-    unsigned int n_nodes = 0;
     unsigned char is_alt_tag = 0;
+    unsigned char is_comment_tag = 0;
     char *body = NULL;
     analizer_stack_elem *stack_head = NULL;
 
@@ -1573,10 +1654,18 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
     current_close = tag->pos;
     current_open = ctx->pos_open;
 
-    is_alt_tag = (tag->tag_id == BLITZ_TAG_ID_CLOSE_ALT) ? 1 : 0;
+    if (tag->tag_id == BLITZ_TAG_ID_CLOSE_ALT) {
+         is_alt_tag = 1;
+    } else if (tag->tag_id == BLITZ_TAG_ID_COMMENT_CLOSE) {
+         is_comment_tag = 1;
+    }
+
     if (is_alt_tag) { 
         open_len = tpl->static_data.tag_open_alt_len;
         close_len = tpl->static_data.tag_close_alt_len;
+    } else if (is_comment_tag) {
+        open_len = tpl->static_data.tag_comment_open_len;
+        close_len = tpl->static_data.tag_comment_close_len;
     } else {
         open_len = tpl->static_data.tag_open_len;
         close_len = tpl->static_data.tag_close_len;
@@ -1594,7 +1683,7 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
 
     if (lexem_len > BLITZ_MAX_LEXEM_LEN) {
         if (tag->tag_id != BLITZ_TAG_ID_CLOSE_ALT) { /* HTML-comments fix */
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "SYNTAX ERROR: lexem is too long (%s: line %lu, pos %lu)",
                 tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
@@ -1603,7 +1692,7 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
     } 
 
     if (lexem_len <= 0) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,
+        blitz_error(tpl TSRMLS_CC, E_WARNING,
             "SYNTAX ERROR: zero length lexem (%s: line %lu, pos %lu)",
             tpl->static_data.name,
             get_line_number(body, current_open), get_line_pos(body, current_open)
@@ -1656,19 +1745,19 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
         if (is_alt_tag) return 1; /* alternative tags can be just HTML comment tags */
         i_node->hidden = 1;
         if (i_error == BLITZ_CALL_ERROR) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "SYNTAX ERROR: invalid method call (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body,current_open), get_line_pos(body,current_open)
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
         } else if (i_error == BLITZ_CALL_ERROR_IF) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "SYNTAX ERROR: invalid <if> syntax, only 2 or 3 arguments allowed (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body,current_open), get_line_pos(body,current_open)
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
         } else if (i_error == BLITZ_CALL_ERROR_INCLUDE) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "SYNTAX ERROR: invalid <inlcude> syntax, only 1 argument allowed (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body,current_open), get_line_pos(body,current_open)
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
         }
     } else {
@@ -1696,6 +1785,7 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
         i_node->pos_begin = current_open;
         i_node->pos_end = current_close + close_len;
         i_node->lexem_len = true_lexem_len;
+        i_node->lexem[true_lexem_len] = '\x0';
 
         ++(ctx->n_nodes);
         stack_head = ctx->node_stack + ctx->node_stack_len;
@@ -1779,7 +1869,7 @@ static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     blitz_list list_tag;
     blitz_string body_s;
     unsigned int tags_len = 0;
-    unsigned int n_open = 0, n_close = 0, n_nodes = 0;
+    unsigned int n_open = 0, n_close = 0;
     unsigned char i_tag_id = 0;
     unsigned char i_prev_state = 0;
     analizer_ctx ctx;
@@ -1986,7 +2076,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
         }
 
         if (BLITZ_DEBUG) {
-            php_printf("lexem: %s, pos_begin = %u, pos_begin_shift = %u, pos_end = %u, pos_end_shift = %u\n",
+            php_printf("lexem: %s, pos_begin = %lu, pos_begin_shift = %lu, pos_end = %lu, pos_end_shift = %lu\n",
                 i_node->lexem, i_node->pos_begin, i_node->pos_begin_shift, i_node->pos_end, i_node->pos_end_shift);
         }
 
@@ -2032,7 +2122,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                 i_node->pos_begin = shift_tmp;
                 i_node->pos_begin_shift = tpl->static_data.body_len - shift - 1;
                 if (BLITZ_DEBUG) {
-                    php_printf("new: pos_begin = %u, pos_begin_shift = %u\n", i_node->pos_begin, i_node->pos_begin_shift);
+                    php_printf("new: pos_begin = %lu, pos_begin_shift = %lu\n", i_node->pos_begin, i_node->pos_begin_shift);
                 }
             }
         }
@@ -2082,7 +2172,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
                 i_node->pos_end_shift = shift_tmp + 1;
                 i_node->pos_end = tpl->static_data.body_len - shift;
                 if (BLITZ_DEBUG) {
-                    php_printf("new: pos_end = %u, pos_end_shift = %u\n", i_node->pos_end, i_node->pos_end_shift);
+                    php_printf("new: pos_end = %lu, pos_end_shift = %lu\n", i_node->pos_end, i_node->pos_end_shift);
                 }
             }
         }
@@ -2091,13 +2181,12 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
 /* }}} */
 
 /* {{{ int blitz_exec_wrapper() */
-static inline int blitz_exec_wrapper(char **result, int *result_len, unsigned long type, int args_num, char **args, int *args_len, char *tmp_buf TSRMLS_DC)
+static inline int blitz_exec_wrapper(blitz_tpl *tpl, char **result, unsigned long *result_len, unsigned long type, int args_num, char **args, int *args_len, char *tmp_buf TSRMLS_DC)
 {
     /* following wrappers are to be added: escape, date, gettext, something else?... */
     if (type == BLITZ_NODE_TYPE_WRAPPER_ESCAPE) {
         char *quote_str = args[1];
         long quote_style = ENT_QUOTES;
-        char *charset = NULL;
         int all = 0, wrong_format = 0, quote_str_len = 0;
         
         if (quote_str) {
@@ -2121,16 +2210,14 @@ static inline int blitz_exec_wrapper(char **result, int *result_len, unsigned lo
         }
 
         if (wrong_format) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "escape format error (\"%s\"), available formats are ENT_QUOTES, ENT_COMPAT, ENT_NOQUOTES", quote_str
             );
             return 0;
         }
 
-        if (BLITZ_G(charset))
-            charset = BLITZ_G(charset);
+        *result = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], (size_t *)result_len, all, quote_style, NULL, 1 TSRMLS_CC);
 
-        *result = php_escape_html_entities((unsigned char *)args[0], args_len[0], result_len, all, quote_style, charset TSRMLS_CC);
     } else if (type == BLITZ_NODE_TYPE_WRAPPER_DATE) {
 /* FIXME: check how it works under Windows */
         char *format = NULL;
@@ -2146,7 +2233,7 @@ static inline int blitz_exec_wrapper(char **result, int *result_len, unsigned lo
         }
 
         if (!format) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "date syntax error"
             );
             return 0;
@@ -2187,7 +2274,7 @@ static inline int blitz_exec_wrapper(char **result, int *result_len, unsigned lo
 }
 /* }}} */
 
-static inline blitz_scope_stack_find(blitz_tpl *tpl, char *key, unsigned long key_len, zval ***zparam TSRMLS_DC) /* {{{ */
+static inline int blitz_scope_stack_find(blitz_tpl *tpl, char *key, unsigned long key_len, zval ***zparam TSRMLS_DC) /* {{{ */
 {
     unsigned long i = 1;
     unsigned long lookup_limit = BLITZ_G(scope_lookup_limit);
@@ -2208,7 +2295,7 @@ static inline blitz_scope_stack_find(blitz_tpl *tpl, char *key, unsigned long ke
 }
 /* }}} */
 
-static inline int blitz_fetch_var_by_path(zval ***zparam, const char *lexem, int lexem_len, zval *params, blitz_tpl *tpl TSRMLS_DC) /* {{{ */
+static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *lexem, int lexem_len, zval *params, blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
     char key[256];
@@ -2219,7 +2306,7 @@ static inline int blitz_fetch_var_by_path(zval ***zparam, const char *lexem, int
     last_pos = 0;
     j = lexem_len - 1;
     /* walk through the path */
-    for (i=0; i<lexem_len; i++, j--) {
+    for (i = 0; i < lexem_len; i++, j--) {
         is_last = (j == 0);
         if (('.' == lexem[i]) || is_last) {
             key_len = i - last_pos + is_last;
@@ -2367,8 +2454,8 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             if (is_var || is_var_path) { /* argument is variable  */
                 if (is_var &&
                     (
-                        (iteration_params && SUCCESS == zend_hash_find(Z_ARRVAL_P(iteration_params),arg->name,1+arg->len,(void**)&z))
-                        || (SUCCESS == zend_hash_find(tpl->hash_globals,arg->name,1+arg->len,(void**)&z))
+                        (iteration_params && SUCCESS == zend_hash_find(Z_ARRVAL_P(iteration_params), arg->name, 1 + arg->len, (void**)&z))
+                        || (SUCCESS == zend_hash_find(tpl->hash_globals, arg->name, 1 + arg->len, (void**)&z))
                     ))
                 {
                     is_found = 1;
@@ -2380,18 +2467,20 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
                 }
 
                 if (is_found) {
+// FIXME: escape !!!
                     convert_to_string_ex(z);
                     buf_len = Z_STRLEN_PP(z);
-                    BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
-                    *p_result = (char*)memcpy(*p_result,Z_STRVAL_PP(z),buf_len);
+                    BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result, *p_result);
+                    *p_result = (char*)memcpy(*p_result, Z_STRVAL_PP(z), buf_len);
                     *result_len += buf_len;
                     p_result+=*result_len;
                     (*result)[*result_len] = '\0';
                 }
             } else { /* argument is string or number */
+// FIXME: escape !!!
                 buf_len = (unsigned long)arg->len;
-                BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
-                *p_result = (char*)memcpy(*p_result,node->args[i_arg].name,buf_len);
+                BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result, *p_result);
+                *p_result = (char*)memcpy(*p_result, node->args[i_arg].name, buf_len);
                 *result_len += buf_len;
                 p_result+=*result_len;
                 (*result)[*result_len] = '\0';
@@ -2407,8 +2496,12 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
         blitz_tpl *itpl = NULL;
         int res = 0, found = 0;
 
-        if (BLITZ_G(disable_include)) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "disable_include restriction in effect: include() ignored");
+        if (!BLITZ_G(enable_include)) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING, 
+                "includes are disabled by blitz.enable_include, line %lu, pos %lu", 
+                get_line_number(tpl->static_data.body, node->pos_begin),
+                get_line_pos(tpl->static_data.body, node->pos_begin)
+            );
             return 0;
         }
 
@@ -2453,12 +2546,12 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
         char *wrapper_args[BLITZ_WRAPPER_MAX_ARGS];
         int  wrapper_args_len[BLITZ_WRAPPER_MAX_ARGS];
         char *str = NULL;
-        int str_len = 0;
+        unsigned long str_len = 0;
         call_arg *p_arg = NULL;
         int i = 0;
         int wrapper_args_num = 0;
 
-        for(i=0; i<BLITZ_WRAPPER_MAX_ARGS; i++) {
+        for(i=0; i < BLITZ_WRAPPER_MAX_ARGS; i++) {
             wrapper_args[i] = NULL;
             wrapper_args_len[i] = 0;
 
@@ -2486,11 +2579,11 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         }
 
-        if (blitz_exec_wrapper(&str, &str_len, node->type, wrapper_args_num, wrapper_args, wrapper_args_len, tmp_buf TSRMLS_CC)) {
+        if (blitz_exec_wrapper(tpl, &str, &str_len, node->type, wrapper_args_num, wrapper_args, wrapper_args_len, tmp_buf TSRMLS_CC)) {
             BLITZ_REALLOC_RESULT(str_len, new_len, *result_len, *result_alloc_len, *result, *p_result);
             *p_result = (char*)memcpy(*p_result, str, str_len);
             *result_len += str_len;
-            p_result+=*result_len;
+            p_result +=*result_len;
             (*result)[*result_len] = '\0';
             if (str && str != tmp_buf) {
                 efree(str);
@@ -2519,7 +2612,6 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
     int predefined = -1, has_iterations = 0;
     zval **old_caller_iteration = NULL; 
     blitz_tpl *tpl_caller = NULL;
-    zend_function *func = NULL;
     HashTable *function_table = NULL;
    
     MAKE_STD_ZVAL(zmethod);
@@ -2591,16 +2683,44 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
     old_caller_iteration = tpl_caller->caller_iteration;
     tpl_caller->caller_iteration = iteration_params;
 
-    // class method or external (PHP/plugin) function?
+    /*
+        CALLBACK SETTINGS:
+            * enable_callbacks - all callbacks, PHP and object methods, checked externally
+            * enable_php_callbacks - just PHP callbacks
+            * php_callbacks_first - PHP callbacks have high priority in cases when it's unclear
+              if it's PHP callback or template object callback
+        CALLBACK PRIORITIES:
+            * Call object method if it's a this::call(). 
+            * Call PHP method if it's any other namespace::call() and PHP calls are enabled.
+            * If PHP-calls are enabled and have highest priority - call PHP method and then object method.
+              Otherwise, call object method and then PHP if PHP cals are enabled.
+    */
+
     function_table = &Z_OBJCE_P(obj)->function_table;
     if (node->namespace_code == BLITZ_NODE_THIS_NAMESPACE) {
         method_res = call_user_function_ex(function_table, &obj, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
     } else if (node->namespace_code) {
-        method_res = call_user_function_ex(NULL, NULL, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
+        if (BLITZ_G(enable_php_callbacks)) {
+            method_res = call_user_function_ex(NULL, NULL, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
+        } else {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "PHP callbacks are disabled by blitz.enable_php_callbacks, %s call was ignored, line %lu, pos %lu",
+                node->lexem,
+                get_line_number(tpl->static_data.body, node->pos_begin),
+                get_line_pos(tpl->static_data.body, node->pos_begin)
+            );
+        }
     } else {
-        method_res = call_user_function_ex(NULL, NULL, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
-        if (method_res == FAILURE) {
+        if (BLITZ_G(php_callbacks_first) && BLITZ_G(enable_php_callbacks)) {
+            method_res = call_user_function_ex(NULL, NULL, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
+            if (method_res == FAILURE) {
+                method_res = call_user_function_ex(function_table, &obj, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
+            }
+        } else {
             method_res = call_user_function_ex(function_table, &obj, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
+            if (method_res == FAILURE && BLITZ_G(enable_php_callbacks)) {
+                method_res = call_user_function_ex(NULL, NULL, zmethod, &retval, node->n_args, args, 1, NULL TSRMLS_CC);
+            }
         }
     }
 
@@ -2609,13 +2729,13 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
     tpl->flags &= ~BLITZ_FLAG_CALLED_USER_METHOD;
 
     if (method_res == FAILURE) { /* failure: */
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,
+        blitz_error(tpl TSRMLS_CC, E_WARNING,
             "INTERNAL ERROR: calling function \"%s\" failed, check if this function exists or parameters are valid", node->lexem);
     } else if (retval) { /* retval can be empty even in success: method throws exception */
         convert_to_string_ex(&retval);
         buf_len = Z_STRLEN_P(retval);
-        BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,*p_result);
-        *p_result = (char*)memcpy(*p_result,Z_STRVAL_P(retval), buf_len);
+        BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result, *p_result);
+        *p_result = (char*)memcpy(*p_result, Z_STRVAL_P(retval), buf_len);
         *result_len += buf_len;
         p_result+=*result_len;
         (*result)[*result_len] = '\0';
@@ -2638,98 +2758,83 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 }
 /* }}} */
 
-/* {{{ int blitz_exec_var() */
-static inline void blitz_exec_var(blitz_tpl *tpl, const char *lexem, zval *params, char **result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
+/* {{{ void blitz_exec_var() */
+static inline void blitz_exec_var(
+    blitz_tpl *tpl, 
+    char *name, 
+    unsigned long len,
+    unsigned char is_path,
+    unsigned char escape_mode,
+    unsigned long pos,
+    zval *params, 
+    char **result, 
+    unsigned long *result_len, 
+    unsigned long *result_alloc_len TSRMLS_DC)
 {
-    /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
-    unsigned int lexem_len = strlen(lexem);
-    unsigned int lexem_len_p1 = lexem_len + 1;
-    unsigned long buf_len = 0, new_len = 0;
     zval **zparam = NULL;
+    long predefined = -1;
+    unsigned long var_len = 0, new_len = 0;
     char *p_result = *result;
-    int predefined = -1;
+    char *escaped = NULL;
     char predefined_buf[BLITZ_PREDEFINED_BUF_LEN];
+    unsigned int found = 0;
 
-    BLITZ_GET_PREDEFINED_VAR(tpl, lexem, lexem_len, predefined);
-    if (predefined>=0) {
+    found = blitz_extract_var(tpl, name, len, is_path, params, &predefined, &zparam TSRMLS_CC);
+
+    if (predefined >= 0) {
         snprintf(predefined_buf, BLITZ_PREDEFINED_BUF_LEN, "%u", predefined);
-        buf_len = strlen(predefined_buf);
-        BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
-        p_result = (char*)memcpy(p_result, predefined_buf, buf_len);
-        *result_len += buf_len;
-        p_result+=*result_len;
+        var_len = strlen(predefined_buf);
+        BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+        p_result = (char*)memcpy(p_result, predefined_buf, var_len);
+        *result_len += var_len;
+        p_result += *result_len;
         (*result)[*result_len] = '\0';
-    } else {
-        if ( 
-            (params && (SUCCESS == zend_hash_find(Z_ARRVAL_P(params), (char *)lexem, lexem_len_p1, (void**)&zparam)))
-            ||
-            (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, (char *)lexem, lexem_len_p1, (void**)&zparam)))
-            || 
-            (tpl->scope_stack_pos && BLITZ_G(scope_lookup_limit) && blitz_scope_stack_find(tpl, (char *)lexem, lexem_len_p1, &zparam TSRMLS_CC))
-        ) {
-            if (Z_TYPE_PP(zparam) != IS_STRING) {
-                zval p;
+        return;
+    } 
 
-                p = **zparam;
-                zval_copy_ctor(&p);
-                convert_to_string(&p);
-
-                buf_len = Z_STRLEN(p);
-                BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result,p_result);
-                p_result = (char*)memcpy(p_result, Z_STRVAL(p), buf_len);
-				zval_dtor(&p);
-            } else {
-               buf_len = Z_STRLEN_PP(zparam);
-               BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
-               p_result = (char*)memcpy(p_result,Z_STRVAL_PP(zparam), buf_len);
-            }
-
-            *result_len += buf_len;
-            p_result+=*result_len;
-            (*result)[*result_len] = '\0';
-        }
+    if (!found || !zparam) { // variable wasn't found
+        return;
     }
-}
-/* }}} */
 
-/* {{{ int blitz_exec_var_path() */
-static inline void blitz_exec_var_path(blitz_tpl *tpl, const char *lexem, zval *params, char **result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
-{
-    /* FIXME: there should be just node->lexem_len+1, but method.phpt test becomes broken. REMOVE STRLEN! */
-    unsigned int lexem_len = strlen(lexem);
-    unsigned long buf_len = 0, new_len = 0;
-    char *p_result = *result;
-    zval **elem = NULL;
-
-    if (!blitz_fetch_var_by_path(&elem, lexem, lexem_len, params, tpl TSRMLS_CC))
-        return;
-
-    if (!elem)
-        return;
-
-    if (Z_TYPE_PP(elem) != IS_STRING) {
+    if (Z_TYPE_PP(zparam) != IS_STRING) {
         zval p;
-        
-        p = **elem;
+
+        if (Z_TYPE_PP(zparam) == IS_ARRAY) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING, "Array to string conversion for variable \"%s\" (%s: line %u, position %u)", 
+                name, tpl->static_data.name, get_line_number(tpl->static_data.body, pos), get_line_pos(tpl->static_data.body, pos));
+            return;
+        } 
+
+        p = **zparam;
         zval_copy_ctor(&p);
         convert_to_string(&p);
 
-        buf_len = Z_STRLEN(p);
-        BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
-        p_result = (char*)memcpy(p_result,Z_STRVAL(p), buf_len);
+        var_len = Z_STRLEN(p);
+        BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+        p_result = (char*)memcpy(p_result, Z_STRVAL(p), var_len);
         zval_dtor(&p);
     } else {
-       buf_len = Z_STRLEN_PP(elem);
-       BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
-       p_result = (char*)memcpy(p_result,Z_STRVAL_PP(elem), buf_len);
+        if (escape_mode == BLITZ_ESCAPE_YES || ((escape_mode == BLITZ_ESCAPE_DEFAULT) && BLITZ_G(auto_escape))) {
+#if defined(ENT_SUBSTITUTE) && defined(ENT_DISALLOWED) && defined(ENT_HTML5)
+            long quote_style = ENT_QUOTES | ENT_SUBSTITUTE | ENT_DISALLOWED | ENT_HTML5;
+#else
+            long quote_style = ENT_QUOTES;
+#endif
+            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_PP(zparam), Z_STRLEN_PP(zparam), (size_t *)&var_len, 0, quote_style, NULL, 1 TSRMLS_CC);
+            BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+            p_result = (char*)memcpy(p_result, escaped, var_len);
+        } else {
+            var_len = Z_STRLEN_PP(zparam);
+            BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+            p_result = (char*)memcpy(p_result, Z_STRVAL_PP(zparam), var_len);
+        }
+
     }
 
-    *result_len += buf_len;
-    p_result+=*result_len;
+    *result_len += var_len;
+    p_result += *result_len;
     (*result)[*result_len] = '\0';
-
 }
-/* }}} */
 
 /* {{{ int blitz_exec_context() */
 static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_params, zval *id,
@@ -2742,9 +2847,6 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     zval **ctx_iterations = NULL;
     zval **ctx_data = NULL;
     call_arg *arg = node->args;
-    zval **z = NULL;
-    int predefined = -1;
-    int use_scope = 0;
 
     if (BLITZ_DEBUG) php_printf("blitz_exec_context: %s\n",node->args->name);
 
@@ -2794,7 +2896,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                 }
                 /* mix of num/str errors: array(0=>array(), 'key' => 'val') */
                 if (IS_ARRAY != Z_TYPE_PP(ctx_data)) {
-                    php_error_docref(NULL TSRMLS_CC, E_WARNING,
+                    blitz_error(tpl TSRMLS_CC, E_WARNING,
                         "ERROR: You have a mix of numerical and non-numerical keys in the iteration set "
                         "(context: %s, line %lu, pos %lu), key was ignored",
                         node->args[0].name,
@@ -2815,34 +2917,50 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                 zend_hash_move_forward_ex(Z_ARRVAL_PP(ctx_iterations), NULL);
             }
         } else {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: non existant hash key");
+            blitz_error(tpl TSRMLS_CC, E_WARNING, "INTERNAL ERROR: non existant hash key");
         }
     }
 }
 /* }}} */
 
 /* {{{ int blitz_extract_var() */
-static inline void blitz_extract_var (
+static inline unsigned int blitz_extract_var (
     blitz_tpl *tpl,
-    call_arg *a,
+    char *name,
+    unsigned long len,
+    unsigned char is_path,
     zval *params,
     long *l, 
     zval ***z TSRMLS_DC)
 {
-    *l = -1;
-    BLITZ_GET_PREDEFINED_VAR(tpl, a->name, a->len, *l);
+    unsigned long len_p1 = len + 1;
 
-    if (*l == -1) {
-        if (a->type == BLITZ_ARG_TYPE_VAR) {
-            if (SUCCESS != zend_hash_find(Z_ARRVAL_P(params), a->name, a->len + 1, (void**)z)) {
-                if (BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos) {
-                    blitz_scope_stack_find(tpl, a->name, a->len + 1, z TSRMLS_CC);
-                }
-            }
-        } else if (a->type == BLITZ_ARG_TYPE_VAR_PATH) {
-            blitz_fetch_var_by_path(z, a->name, a->len, params, tpl TSRMLS_CC);
-        }
+    *l = -1;
+    BLITZ_GET_PREDEFINED_VAR(tpl, name, len, *l);
+
+    if (*l >= 0) {
+        return 1;
     }
+
+    if (is_path) {
+        return blitz_fetch_var_by_path(z, name, len, params, tpl TSRMLS_CC);
+    } else {
+        if (params && SUCCESS == zend_hash_find(Z_ARRVAL_P(params), name, len_p1, (void**)z)) {
+            return 1;
+        }
+
+        if (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, name, len_p1, (void**)z))) {
+            return 1;
+        }
+
+        if (tpl->scope_stack_pos && BLITZ_G(scope_lookup_limit) && blitz_scope_stack_find(tpl, name, len_p1, z TSRMLS_CC)) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    return 1;
 }
 /* }}} */
 
@@ -2885,6 +3003,8 @@ static inline void blitz_check_arg (
             }
         } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
             *not_empty = (arg->name[0] == 't');
+        } else {
+            BLITZ_ARG_NOT_EMPTY(*arg, NULL, *not_empty);
         }
 
         if (*not_empty == -1) // "unknown" is equal to "empty"
@@ -2894,10 +3014,11 @@ static inline void blitz_check_arg (
 /* }}} */
 
 #define BLITZ_PHP_TYPE_MAX IS_CONSTANT_ARRAY
-#define BLITZ_COMPARE_UNKNOWN   0
-#define BLITZ_COMPARE_LONG      1
-#define BLITZ_COMPARE_DOUBLE    2
-#define BLITZ_COMPARE_STRING    3
+#define BLITZ_COMPARE_UNKNOWN       0
+#define BLITZ_COMPARE_UNDEFINED_VAR 1
+#define BLITZ_COMPARE_LONG          2
+#define BLITZ_COMPARE_DOUBLE        3
+#define BLITZ_COMPARE_STRING        4
 
 #define BLITZ_CAST_ARG_BOOL         10
 #define BLITZ_CAST_ARG_LONG         11
@@ -2943,14 +3064,13 @@ static inline void blitz_check_expr (
     zval *parent_params,
     int *is_true TSRMLS_DC)
 {
-    long predefined = -1, use_scope = 0, cmp = 0, i = 0;
+    long predefined = -1, cmp = 0;
+    unsigned long i = 0;
     call_arg *arg = NULL, *expr_arg = NULL;
     call_arg *a[2] = {NULL, NULL};
     unsigned char t[2] = {0, 0};
     unsigned char c = 0;
-    zval **x = NULL;
     zval **z[] = {NULL, NULL};
-    unsigned char use_numeric = 0;
     char *s1 = NULL, *s2 = NULL;
     long l1 = 0, l2 = 0;
     double d1 = 0.0, d2 = 0.0;
@@ -2959,11 +3079,14 @@ static inline void blitz_check_expr (
     a[0] = &node->args[0];
     a[1] = &node->args[2];
 
+    if (BLITZ_DEBUG)
+        php_printf("*** FUNCTION *** blitz_check_expr\n");
+
     for (i = 0; i < 2; i++) {
         c = BLITZ_COMPARE_UNKNOWN;
         arg = a[i];
         if (arg->type == BLITZ_ARG_TYPE_VAR || arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
-            blitz_extract_var(tpl, arg, parent_params, &predefined, &z[i] TSRMLS_CC);
+            blitz_extract_var(tpl, arg->name, arg->len, (arg->type == BLITZ_ARG_TYPE_VAR_PATH), parent_params, &predefined, &z[i] TSRMLS_CC);
             if (predefined > 0) {
                 if (i) {
                     l2 = predefined;
@@ -2978,6 +3101,8 @@ static inline void blitz_check_expr (
                 } else if ((c == IS_LONG) || (c == IS_BOOL) || (c == IS_DOUBLE)) {
                     c = BLITZ_COMPARE_DOUBLE;                
                 }
+            } else {
+                c = BLITZ_COMPARE_UNDEFINED_VAR;
             }
         } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
             c = BLITZ_CAST_ARG_BOOL;
@@ -2988,11 +3113,19 @@ static inline void blitz_check_expr (
         } else if (arg->type == BLITZ_ARG_TYPE_STR) {
             c = BLITZ_COMPARE_STRING;
         }
+        if (BLITZ_DEBUG) 
+            php_printf("type#%lu = %u\n", i, c);
+
         t[i] = c;
     }
 
     if ((t[0] == BLITZ_COMPARE_UNKNOWN) || (t[1] == BLITZ_COMPARE_UNKNOWN)) {
-        *is_true = -1;
+        *is_true = - 1;
+    } else if ((t[0] == BLITZ_COMPARE_UNDEFINED_VAR) || (t[1] == BLITZ_COMPARE_UNDEFINED_VAR)) {
+        switch (expr_arg->type) {
+            case BLITZ_EXPR_OPERATOR_E: *is_true = 0; break;
+            default: *is_true = 0;
+        }
     } else {
         if ((t[0] == BLITZ_COMPARE_STRING) && (t[1] == BLITZ_COMPARE_STRING)) {
             BLITZ_DO_CAST_TO_STRING(s1, l1, z[0], a[0]);
@@ -3043,15 +3176,9 @@ static void blitz_exec_if_context(
     unsigned long *result_alloc_len,
     unsigned long *jump TSRMLS_DC)
 {
-    char *key = NULL;
-    unsigned int key_len = 0;
-    unsigned long key_index = 0;
-    int check_key = 0, condition = 0, is_true = 0;
-    zval **ctx_iterations = NULL;
-    zval **ctx_data = NULL;
-    call_arg *arg = NULL;
-    blitz_node *node = NULL, *subnodes = NULL;
-    unsigned int i = 0, i_jump = 0, n_subnodes = 0, n_nodes = 0, pos_end = 0;
+    int condition = 0, is_true = 0;
+    blitz_node *node = NULL;
+    unsigned int i = 0, i_jump = 0, n_nodes = 0, pos_end = 0;
 
     node = tpl->static_data.nodes + node_id;
     i = node_id;
@@ -3068,6 +3195,7 @@ static void blitz_exec_if_context(
         if (node->type == BLITZ_NODE_TYPE_ELSE_CONTEXT) {
             condition = 1;
         } else { 
+
             if (node->n_args == 3) {
                 blitz_check_expr(tpl, node, parent_params, &is_true TSRMLS_CC);
             } else {
@@ -3089,7 +3217,7 @@ static void blitz_exec_if_context(
         if (!condition) { // if condition is false - move to the next node in this chain
             pos_end = node->pos_end;
             i_jump = 0;
-            while (node = node->next) {
+            while ((node = node->next)) {
                 if (node->pos_begin >= pos_end || node->pos_begin_shift >= pos_end) { // vars have pos_begin_shift = 0
                     pos_end = node->pos_end;
                     if (node->type == BLITZ_NODE_TYPE_ELSEIF_CONTEXT || node->type == BLITZ_NODE_TYPE_ELSE_CONTEXT) {
@@ -3113,7 +3241,7 @@ static void blitz_exec_if_context(
 
             // find the end of this chain
             pos_end = node->pos_end;
-            while (node = node->next) {
+            while ((node = node->next)) {
                 if (node->pos_begin >= pos_end || node->pos_begin_shift >= pos_end) {
                     pos_end = node->pos_end;
                     if (node->type != BLITZ_NODE_TYPE_ELSEIF_CONTEXT || node->type != BLITZ_NODE_TYPE_ELSE_CONTEXT) {
@@ -3169,7 +3297,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
 
         /* between nodes */
         if (current_open > last_close) {
-            if (BLITZ_DEBUG) php_printf("copy part netween nodes [%u,%u]\n", last_close, current_open);
+            if (BLITZ_DEBUG) php_printf("copy part netween nodes [%lu,%lu]\n", last_close, current_open);
             buf_len = current_open - last_close;
             BLITZ_REALLOC_RESULT(buf_len,new_len,*result_len,*result_alloc_len,*result,p_result);
             p_result = (char*)memcpy(p_result, tpl->static_data.body + last_close, buf_len); 
@@ -3179,10 +3307,9 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
 
         if (node->lexem && !node->hidden) {
-            if (node->type == BLITZ_NODE_TYPE_VAR) { 
-                blitz_exec_var(tpl, node->lexem, parent_params, result, result_len, result_alloc_len TSRMLS_CC);
-            } else if (node->type == BLITZ_NODE_TYPE_VAR_PATH) {
-                blitz_exec_var_path(tpl, node->lexem, parent_params, result, result_len, result_alloc_len TSRMLS_CC);
+            if ((node->type == BLITZ_NODE_TYPE_VAR) || (node->type == BLITZ_NODE_TYPE_VAR_PATH)) { 
+                blitz_exec_var(tpl, node->lexem, node->lexem_len, node->type == BLITZ_NODE_TYPE_VAR_PATH, node->escape_mode, node->pos_begin, 
+                    parent_params, result, result_len, result_alloc_len TSRMLS_CC);
             } else if (BLITZ_IS_METHOD(node->type)) {
                 if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
                     BLITZ_LOOP_MOVE_FORWARD(tpl);
@@ -3199,10 +3326,19 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
                             result, &p_result, result_len, result_alloc_len, tpl->tmp_buf TSRMLS_CC
                         );
                     } else {
-                        blitz_exec_user_method(
-                            tpl, node, &iteration_params, id,
-                            result, &p_result, result_len, result_alloc_len TSRMLS_CC
-                        );
+                        if (BLITZ_G(enable_callbacks)) {
+                            blitz_exec_user_method(
+                                tpl, node, &iteration_params, id,
+                                result, &p_result, result_len, result_alloc_len TSRMLS_CC
+                            );
+                        } else {
+                            blitz_error(tpl TSRMLS_CC, E_WARNING, 
+                                "callbacks are disabled by blitz.enable_callbacks, %s call was ignored, line %lu, pos %lu",
+                                node->lexem,
+                                get_line_number(tpl->static_data.body, node->pos_begin), 
+                                get_line_pos(tpl->static_data.body, node->pos_begin)
+                            );
+                        }
                     }
                 }
             }
@@ -3210,7 +3346,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
 
         last_close = node->pos_end;
         if (n_jump) {
-            if (BLITZ_DEBUG) php_printf("JUMP FROM: %s, n_jump = %u\n", node->lexem, n_jump);
+            if (BLITZ_DEBUG) php_printf("JUMP FROM: %s, n_jump = %lu\n", node->lexem, n_jump);
             i = 0;
             while(i++ < n_jump) {
                 node = node->next;
@@ -3309,22 +3445,22 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
 }
 /* }}} */
 
-static inline int blitz_normalize_path(char **dest, const char *local, int local_len, char *global, int global_len TSRMLS_DC) /* {{{ */
+static inline int blitz_normalize_path(blitz_tpl *tpl, char **dest, const char *local, int local_len, char *global, int global_len TSRMLS_DC) /* {{{ */
 {
     int buf_len = 0;
     char *buf = *dest;
     register char  *p = NULL, *q = NULL;
 
     if (local_len && local[0] == '/') {
-        if (local_len+1>BLITZ_CONTEXT_PATH_MAX_LEN) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "context path %s is too long (limit %d)",local,BLITZ_CONTEXT_PATH_MAX_LEN);
+        if (local_len + 1 > BLITZ_CONTEXT_PATH_MAX_LEN) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING, "context path %s is too long (limit %d)", local, BLITZ_CONTEXT_PATH_MAX_LEN);
             return 0;
         }
         memcpy(buf, local, local_len + 1);
         buf_len = local_len;
     } else {
         if (local_len + global_len + 2 > BLITZ_CONTEXT_PATH_MAX_LEN) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "context path %s is too long (limit %d)",local,BLITZ_CONTEXT_PATH_MAX_LEN);
+            blitz_error(tpl TSRMLS_CC, E_WARNING, "context path %s is too long (limit %d)", local, BLITZ_CONTEXT_PATH_MAX_LEN);
             return 0;
         }
 
@@ -3430,8 +3566,8 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
         return 1;
     }
 
-    *p++;
-    while (i<pmax) {
+    p++;
+    while (i < pmax) {
         if (*p == '/' || i == k) {
             j = i - ilast;
             key_len = j + (i == k ? 1 : 0);
@@ -3462,7 +3598,7 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
             }
 
             if (Z_TYPE_PP(tmp) != IS_ARRAY) {
-                php_error_docref(NULL TSRMLS_CC, E_WARNING,
+                blitz_error(tpl TSRMLS_CC, E_WARNING,
                     "OPERATION ERROR: unable to iterate context \"%s\" in \"%s\" "
                     "because parent iteration was not set as array of arrays before. "
                     "Correct your previous iteration sets.", key, path);
@@ -3515,7 +3651,7 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
             }
 
             if (Z_TYPE_PP(tmp) != IS_ARRAY) {
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, 
+                blitz_error(tpl TSRMLS_CC, E_WARNING, 
                     "OPERATION ERROR: unable to iterate context \"%s\" in \"%s\" "
                     "because it was set as \"scalar\" value before. "
                     "Correct your previous iteration sets.", key, path);
@@ -3559,7 +3695,7 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
     }
 
     if (SUCCESS != zend_hash_get_current_data(Z_ARRVAL_PP(tmp), (void **) &tpl->last_iteration)) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,
+        blitz_error(tpl TSRMLS_CC, E_WARNING,
             "INTERNAL ERROR: unable fetch last_iteration in blitz_iterate_by_path");
         tpl->last_iteration = NULL;
     }
@@ -3613,13 +3749,13 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
         return 1;
     }
 
-    if (i>=pmax) {
+    if (i >= pmax) {
         return 0;
     }
 
-    *p++;
+    p++;
     if (BLITZ_DEBUG) php_printf("%d/%d\n", i, pmax);
-    while (i<pmax) {
+    while (i < pmax) {
         if (BLITZ_DEBUG) php_printf("%d/%d\n", i, pmax);
         if (*p == '/' || i == k) {
             j = i - ilast;
@@ -3663,7 +3799,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
 
     /* can be not an array (tried to iterate scalar) */
     if (IS_ARRAY != Z_TYPE_PP(tmp)) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "ERROR: unable to find context '%s', "
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "ERROR: unable to find context '%s', "
             "it was set as \"scalar\" value - check your iteration params", path); 
         return 0;
     }
@@ -3699,7 +3835,6 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
 
 static void blitz_build_fetch_index_node(blitz_tpl *tpl, blitz_node *node, const char *path, unsigned int path_len) /* {{{ */
 {
-    unsigned long j = 0;
     unsigned int current_path_len = 0;
     char current_path[BLITZ_MAX_FETCH_INDEX_KEY_SIZE] = "";
     char *lexem = NULL;
@@ -3755,7 +3890,6 @@ static void blitz_build_fetch_index_node(blitz_tpl *tpl, blitz_node *node, const
 
 static int blitz_build_fetch_index(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
-    unsigned long i = 0, last_close = 0;
     char path[BLITZ_MAX_FETCH_INDEX_KEY_SIZE] = "";
     unsigned int path_len = 0;
     blitz_node *i_node = NULL;
@@ -3772,8 +3906,8 @@ static int blitz_build_fetch_index(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     if (BLITZ_DEBUG) {
         zval *elem = NULL;
         char *key = NULL;
-        int key_len = 0;
-        long index = 0;
+        unsigned int key_len = 0;
+        unsigned long index = 0;
         HashTable *ht = tpl->static_data.fetch_index;
 
         zend_hash_internal_pointer_reset(ht);
@@ -3827,7 +3961,7 @@ static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, const char *path, 
     if (SUCCESS == zend_hash_find(tpl->static_data.fetch_index, (char *)path, path_len + 1, (void**)&z)) {
         i_node = tpl->static_data.nodes + Z_LVAL_PP(z);
     } else {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "cannot find context %s in template %s", path, tpl->static_data.name);
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "cannot find context %s in template %s", path, tpl->static_data.name);
         return 0;
     }
 
@@ -3880,7 +4014,7 @@ static inline int blitz_prepare_iteration(blitz_tpl *tpl, const char *path, int 
     } else {
         int current_len = strlen(tpl->current_path);
         int norm_len = 0;
-        res = blitz_normalize_path(&tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
+        res = blitz_normalize_path(tpl, &tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
 
         if (!res) return 0;
         norm_len = strlen(tpl->tmp_buf);
@@ -4026,7 +4160,7 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr TSR
         res = blitz_merge_iterations_by_str_keys(target_iteration, input_arr TSRMLS_CC);
     } else {
         if (!tpl->current_iteration_parent) {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "INTERNAL ERROR: unable to set into current_iteration_parent, is NULL");
+            blitz_error(tpl TSRMLS_CC, E_WARNING, "INTERNAL ERROR: unable to set into current_iteration_parent, is NULL");
             return 0;
         }
         target_iteration = tpl->current_iteration_parent;
@@ -4046,7 +4180,7 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr TSR
 /* {{{ proto new Blitz([string filename]) */
 static PHP_FUNCTION(blitz_init)
 {
-    blitz_tpl *tpl;
+    blitz_tpl *tpl = NULL;
     int filename_len = 0, ret;
     char *filename = NULL;
 
@@ -4055,12 +4189,12 @@ static PHP_FUNCTION(blitz_init)
     }
 
     if (filename_len >= MAXPATHLEN) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "Filename exceeds the maximum allowed length of %d characters", MAXPATHLEN);
+        blitz_error(NULL TSRMLS_CC, E_WARNING, "Filename exceeds the maximum allowed length of %d characters", MAXPATHLEN);
         RETURN_FALSE;
     }
 
     if (getThis() && zend_hash_exists(Z_OBJPROP_P(getThis()), "tpl", sizeof("tpl"))) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "ERROR: the object has already been initialized");
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "ERROR: the object has already been initialized");
         RETURN_FALSE;
     }
 
@@ -4077,7 +4211,7 @@ static PHP_FUNCTION(blitz_init)
         }
     }
 
-    ret = zend_list_insert(tpl, le_blitz);
+    ret = zend_list_insert(tpl, le_blitz TSRMLS_CC);
     add_property_resource(getThis(), "tpl", ret);
 }
 /* }}} */
@@ -4099,7 +4233,7 @@ static PHP_FUNCTION(blitz_load)
     }
 
     if (tpl->static_data.body) {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,"INTERNAL ERROR: template is already loaded");
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "INTERNAL ERROR: template is already loaded");
         RETURN_FALSE;
     }
 
@@ -4113,7 +4247,12 @@ static PHP_FUNCTION(blitz_load)
         RETURN_FALSE;
     }
 
-    RETURN_TRUE;
+    if (tpl->error == NULL) {
+        RETURN_TRUE;
+    } else {
+        RETURN_FALSE;
+    }
+
 }
 /* }}} */
 
@@ -4240,7 +4379,7 @@ static PHP_FUNCTION(blitz_has_context)
     }
 
     current_len = strlen(tpl->current_path);
-    if (!blitz_normalize_path(&tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC)) {
+    if (!blitz_normalize_path(tpl, &tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC)) {
         RETURN_FALSE;
     }
     norm_len = strlen(tpl->tmp_buf);
@@ -4353,7 +4492,7 @@ static PHP_FUNCTION(blitz_context)
         return;
     }
 
-    res = blitz_normalize_path(&tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
+    res = blitz_normalize_path(tpl, &tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
     if (res) {
         norm_len = strlen(tpl->tmp_buf);
     }
@@ -4458,7 +4597,7 @@ static PHP_FUNCTION(blitz_block) {
     } else if (IS_ARRAY == Z_TYPE_P(p1)) {
         input_arr = p1;
     } else {
-        php_error_docref(NULL TSRMLS_CC, E_WARNING, "first pararmeter can be only NULL, string or array");
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "first pararmeter can be only NULL, string or array");
         RETURN_FALSE;
     }
 
@@ -4481,7 +4620,7 @@ static PHP_FUNCTION(blitz_block) {
             zval_copy_ctor(*tpl->last_iteration);
             INIT_PZVAL(*tpl->last_iteration);
         } else {
-            php_error_docref(NULL TSRMLS_CC, E_WARNING,
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "INTERNAL ERROR: last_iteration is empty, it's a bug. Send the test case to developer, please.\n"); 
             RETURN_FALSE;
         }
@@ -4568,7 +4707,7 @@ static PHP_FUNCTION(blitz_fetch)
     }
 
     /* find corresponding iteration data */
-    res = blitz_normalize_path(&tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
+    res = blitz_normalize_path(tpl, &tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
     current_len = strlen(tpl->current_path);
     norm_len = strlen(tpl->tmp_buf);
 
@@ -4674,7 +4813,7 @@ static PHP_FUNCTION(blitz_clean)
     }
 
     /* find corresponding iteration data */
-    res = blitz_normalize_path(&tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
+    res = blitz_normalize_path(tpl, &tpl->tmp_buf, path, path_len, tpl->current_path, current_len TSRMLS_CC);
 
     current_len = strlen(tpl->current_path);
     norm_len = strlen(tpl->tmp_buf);
@@ -4700,6 +4839,32 @@ static PHP_FUNCTION(blitz_clean)
     RETURN_TRUE;
 }
 /* }}} */
+
+
+/* {{{ string Blitz->getError() */
+static PHP_FUNCTION(blitz_get_error)
+{
+    zval *id, **desc;
+    blitz_tpl *tpl;
+
+    BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|")) {
+        return;
+    }
+
+    if (tpl) {
+        if (tpl->error) {
+            RETVAL_STRING(tpl->error, 1);
+        } else {
+            RETURN_FALSE;
+        }
+    } else {
+        RETURN_FALSE;
+    }
+}
+/* }}} */
+
+
 
 /* {{{ blitz_functions[] : Blitz class */
 static const zend_function_entry blitz_functions[] = {
@@ -4731,6 +4896,8 @@ static const zend_function_entry blitz_functions[] = {
     PHP_FALIAS(setglobal,           blitz_set_global,           NULL)
     PHP_FALIAS(setglobals,          blitz_set_global,           NULL)
     PHP_FALIAS(getglobals,          blitz_get_globals,          NULL)
+    PHP_FALIAS(geterror,            blitz_get_error,            NULL)
+    PHP_FALIAS(get_error,           blitz_get_error,            NULL)
     {NULL, NULL, NULL}
 };
 /* }}} */
@@ -4761,7 +4928,7 @@ PHP_MINFO_FUNCTION(blitz) /* {{{ */
     php_info_print_table_start();
     php_info_print_table_row(2, "Blitz support", "enabled");
     php_info_print_table_row(2, "Version", BLITZ_VERSION_STRING);
-    php_info_print_table_row(2, "Revision", "$Revision$");
+    php_info_print_table_row(2, "Revision", "$Revision: 1.73 $");
     php_info_print_table_end();
 
     DISPLAY_INI_ENTRIES();

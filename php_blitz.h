@@ -16,7 +16,7 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id$ */
+/* $Id: php_blitz.h,v 1.25 2012/06/18 15:02:58 fisher Exp $ */
 
 #ifndef PHP_BLITZ_H
 #define PHP_BLITZ_H
@@ -54,13 +54,17 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char enable_alternative_tags;
     char enable_comments;
     char *path;
-    char disable_include;
+    char enable_include;
+    char enable_callbacks;
+    char enable_php_callbacks;
+    char php_callbacks_first;
     char remove_spaces_around_context_tags;
     char warn_context_duplicates;
     char check_recursion;
-    char *charset;
     unsigned long scope_lookup_limit;
     char lower_case_method_names;
+    char auto_escape;
+    char throw_exceptions;
 ZEND_END_MODULE_GLOBALS(blitz)
 
 #ifdef ZTS
@@ -142,7 +146,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_ANALISER_ACTION_ERROR_CURR    5
 #define BLITZ_ANALISER_ACTION_ERROR_BOTH    6
 
-#define BLITZ_MAX_LEXEM_LEN    			128
+#define BLITZ_MAX_LEXEM_LEN    			512
 #define BLITZ_INPUT_BUF_SIZE 	   		4096
 #define BLITZ_MAX_FETCH_INDEX_KEY_SIZE  1024
 #define BLITZ_ALLOC_TAGS_STEP   		16
@@ -203,12 +207,12 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_STRING_IS_ESCAPE(s, len)                                                              \
     (((1 == len) &&                                                                                 \
-        (('q' == s[0]) || ('Q' == s[0])) ||                                                         \
+        (('q' == s[0]) || ('Q' == s[0]))) ||                                                        \
     ((6 == len) &&                                                                                  \
         (('E' == s[0] && 'S' == s[1] && 'C' == s[2] && 'A' == s[3] && 'P' == s[4] && 'E' == s[5])   \
         ||                                                                                          \
         ('e' == s[0] && 's' == s[1] && 'c' == s[2] && 'a' == s[3] && 'p' == s[4] && 'e' == s[5]))   \
-    )))
+    ))
 
 #define BLITZ_STRING_IS_DATE(s, len)                                                        \
     ((4 == len) &&                                                                          \
@@ -219,17 +223,17 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_PHP_NAMESPACE_SHIFT   5
 #define BLITZ_STRING_PHP_NAMESPACE(s, len)                                                  \
     ((len >= 5) &&                                                                          \
-        (('P' == s[0]) && 'H' == s[1] && 'P' == s[2] && ':' == s[3] && ':' == s[4])         \
+        (('P' == s[0] && 'H' == s[1] && 'P' == s[2] && ':' == s[3] && ':' == s[4])          \
         ||                                                                                  \
-        (('p' == s[0]) && 'h' == s[1] && 'p' == s[2] && ':' == s[3] && ':' == s[4])         \
+        ('p' == s[0] && 'h' == s[1] && 'p' == s[2] && ':' == s[3] && ':' == s[4]))          \
     )
 
 #define BLITZ_THIS_NAMESPACE_SHIFT  6 
-#define BLITZ_STRING_THIS_NAMESPACE(s, len)                                                             \
-    ((len >= 6) &&                                                                                      \
-        (('T' == s[0]) && 'H' == s[1] && 'I' == s[2] && 'S' == s[3] && ':' == s[4] && ':' == s[5])      \
-        ||                                                                                              \
-        (('t' == s[0]) && 'h' == s[1] && 'i' == s[2] && 's' == s[3] && ':' == s[4] && ':' == s[5])      \
+#define BLITZ_STRING_THIS_NAMESPACE(s, len)                                                            \
+    ((len >= 6) &&                                                                                     \
+        (('T' == s[0] && 'H' == s[1] && 'I' == s[2] && 'S' == s[3] && ':' == s[4] && ':' == s[5])      \
+        ||                                                                                             \
+        ('t' == s[0] && 'h' == s[1] && 'i' == s[2] && 's' == s[3] && ':' == s[4] && ':' == s[5]))      \
     )
 
 #define BLITZ_WRAPPER_MAX_ARGS                  3
@@ -274,9 +278,10 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_TMP_BUF_MAX_LEN                   1024
 #define BLITZ_CONTEXT_PATH_MAX_LEN              1024
 
+#define BLITZ_NODE_NO_NAMESPACE                 0
 #define BLITZ_NODE_THIS_NAMESPACE               1
 #define BLITZ_NODE_PHP_NAMESPACE                2
-#define BLITZ_NODE_UNKNOWN_NAMESPACE            3
+#define BLITZ_NODE_CUSTOM_NAMESPACE             3
 
 #define BLITZ_FLAG_FETCH_INDEX_BUILT            1
 #define BLITZ_FLAG_GLOBALS_IS_OTHER             2
@@ -287,6 +292,10 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_LOOP_STACK_MAX    32
 #define BLITZ_SCOPE_STACK_MAX   32
+
+#define BLITZ_ESCAPE_DEFAULT    0
+#define BLITZ_ESCAPE_NO         1
+#define BLITZ_ESCAPE_YES        2
 
 /* simple string with length */
 typedef struct {
@@ -322,7 +331,8 @@ typedef struct _blitz_node {
     unsigned long pos_end;
     unsigned long pos_begin_shift;
     unsigned long pos_end_shift;
-    char type;
+    unsigned char type;
+    unsigned char escape_mode;
     char hidden;
     char namespace_code;
     char lexem[BLITZ_MAX_LEXEM_LEN]; 
@@ -352,8 +362,11 @@ typedef struct _blitz_static_data {
     unsigned int tag_close_len;
     unsigned int tag_open_alt_len;
     unsigned int tag_close_alt_len;
+    unsigned int tag_comment_open_len;
+    unsigned int tag_comment_close_len;
 } blitz_static_data;
 
+#define BLITZ_ERROR_MAX_LEN     1024
 /* template: "static" and "dynamic" parts */
 typedef struct _blitz_tpl {
     struct _blitz_static_data static_data;
@@ -375,6 +388,7 @@ typedef struct _blitz_tpl {
     struct _blitz_loop_stack_item loop_stack[BLITZ_LOOP_STACK_MAX]; 
     zval *scope_stack[BLITZ_SCOPE_STACK_MAX];
     unsigned int scope_stack_pos;
+    char *error;
 } blitz_tpl;
 
 #define BLITZ_ANALIZER_NODE_STACK_LEN    64
@@ -582,7 +596,7 @@ typedef struct _blitz_analizer_ctx {
         default: res = 0; break;                                                                  \
     }
 
-#define BLITZ_ARG_NOT_EMPTY(a,ht,res)                                                             \
+#define BLITZ_ARG_NOT_EMPTY(a, ht, res)                                                           \
     if ((a).type == BLITZ_ARG_TYPE_STR) {                                                         \
         if (((a).len == 1) && ((a).name[0] == '0')) {                                             \
             (res) = 0;                                                                            \
@@ -590,11 +604,11 @@ typedef struct _blitz_analizer_ctx {
             (res) = (a).len > 0;                                                                  \
         }                                                                                         \
     } else if ((a).type == BLITZ_ARG_TYPE_NUM) {                                                  \
-        (res) = (0 == strncmp((a).name,"0",1)) ? 0 : 1;                                           \
+        (res) = (0 == strncmp((a).name, "0", 1)) ? 0 : 1;                                         \
     } else if (((a).type == BLITZ_ARG_TYPE_VAR) && ht) {                                          \
         zval **z;                                                                                 \
-        if((a).name && (a).len>0) {                                                               \
-            if (SUCCESS == zend_hash_find(ht,(a).name,1+(a).len,(void**)&z))                      \
+        if((a).name && (a).len > 0) {                                                             \
+            if (SUCCESS == zend_hash_find(ht, (a).name, 1 + (a).len, (void**)&z))                 \
             {                                                                                     \
                 BLITZ_ZVAL_NOT_EMPTY(z, res)                                                      \
             } else {                                                                              \
@@ -612,8 +626,8 @@ typedef struct _blitz_analizer_ctx {
 #define BLITZ_GET_ARG_ZVAL(a, ht, z)                                                              \
     if (((a).type == BLITZ_ARG_TYPE_VAR) && ht) {                                                 \
         if ((a).name && (a).len>0) {                                                              \
-         zend_hash_find(ht, (a).name, 1+(a).len, (void**)&z);                                     \
-       }                                                                                          \
+            zend_hash_find(ht, (a).name, 1 + (a).len, (void**)&z);                                \
+        }                                                                                         \
     }                                                                                             
 
 // switch (Z_TYPE_PP(z)) : see 10 lines upper
