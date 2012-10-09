@@ -94,7 +94,7 @@ $T->display();
 ?>
 --EXPECT--
 T1:YES
-T2:YES
+T2:NO
 T3:YES
 T4:YES
 T5:NO
