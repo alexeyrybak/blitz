@@ -16,7 +16,8 @@
   +----------------------------------------------------------------------+
 */
 
-/* $Id: blitz.c,v 1.73 2012/06/18 15:02:58 fisher Exp $ */
+#define BLITZ_DEBUG 0 
+#define BLITZ_VERSION_STRING "0.8.3"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -57,9 +58,6 @@
 #endif
 
 #include "php_blitz.h"
-
-#define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.2"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
 
