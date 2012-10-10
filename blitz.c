@@ -5030,7 +5030,6 @@ PHP_MINFO_FUNCTION(blitz) /* {{{ */
     php_info_print_table_start();
     php_info_print_table_row(2, "Blitz support", "enabled");
     php_info_print_table_row(2, "Version", BLITZ_VERSION_STRING);
-    php_info_print_table_row(2, "Revision", "$Revision: 1.73 $");
     php_info_print_table_end();
 
     DISPLAY_INI_ENTRIES();
