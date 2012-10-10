@@ -2,6 +2,7 @@
 0.8.3 version 
 ===================================================================================================
 - ADD: cleanGlobals function was added, thanx to fixxxer
+- ADD: new variable filter nl2br was added. With this filter variable is always pre-escaped.
 
 ===================================================================================================
 0.8.2 version 18 june 2012.

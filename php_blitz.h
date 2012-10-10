@@ -296,6 +296,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_ESCAPE_DEFAULT    0
 #define BLITZ_ESCAPE_NO         1
 #define BLITZ_ESCAPE_YES        2
+#define BLITZ_ESCAPE_NL2BR      3
 
 /* simple string with length */
 typedef struct {

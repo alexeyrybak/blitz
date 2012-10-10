@@ -1373,6 +1373,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                 node->escape_mode = BLITZ_ESCAPE_NO;
             } else if (i_pos == 6 && buf[0] == 'e' && buf[1] == 's' && buf[2] == 'c' && buf[3] == 'a' && buf[4] == 'p' && buf[5] == 'e') {
                 node->escape_mode = BLITZ_ESCAPE_YES;
+            } else if (i_pos == 5 && buf[0] == 'n' && buf[1] == 'l' && buf[2] == '2' && buf[3] == 'b' && buf[4] == 'r') {
+                node->escape_mode = BLITZ_ESCAPE_NL2BR;
             }
             pos += i_pos;
         }
@@ -2758,6 +2760,85 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 }
 /* }}} */
 
+/* {{{ void blitz_nl2br() - this code was simply taken from PHP's string.c */
+int blitz_nl2br(
+    char **in,
+    long unsigned int *len TSRMLS_DC)
+{
+    char *tmp, *str, *result;
+    long unsigned int new_length = 0, str_len = 0;
+    char *end, *target;
+    long unsigned int repl_cnt = 0;
+    zend_bool is_xhtml = 1;
+
+    str = *in;
+    str_len = *len;
+    tmp = str;
+    end = str + str_len;
+
+    /* it is really faster to scan twice and allocate mem once instead of scanning once and constantly reallocing */
+    while (tmp < end) {
+        if (*tmp == '\r') {
+            if (*(tmp + 1) == '\n') {
+                tmp++;
+            }
+            repl_cnt++;
+        } else if (*tmp == '\n') {
+            if (*(tmp+1) == '\r') {
+                tmp++;
+            }
+            repl_cnt++;
+        }
+
+        tmp++;
+    }
+
+    if (repl_cnt == 0)
+        return 1;
+
+    if (is_xhtml) {
+        new_length = str_len + repl_cnt * (sizeof("<br />") - 1);
+    } else {
+        new_length = str_len + repl_cnt * (sizeof("<br>") - 1);
+    }
+
+    result = target = emalloc(new_length + 1);
+
+    while (str < end) {
+        switch (*str) {
+            case '\r':
+            case '\n':
+                *target++ = '<';
+                *target++ = 'b';
+                *target++ = 'r';
+
+                if (is_xhtml) {
+                    *target++ = ' ';
+                    *target++ = '/';
+                }
+
+                *target++ = '>';
+
+                if ((*str == '\r' && *(str + 1) == '\n') || (*str == '\n' && *(str + 1) == '\r')) {
+                    *target++ = *str++;
+                }
+                /* lack of a break; is intentional */
+            default:
+                *target++ = *str;
+        }
+
+        str++;
+    }
+
+    *target = '\0';
+    efree(*in);
+    *in = result;
+    *len = new_length;
+
+    return 1;
+}
+/* }}} */
+
 /* {{{ void blitz_exec_var() */
 static inline void blitz_exec_var(
     blitz_tpl *tpl, 
@@ -2814,15 +2895,22 @@ static inline void blitz_exec_var(
         p_result = (char*)memcpy(p_result, Z_STRVAL(p), var_len);
         zval_dtor(&p);
     } else {
-        if (escape_mode == BLITZ_ESCAPE_YES || ((escape_mode == BLITZ_ESCAPE_DEFAULT) && BLITZ_G(auto_escape))) {
+        if (escape_mode == BLITZ_ESCAPE_YES || escape_mode == BLITZ_ESCAPE_NL2BR || ((escape_mode == BLITZ_ESCAPE_DEFAULT) && BLITZ_G(auto_escape))) {
 #if defined(ENT_SUBSTITUTE) && defined(ENT_DISALLOWED) && defined(ENT_HTML5)
             long quote_style = ENT_QUOTES | ENT_SUBSTITUTE | ENT_DISALLOWED | ENT_HTML5;
 #else
             long quote_style = ENT_QUOTES;
 #endif
             escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_PP(zparam), Z_STRLEN_PP(zparam), (size_t *)&var_len, 0, quote_style, NULL, 1 TSRMLS_CC);
-            BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
-            p_result = (char*)memcpy(p_result, escaped, var_len);
+
+            if (escape_mode == BLITZ_ESCAPE_NL2BR) {
+                blitz_nl2br(&escaped, &var_len);
+                BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+                p_result = (char*)memcpy(p_result, escaped, var_len);
+            } else {
+                BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+                p_result = (char*)memcpy(p_result, escaped, var_len);
+            }
         } else {
             var_len = Z_STRLEN_PP(zparam);
             BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
