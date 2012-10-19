@@ -2904,7 +2904,7 @@ static inline void blitz_exec_var(
             escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_PP(zparam), Z_STRLEN_PP(zparam), (size_t *)&var_len, 0, quote_style, SG(default_charset), 1 TSRMLS_CC);
 
             if (escape_mode == BLITZ_ESCAPE_NL2BR) {
-                blitz_nl2br(&escaped, &var_len);
+                blitz_nl2br(&escaped, &var_len TSRMLS_CC);
                 BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
                 p_result = (char*)memcpy(p_result, escaped, var_len);
             } else {
