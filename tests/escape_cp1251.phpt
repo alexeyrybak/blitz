@@ -1,8 +1,9 @@
 --TEST--
-Escape for non-UTF encoding (cp1251)
+escape for non-UTF encoding (cp1251)
 --FILE--
 <?php
 include('common.inc');
+ini_set('default_charset', 'cp1251');
 $string_var = 'строка в кодировке windows-1251';
 $body = "<span>{{ escape(\$string_var); }}</span>";
 

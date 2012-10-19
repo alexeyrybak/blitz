@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.3"
+#define BLITZ_VERSION_STRING "0.8.4"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
