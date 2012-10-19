@@ -57,6 +57,8 @@
 #define OnUpdateLongLegacy OnUpdateInt
 #endif
 
+#include "SAPI.h"
+
 #include "php_blitz.h"
 
 ZEND_DECLARE_MODULE_GLOBALS(blitz)
@@ -2216,7 +2218,7 @@ static inline int blitz_exec_wrapper(blitz_tpl *tpl, char **result, unsigned lon
             return 0;
         }
 
-        *result = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], (size_t *)result_len, all, quote_style, NULL, 1 TSRMLS_CC);
+        *result = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], (size_t *)result_len, all, quote_style, SG(default_charset), 1 TSRMLS_CC);
 
     } else if (type == BLITZ_NODE_TYPE_WRAPPER_DATE) {
 /* FIXME: check how it works under Windows */
@@ -2899,7 +2901,7 @@ static inline void blitz_exec_var(
 #else
             long quote_style = ENT_QUOTES;
 #endif
-            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_PP(zparam), Z_STRLEN_PP(zparam), (size_t *)&var_len, 0, quote_style, NULL, 1 TSRMLS_CC);
+            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_PP(zparam), Z_STRLEN_PP(zparam), (size_t *)&var_len, 0, quote_style, SG(default_charset), 1 TSRMLS_CC);
 
             if (escape_mode == BLITZ_ESCAPE_NL2BR) {
                 blitz_nl2br(&escaped, &var_len);
