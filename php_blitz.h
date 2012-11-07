@@ -291,7 +291,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_CALLED_USER_METHOD(v) (((v)->flags & BLITZ_FLAG_CALLED_USER_METHOD) == BLITZ_FLAG_CALLED_USER_METHOD)
 
 #define BLITZ_LOOP_STACK_MAX    32
-#define BLITZ_SCOPE_STACK_MAX   32
+#define BLITZ_SCOPE_STACK_MAX   128
 
 #define BLITZ_ESCAPE_DEFAULT    0
 #define BLITZ_ESCAPE_NO         1
@@ -688,13 +688,27 @@ typedef struct _blitz_analizer_ctx {
     if (tpl->scope_stack_pos < BLITZ_SCOPE_STACK_MAX) {                                           \
         tpl->scope_stack[tpl->scope_stack_pos] = data;                                            \
         tpl->scope_stack_pos++;                                                                   \
-    }                                                                                             
+    } else {                                                                                      \
+        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+            "Too deep iteration set, lookup scope depth is too high, lookup stack is broken "     \
+            "and variables can be resolved improperly. To fix this rebuild blitz extension with " \
+            "increased BLITZ_SCOPE_STACK_MAX constant in php_blitz.h"                             \
+        );                                                                                        \
+    }                                                                                             \
 
 #define BLITZ_SCOPE_STACK_UPDATE(tpl, data)                                                       \
     tpl->scope_stack[tpl->scope_stack_pos - 1] = data;                                            \
 
 #define BLITZ_SCOPE_STACK_SHIFT(tpl)                                                              \
-    tpl->scope_stack_pos--;                                                                       \
+    if (tpl->scope_stack_pos > 0) {                                                               \
+        tpl->scope_stack_pos--;                                                                   \
+    } else {                                                                                      \
+        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+            "Too deep iteration set, lookup scope depth is too high, lookup stack is broken "     \
+            "and variables can be resolved improperly. To fix this rebuild blitz extension with " \
+            "increased BLITZ_SCOPE_STACK_MAX constant in php_blitz.h"                             \
+        );                                                                                        \
+    }                                                                                             \
 
 #define BLITZ_GET_PREDEFINED_VAR(tpl, n, len, value)                                                                   \
     if (len == 0 || n[0] != '_') {                                                                                     \
