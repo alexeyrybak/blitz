@@ -2936,18 +2936,41 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     zval **ctx_data = NULL;
     call_arg *arg = node->args;
 
-    if (BLITZ_DEBUG) php_printf("blitz_exec_context: %s\n",node->args->name);
+    if (BLITZ_DEBUG) php_printf("*** FUNCTION *** blitz_exec_context: %s\n",node->args->name);
 
-    if (!parent_params) return; 
+    if (!parent_params) {
+        if (BLITZ_DEBUG) php_printf("blitz_exec_context was called with empty parent_params: nothing to do, will return\n");
+        return; 
+    } else {
+        if (BLITZ_DEBUG) {
+            php_printf("parent_params:\n");
+            php_var_dump(&parent_params, 0 TSRMLS_CC);
+        }
+    }
+
+    if (BLITZ_DEBUG) {
+        php_printf("checking key %s in parent_params...\n", arg->name);
+    }
 
     check_key = zend_hash_find(Z_ARRVAL_P(parent_params), arg->name, arg->len + 1, (void**)&ctx_iterations);
     if (check_key == FAILURE) {
+        if (BLITZ_DEBUG) {
+            php_printf("failed to find key %s in parent params\n", arg->name);
+        }
+
         if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
+            if (BLITZ_DEBUG) {
+                php_printf("as we failed to find key %s in parent params and node->type is BLITZ_NODE_TYPE_CONTEXT - will return\n", arg->name);
+            }
             return;
         } else {
             not_empty = 0;
         }
     } else {
+        if (BLITZ_DEBUG) {
+            php_printf("key %s was found in parent params\n", arg->name);
+        }
+
         BLITZ_ZVAL_NOT_EMPTY(ctx_iterations, not_empty);
     }
 
@@ -2957,16 +2980,16 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
         php_printf("not_empty = %u\n", not_empty);
     }
 
-    if (BLITZ_DEBUG) php_printf("data found in parent params:%s\n",arg->name);
+    if (BLITZ_DEBUG) php_printf("data found in parent params for key %s\n",arg->name);
     if (Z_TYPE_PP(ctx_iterations) == IS_ARRAY && zend_hash_num_elements(Z_ARRVAL_PP(ctx_iterations))) {
         if (BLITZ_DEBUG) php_printf("will walk through iterations\n");
 
         zend_hash_internal_pointer_reset_ex(Z_ARRVAL_PP(ctx_iterations), NULL);
         check_key = zend_hash_get_current_key_ex(Z_ARRVAL_PP(ctx_iterations), &key, &key_len, &key_index, 0, NULL);
-        if (BLITZ_DEBUG) php_printf("KEY_CHECK: %d\n", check_key);
+        if (BLITZ_DEBUG) php_printf("KEY_TYPE: %d\n", check_key);
 
         if (HASH_KEY_IS_STRING == check_key) {
-            if (BLITZ_DEBUG) php_printf("KEY_CHECK: string\n");
+            if (BLITZ_DEBUG) php_printf("KEY_CHECK: %s <string>\n", key);
             blitz_exec_nodes(tpl, node->first_child, id,
                 result, result_len, result_alloc_len,
                 node->pos_begin_shift,
@@ -2974,7 +2997,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                 *ctx_iterations TSRMLS_CC
             );
         } else if (HASH_KEY_IS_LONG == check_key) {
-            if (BLITZ_DEBUG) php_printf("KEY_CHECK: long\n");
+            if (BLITZ_DEBUG) php_printf("KEY_CHECK: %d <long>\n", key_index);
             BLITZ_LOOP_INIT(tpl, zend_hash_num_elements(Z_ARRVAL_PP(ctx_iterations)));
             while (zend_hash_get_current_data_ex(Z_ARRVAL_PP(ctx_iterations),(void**) &ctx_data, NULL) == SUCCESS) {
 
@@ -3368,8 +3391,14 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
 
     if (BLITZ_DEBUG) {
         php_printf("*** FUNCTION *** blitz_exec_nodes\n");
-        if (parent_ctx_data) php_var_dump(&parent_ctx_data, 0 TSRMLS_CC);
-        if (parent_params) php_var_dump(&parent_params, 0 TSRMLS_CC);
+        if (parent_ctx_data) {
+            php_printf("parent_ctx_data (%p):\n", parent_ctx_data);
+            php_var_dump(&parent_ctx_data, 0 TSRMLS_CC);
+        }
+        if (parent_params) {
+            php_printf("parent_params (%p):\n", parent_params);
+            php_var_dump(&parent_params, 0 TSRMLS_CC);
+        }
     }
 
     if (BLITZ_G(scope_lookup_limit)) BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
