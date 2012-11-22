@@ -417,6 +417,8 @@ typedef struct _blitz_analizer_ctx {
     unsigned long current_close; 
     unsigned long close_len; 
     unsigned int true_lexem_len;
+    unsigned int n_needs_end;
+    unsigned int n_actual_end;
 } analizer_ctx;
 
 /* call scanner */

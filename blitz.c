@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.5"
+#define BLITZ_VERSION_STRING "0.8.6"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -1657,9 +1657,9 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
     current_open = ctx->pos_open;
 
     if (tag->tag_id == BLITZ_TAG_ID_CLOSE_ALT) {
-         is_alt_tag = 1;
+        is_alt_tag = 1;
     } else if (tag->tag_id == BLITZ_TAG_ID_COMMENT_CLOSE) {
-         is_comment_tag = 1;
+        is_comment_tag = 1;
     }
 
     if (is_alt_tag) { 
@@ -1776,8 +1776,10 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
         if (!blitz_analizer_create_parent(ctx, 1 TSRMLS_CC)) {
             return 0;
         }
+        ctx->n_needs_end++;
     } else if (i_node->type == BLITZ_NODE_TYPE_END) {
         blitz_analizer_finalize_parent(ctx, 1 TSRMLS_CC); 
+        ctx->n_actual_end++;
     } else if (i_node->type == BLITZ_NODE_TYPE_ELSEIF_NF || i_node->type == BLITZ_NODE_TYPE_ELSE_NF) {
         blitz_analizer_finalize_parent(ctx, 0 TSRMLS_CC);
         if (!blitz_analizer_create_parent(ctx, 0 TSRMLS_CC)) {
@@ -2017,6 +2019,8 @@ static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
     ctx.pos_open = 0;
     ctx.tag = NULL;
     ctx.prev_tag = NULL;
+    ctx.n_needs_end = 0;
+    ctx.n_actual_end = 0;
 
     for (i=0; i < tags_len; i++, i_tag++) {
         i_tag_id = i_tag->tag_id;
@@ -2034,6 +2038,12 @@ static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
         blitz_analizer_process_node(&ctx, is_last TSRMLS_CC);
 
         i_prev_state = ctx.state;
+    }
+
+    // Check if we had non-ended begin/if/unless. 
+    // Use ">" here instead of "!=" because end with no begin is checked in blitz_analizer_finalize_parent
+    if (ctx.n_needs_end > ctx.n_actual_end) { 
+        blitz_error(tpl TSRMLS_CC, E_WARNING, "SYNTAX ERROR: seems that you forgot to close some begin/if/unless nodes with end (%u opened vs %u end)", ctx.n_needs_end, ctx.n_actual_end);
     }
 
     tpl->static_data.n_nodes = ctx.n_nodes;
@@ -2183,7 +2193,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS
 /* }}} */
 
 /* {{{ int blitz_exec_wrapper() */
-static inline int blitz_exec_wrapper(blitz_tpl *tpl, char **result, unsigned long *result_len, unsigned long type, int args_num, char **args, int *args_len, char *tmp_buf TSRMLS_DC)
+static inline int blitz_exec_wrapper(blitz_tpl *tpl, char **result, unsigned long *result_len, unsigned long type, int args_num, char **args, unsigned int *args_len, char *tmp_buf TSRMLS_DC)
 {
     /* following wrappers are to be added: escape, date, gettext, something else?... */
     if (type == BLITZ_NODE_TYPE_WRAPPER_ESCAPE) {
@@ -2546,7 +2556,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
 
     } else if (node->type >= BLITZ_NODE_TYPE_WRAPPER_ESCAPE && node->type < BLITZ_NODE_TYPE_IF_NF) {
         char *wrapper_args[BLITZ_WRAPPER_MAX_ARGS];
-        int  wrapper_args_len[BLITZ_WRAPPER_MAX_ARGS];
+        unsigned int wrapper_args_len[BLITZ_WRAPPER_MAX_ARGS];
         char *str = NULL;
         unsigned long str_len = 0;
         call_arg *p_arg = NULL;

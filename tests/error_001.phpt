@@ -14,6 +14,7 @@ echo "Done\n";
 invalid method call (%serror_001.tpl: line 1, pos 1)
 invalid method call (%serror_001.tpl: line 2, pos 1)
 invalid method call (%serror_001.tpl: line 3, pos 1)
+seems that you forgot to close some begin/if/unless nodes with end (3 opened vs 0 end)
 object(blitz)#%d (1) {
   ["tpl"]=>
   resource(%d) of type (Blitz template)
