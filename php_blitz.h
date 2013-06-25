@@ -111,8 +111,8 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_TAG_OPEN                  "{{"
 #define BLITZ_TAG_CLOSE                 "}}"
-#define BLITZ_TAG_OPEN_ALT              "<!-- "
-#define BLITZ_TAG_CLOSE_ALT             " -->"
+#define BLITZ_TAG_OPEN_ALT              "<!--"
+#define BLITZ_TAG_CLOSE_ALT             "-->"
 #define BLITZ_TAG_COMMENT_OPEN          "/*"
 #define BLITZ_TAG_COMMENT_CLOSE          "*/"
 #define BLITZ_TAG_LIST_LEN              6

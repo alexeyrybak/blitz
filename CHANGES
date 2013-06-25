@@ -1,4 +1,11 @@
 ===================================================================================================
+0.8.7 version 12 june 2013 
+===================================================================================================
+- FIX: large pieces of commented code work fine with no "lexem is too long" error
+- CHANGE: alternative close tag was changed from " -->" to "-->" (first space was removed). 
+  Reason: be more friendly with cases when tages are just valid HTML comments.
+
+===================================================================================================
 0.8.6 version 22 nov 2012 
 ===================================================================================================
 - ADD: template syntax warning when begin/if/unless wasn't closed with end
