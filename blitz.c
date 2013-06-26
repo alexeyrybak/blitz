@@ -3222,7 +3222,7 @@ static inline void blitz_check_expr (
                 c = Z_TYPE_PP(z[i]);
                 if (c == IS_STRING) {
                     c = BLITZ_COMPARE_STRING;
-                } else if ((c == IS_LONG) || (c == IS_BOOL) || (c == IS_DOUBLE)) {
+                } else if ((c == IS_LONG) || (c == IS_BOOL) || (c == IS_DOUBLE) || (c == IS_NULL)) {
                     c = BLITZ_COMPARE_DOUBLE;                
                 }
             } else {
