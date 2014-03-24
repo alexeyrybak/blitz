@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.7"
+#define BLITZ_VERSION_STRING "0.8.8"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -943,11 +943,16 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
         }
     }
 
+    if (body->len < tag_min_len) {
+        return 1;
+    }
+
+    pos_check_max = body->len - tag_min_len;
     pc = (unsigned char *) body->s;
     c = *pc;
     pos = 0;
     skip_steps = 0;
-    pos_check_max = body->len - tag_min_len;
+
     while (c) {
         c = *pc;
         if (BLITZ_DEBUG) php_printf("moving at symbol: %c\n", c);
