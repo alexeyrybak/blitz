@@ -2,6 +2,7 @@
 plugins
 --FILE--
 <?php
+include('common.inc');
 
 class Test {
     static function say($first, $second) {

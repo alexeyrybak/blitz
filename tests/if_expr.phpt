@@ -2,6 +2,8 @@
 expressions in conditional contexts
 --FILE--
 <?php
+include('common.inc');
+ini_set('blitz.remove_spaces_around_context_tags', 1);
 
 $T = new Blitz();
 $T->load(
@@ -73,7 +75,6 @@ $set = array();
 while ($i++ < $i_max) $set[] = array();
 
 $T->display(array('list' => $set));
-
 
 unset($T);
 

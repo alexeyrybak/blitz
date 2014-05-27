@@ -2,6 +2,7 @@
 comments
 --FILE--
 <?php
+include('common.inc');
 
 ini_set('blitz.enable_comments', 1);
 

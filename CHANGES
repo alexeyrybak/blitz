@@ -1,4 +1,15 @@
 ===================================================================================================
+0.8.9 version 28 may 2014. С днём пограничника!
+===================================================================================================
+- FIX: looping through a list of objects, accessing their attributes; thanks to Nikolas Van Eenaeme, 
+  patches were taken from https://gist.github.com/poison/27e1ffb71fc682ee4ec4)
+- FIX: objects were always "empty" in expressions, now it's empty only when no attributes (bug#321);
+  thanks to Nikolas Van Eenaeme
+- FIX: deep nesting loop with overlapping wasn't working properly (bug#320)
+- ADD: experimental magic variable $_ to access current iteration parameters; 
+  thanks to Kostya "fixxxer" Baryshnikov (bug#183)
+
+===================================================================================================
 0.8.8 version 25 march 2014
 ===================================================================================================
 - FIX: fix glorious crash for very short template body lengths (smaller than any tag length)

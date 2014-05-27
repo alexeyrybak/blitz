@@ -2,6 +2,8 @@
 scope lookup test #2
 --FILE--
 <?php
+include('common.inc');
+ini_set('blitz.remove_spaces_around_context_tags', 1);
 
 $T = new Blitz();
 

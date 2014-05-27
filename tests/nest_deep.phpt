@@ -4,6 +4,9 @@ testing deep nesting
 <?php
 include('common.inc');
 
+ini_set('blitz.remove_spaces_around_context_tags', 1);
+ini_set('blitz.warn_context_duplicates', 0);
+
 $T = new Blitz();
  
 $body = <<<BODY

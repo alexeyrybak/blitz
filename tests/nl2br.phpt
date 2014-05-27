@@ -1,7 +1,8 @@
 --TEST--
 nl2br filter
 --FILE--
-<?
+<?php
+include('common.inc');
 
 $str = <<<STR
 <html><head>bla</head></html>

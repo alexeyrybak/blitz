@@ -595,6 +595,7 @@ typedef struct _blitz_analizer_ctx {
         case IS_LONG: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
         case IS_DOUBLE: res = (.0 == Z_DVAL_PP(z)) ? 0 : 1; break;                                \
         case IS_ARRAY: res = (0 == zend_hash_num_elements(Z_ARRVAL_PP(z))) ? 0 : 1; break;        \
+        case IS_OBJECT: res = (0 == zend_hash_num_elements(Z_OBJPROP_PP(z))) ? 0 : 1; break;      \
                                                                                                   \
         default: res = 0; break;                                                                  \
     }

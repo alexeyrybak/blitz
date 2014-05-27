@@ -2,6 +2,7 @@
 expressions in conditional contexts
 --FILE--
 <?php
+include('common.inc');
 
 $T = new Blitz();
 $T->load(
