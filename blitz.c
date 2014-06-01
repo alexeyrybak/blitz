@@ -175,6 +175,8 @@ PHP_INI_BEGIN()
         OnUpdateBool, check_recursion, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.scope_lookup_limit", "0", PHP_INI_ALL,
         OnUpdateLongLegacy, scope_lookup_limit, zend_blitz_globals, blitz_globals)
+    STD_PHP_INI_ENTRY("blitz.enable_magic_scope", "0", PHP_INI_ALL,
+        OnUpdateBool, enable_magic_scope, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.lower_case_method_names", "1", PHP_INI_ALL,
         OnUpdateBool, lower_case_method_names, zend_blitz_globals, blitz_globals)
     STD_PHP_INI_ENTRY("blitz.enable_include", "1", PHP_INI_ALL,
@@ -694,6 +696,7 @@ static void php_blitz_init_globals(zend_blitz_globals *blitz_globals) /* {{{ */
     blitz_globals->tag_comment_open = BLITZ_TAG_COMMENT_OPEN;
     blitz_globals->tag_comment_close = BLITZ_TAG_COMMENT_CLOSE;
     blitz_globals->scope_lookup_limit = 0;
+    blitz_globals->enable_magic_scope = 0;
     blitz_globals->auto_escape = 0;
     blitz_globals->throw_exceptions = 0;
 }
@@ -2322,10 +2325,12 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
     char key[256];
     char root_found = 0;
     char use_scope = 0, found_in_scope = 0;
-    unsigned long loop_index = 0, stack_level = 0;
+    int magic_offset = 0;
+    unsigned long loop_index = 0, stack_level = 0, magic_stack = 0;
 
     last_pos = 0;
     j = lexem_len - 1;
+    magic_stack = tpl->scope_stack_pos;
     /* walk through the path */
     for (i = 0; i < lexem_len; i++, j--) {
         is_last = (j == 0);
@@ -2335,7 +2340,16 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
             key[key_len] = '\x0';
 
             /* try to get data by the key */
-            if (0 == root_found) { /* globals or params? */
+            if (BLITZ_G(enable_magic_scope) && BLITZ_IS_PREDEFINED_TOP(key, key_len)) {
+                if (BLITZ_DEBUG) php_printf("magic_scope: resetting stack key '%s' in scope::%lu -> 0\n", key, magic_stack);
+                magic_stack = 0;
+                *zparam = &tpl->scope_stack[magic_stack];
+            } else if (BLITZ_G(enable_magic_scope) && BLITZ_IS_PREDEFINED_PARENT(key, key_len)) {
+                magic_offset = (tpl->scope_stack_pos == magic_stack ? 2 : 1); /* if we're at the initial stack level, subtract 2 to get to the parent, since we just created a new stack level */
+                if (BLITZ_DEBUG) php_printf("magic_scope: resetting stack key '%s' in scope::%lu -> %lu\n", key, magic_stack, (magic_stack > magic_offset ? magic_stack - magic_offset : 0));
+                magic_stack = (magic_stack > magic_offset ? magic_stack - magic_offset : 0); /* keep track of the current magic scope to enable things like _parent._parent */
+                *zparam = &tpl->scope_stack[magic_stack];
+            } else if (0 == root_found) { /* globals or params? */
                 root_found = (params && (
                     (IS_ARRAY == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_ARRVAL_P(params), key, key_len + 1, (void **) zparam)) ||
                     (IS_OBJECT == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_OBJPROP_P(params), key, key_len + 1, (void **) zparam))
@@ -3442,7 +3456,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
     }
 
-    if (BLITZ_G(scope_lookup_limit)) {
+    if (BLITZ_G(scope_lookup_limit) || BLITZ_G(enable_magic_scope)) {
         BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
     }
 
@@ -3516,7 +3530,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
     }
 
-    if (BLITZ_G(scope_lookup_limit)) {
+    if (BLITZ_G(scope_lookup_limit) || BLITZ_G(enable_magic_scope)) {
         BLITZ_SCOPE_STACK_SHIFT(tpl);
     }
 
