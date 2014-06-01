@@ -15,7 +15,7 @@ Friends:
   Name: {{ name }} {{ IF name == _top.currentUserName }}(Current user){{ END }}
   Friends:
     {{ BEGIN friends }}
-      Name: {{ name }} {{ IF name == _parent.name }}(I'm friends with myself!){{ ELSEIF name == _parent._parent.name }}(Mutual!){{ END }}
+      Name: {{ name }} {{ IF name == _parent.name }}(I'm friends with myself!){{ END }}{{ IF name == _parent._parent.name }}(Mutual!){{ END }}{{ IF name == _top.currentUserName }}(Current user){{ END }}
     {{ END friends }}
   {{ END friends }}
 {{ END users }}
@@ -98,7 +98,7 @@ Name: Vincent
 Friends:
   Name: Maurus 
   Friends:
-      Name: Thibaut 
+      Name: Thibaut (Current user)
       Name: Vincent (Mutual!)
       Name: Nicolas 
   Name: Thibaut (Current user)
@@ -107,8 +107,8 @@ Friends:
   Name: Vincent 
   Friends:
       Name: Maurus 
-      Name: Thibaut 
-      Name: Vincent (I'm friends with myself!)
+      Name: Thibaut (Current user)
+      Name: Vincent (I'm friends with myself!)(Mutual!)
 Name: Maurus 
 Friends:
   Name: Thibaut (Current user)
@@ -117,7 +117,7 @@ Friends:
   Name: Vincent 
   Friends:
       Name: Maurus (Mutual!)
-      Name: Thibaut 
+      Name: Thibaut (Current user)
       Name: Vincent (I'm friends with myself!)
   Name: Nicolas 
   Friends:
@@ -126,7 +126,7 @@ Friends:
   Name: Vincent 
   Friends:
       Name: Maurus 
-      Name: Thibaut (Mutual!)
+      Name: Thibaut (Mutual!)(Current user)
       Name: Vincent (I'm friends with myself!)
 Name: Nicolas 
 Friends:
