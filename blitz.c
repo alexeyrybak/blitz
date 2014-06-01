@@ -2997,16 +2997,9 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     if (blitz_extract_var(tpl, arg->name, arg->len, (arg->type == BLITZ_ARG_TYPE_VAR_PATH), parent_params, &predefined, &ctx_iterations TSRMLS_CC) == 0) {
         if (BLITZ_DEBUG) {
             php_printf("failed to find key %s in parent params\n", arg->name);
+            php_printf("as we failed to find key %s in parent params and node->type is BLITZ_NODE_TYPE_CONTEXT - will return\n", arg->name);
         }
-
-        if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
-            if (BLITZ_DEBUG) {
-                php_printf("as we failed to find key %s in parent params and node->type is BLITZ_NODE_TYPE_CONTEXT - will return\n", arg->name);
-            }
-            return;
-        } else {
-            not_empty = 0;
-        }
+        return;
     } else {
         if (BLITZ_DEBUG) {
             php_printf("key %s was found in parent params\n", arg->name);
