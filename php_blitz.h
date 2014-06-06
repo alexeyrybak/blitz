@@ -62,7 +62,6 @@ ZEND_BEGIN_MODULE_GLOBALS(blitz)
     char warn_context_duplicates;
     char check_recursion;
     unsigned long scope_lookup_limit;
-    char enable_magic_scope;
     char lower_case_method_names;
     char auto_escape;
     char throw_exceptions;

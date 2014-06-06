@@ -50,50 +50,10 @@ $data = array(
     'currentUserName' => 'Thibaut'
 );
 
-ini_set('blitz.enable_magic_scope', 0);
-$T->display($data);
-ini_set('blitz.enable_magic_scope', 1);
 $T->display($data);
 
 ?>
 --EXPECT--
-Name: Vincent 
-Friends:
-  Name: Maurus 
-  Friends:
-      Name: Thibaut 
-      Name: Vincent 
-      Name: Nicolas 
-  Name: Thibaut 
-  Friends:
-      Name: Vincent 
-  Name: Vincent 
-  Friends:
-      Name: Maurus 
-      Name: Thibaut 
-      Name: Vincent 
-Name: Maurus 
-Friends:
-  Name: Thibaut 
-  Friends:
-      Name: Vincent 
-  Name: Vincent 
-  Friends:
-      Name: Maurus 
-      Name: Thibaut 
-      Name: Vincent 
-  Name: Nicolas 
-  Friends:
-Name: Thibaut 
-Friends:
-  Name: Vincent 
-  Friends:
-      Name: Maurus 
-      Name: Thibaut 
-      Name: Vincent 
-Name: Nicolas 
-Friends:
-===================================================================
 Name: Vincent 
 Friends:
   Name: Maurus 
