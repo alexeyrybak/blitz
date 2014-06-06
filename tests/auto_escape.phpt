@@ -4,6 +4,7 @@ auto-escaping variables (HTML-filtering). NOTE: works 100% only for PHP > 5.4.0!
 <?php
 include('common.inc');
 
+ini_set('default_charset', 'UTF-8');
 ini_set('blitz.auto_escape', 1);
 
 $T = new Blitz();
