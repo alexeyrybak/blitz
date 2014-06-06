@@ -733,6 +733,20 @@ typedef struct _blitz_analizer_ctx {
         }                                                                                                              \
     }
 
+#define BLITZ_IS_PREDEFINED_TOP(s, l)                              \
+    (l == 4) && (                                                  \
+        (s[0] == '_' && s[1] == 't' && s[2] == 'o' && s[3] == 'p') \
+        ||                                                         \
+        (s[0] == '_' && s[1] == 'T' && s[2] == 'O' && s[3] == 'P') \
+    )
+
+#define BLITZ_IS_PREDEFINED_PARENT(s, l)                                                                        \
+    (l == 7) && (                                                                                               \
+        (s[0] == '_' && s[1] == 'p' && s[2] == 'a' && s[3] == 'r' && s[4] == 'e' && s[5] == 'n' && s[6] == 't') \
+        ||                                                                                                      \
+        (s[0] == '_' && s[1] == 'P' && s[2] == 'A' && s[3] == 'R' && s[4] == 'E' && s[5] == 'N' && s[6] == 'T') \
+    )
+
 #define BLITZ_STRING_IS_TRUE(s, l) \
     (l == 4) && ( \
         (s[0] == 't' && s[1] == 'r' && s[2] == 'u' && s[3] == 'e') \

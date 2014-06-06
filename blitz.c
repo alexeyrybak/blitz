@@ -2322,10 +2322,12 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
     char key[256];
     char root_found = 0;
     char use_scope = 0, found_in_scope = 0;
-    unsigned long loop_index = 0, stack_level = 0;
+    int magic_offset = 0;
+    unsigned long loop_index = 0, stack_level = 0, magic_stack = 0;
 
     last_pos = 0;
     j = lexem_len - 1;
+    magic_stack = tpl->scope_stack_pos;
     /* walk through the path */
     for (i = 0; i < lexem_len; i++, j--) {
         is_last = (j == 0);
@@ -2335,7 +2337,16 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
             key[key_len] = '\x0';
 
             /* try to get data by the key */
-            if (0 == root_found) { /* globals or params? */
+            if (BLITZ_IS_PREDEFINED_TOP(key, key_len)) {
+                if (BLITZ_DEBUG) php_printf("predefined path _top: resetting stack key '%s' in scope::%lu -> 0\n", key, magic_stack);
+                magic_stack = 0;
+                *zparam = &tpl->scope_stack[magic_stack];
+            } else if (BLITZ_IS_PREDEFINED_PARENT(key, key_len)) {
+                magic_offset = (tpl->scope_stack_pos == magic_stack ? 2 : 1); /* if we're at the initial stack level, subtract 2 to get to the parent, since we just created a new stack level */
+                if (BLITZ_DEBUG) php_printf("predefined path _parent: resetting stack key '%s' in scope::%lu -> %lu\n", key, magic_stack, (magic_stack > magic_offset ? magic_stack - magic_offset : 0));
+                magic_stack = (magic_stack > magic_offset ? magic_stack - magic_offset : 0); /* keep track of the current magic scope to enable things like _parent._parent */
+                *zparam = &tpl->scope_stack[magic_stack];
+            } else if (0 == root_found) { /* globals or params? */
                 root_found = (params && (
                     (IS_ARRAY == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_ARRVAL_P(params), key, key_len + 1, (void **) zparam)) ||
                     (IS_OBJECT == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_OBJPROP_P(params), key, key_len + 1, (void **) zparam))
@@ -2997,16 +3008,9 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     if (blitz_extract_var(tpl, arg->name, arg->len, (arg->type == BLITZ_ARG_TYPE_VAR_PATH), parent_params, &predefined, &ctx_iterations TSRMLS_CC) == 0) {
         if (BLITZ_DEBUG) {
             php_printf("failed to find key %s in parent params\n", arg->name);
+            php_printf("as we failed to find key %s in parent params and node->type is BLITZ_NODE_TYPE_CONTEXT - will return\n", arg->name);
         }
-
-        if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
-            if (BLITZ_DEBUG) {
-                php_printf("as we failed to find key %s in parent params and node->type is BLITZ_NODE_TYPE_CONTEXT - will return\n", arg->name);
-            }
-            return;
-        } else {
-            not_empty = 0;
-        }
+        return;
     } else {
         if (BLITZ_DEBUG) {
             php_printf("key %s was found in parent params\n", arg->name);
@@ -3449,9 +3453,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
     }
 
-    if (BLITZ_G(scope_lookup_limit)) {
-        BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
-    }
+    BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
 
     node = first_child;
     while (node) {
@@ -3523,9 +3525,7 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
     }
 
-    if (BLITZ_G(scope_lookup_limit)) {
-        BLITZ_SCOPE_STACK_SHIFT(tpl);
-    }
+    BLITZ_SCOPE_STACK_SHIFT(tpl);
 
     if (BLITZ_DEBUG)
         php_printf("== D:b3  %ld,%ld,%ld\n",last_close,parent_begin,parent_end);
