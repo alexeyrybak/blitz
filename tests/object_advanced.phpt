@@ -11,9 +11,10 @@ ini_set('date.timezone', 'UTC');
 
 $body = <<<BODY
 {{ BEGIN users }}
-Name: {{ name }}
+Name: {{ IF(name, name, "Unnamed") }}
 Age: {{ age(age); }}
 Birthdate: {{ date("%Y/%m/%d", \$age); }}
+{{ include(tpl); }}
 {{ END users }}
 ===================================================================
 
@@ -40,31 +41,54 @@ class Age {
     }
 }
 
+class Tpl {
+    public function __toString() {
+        return 'include-inner.tpl';
+    }
+}
+
 class User {
     public $name;
     public $age;
+    public $a;
+    public $b;
+    public $tpl;
 
     public function __construct($name, $birthdate) {
         $this->name = $name;
         $this->age = new Age($birthdate);
+        $this->tpl = new Tpl();
+        $this->a = 'a';
+        $this->b = 'b';
     }
 }
 
 $vincent = new User("Vincent", "1982-11-01");
 $maurus = new User("Maurus", "1991-04-07");
+$unknown = new User(false, "1987-08-14");
 
 $T = new Blitz();
 $T->load($body);
-$T->display(array('users' => array($vincent, $maurus)));
+$T->display(array('users' => array($vincent, $maurus,$unknown)));
 
 ?>
 --EXPECTF--
 Name: Vincent
 Age: %d
 Birthdate: 1982/11/01
+a = a, b = b
+
 
 Name: Maurus
 Age: %d
 Birthdate: 1991/04/07
+a = a, b = b
+
+
+Name: Unnamed
+Age: %d
+Birthdate: 1987/08/14
+a = a, b = b
+
 
 ===================================================================
