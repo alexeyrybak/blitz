@@ -2305,8 +2305,7 @@ static inline int blitz_scope_stack_find(blitz_tpl *tpl, char *key, unsigned lon
 
     while (i <= lookup_limit) {
         data = tpl->scope_stack[tpl->scope_stack_pos - i - 1];
-        if ((IS_ARRAY == Z_TYPE_P(data) && SUCCESS == zend_hash_find(Z_ARRVAL_P(data), key, key_len, (void **) zparam)) ||
-            (IS_OBJECT == Z_TYPE_P(data) && SUCCESS == zend_hash_find(Z_OBJPROP_P(data), key, key_len, (void **) zparam))) {
+        if (SUCCESS == BLITZ_HASH_FIND_P(data, key, key_len, (void **) zparam)) {
             return i;
         }
         i++;
@@ -2347,11 +2346,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                 magic_stack = (magic_stack > magic_offset ? magic_stack - magic_offset : 0); /* keep track of the current magic scope to enable things like _parent._parent */
                 *zparam = &tpl->scope_stack[magic_stack];
             } else if (0 == root_found) { /* globals or params? */
-                root_found = (params && (
-                    (IS_ARRAY == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_ARRVAL_P(params), key, key_len + 1, (void **) zparam)) ||
-                    (IS_OBJECT == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_OBJPROP_P(params), key, key_len + 1, (void **) zparam))
-                ));
-
+                root_found = (params && SUCCESS == BLITZ_HASH_FIND_P(params, key, key_len + 1, (void **) zparam));
                 if (!root_found) {
                     root_found = (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, key, key_len + 1, (void**)zparam)));
                     if (!root_found) {
@@ -2367,7 +2362,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                 }
             } else if (*zparam) { /* just propagate through elem */
                 if (Z_TYPE_PP(*zparam) == IS_ARRAY) {
-                    if (SUCCESS != zend_hash_find(Z_ARRVAL_PP(*zparam), key, key_len + 1, (void **) zparam)) {
+                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam)) {
                         // when using scope 'list.item' can be 1) list->item and 2) list->[loop_index]->item
                         // thus when list->item is not found whe have to test list->[loop_index]->item
                         if (found_in_scope == 0) {
@@ -2385,7 +2380,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                         }
                     }
                 } else if (Z_TYPE_PP(*zparam) == IS_OBJECT) {
-                    if (SUCCESS != zend_hash_find(Z_OBJPROP_PP(*zparam), key, key_len + 1, (void **) zparam)) {
+                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam)) {
                         return 0;
                     }
                 } else {
@@ -2428,10 +2423,8 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         } else if (arg->type == BLITZ_ARG_TYPE_VAR) {
             if (iteration_params) {
-                if (Z_TYPE_P(iteration_params) == IS_ARRAY) {
-                    BLITZ_ARG_NOT_EMPTY(*arg, Z_ARRVAL_P(iteration_params), not_empty);
-                } else if (Z_TYPE_P(iteration_params) == IS_OBJECT) {
-                    BLITZ_ARG_NOT_EMPTY(*arg, Z_OBJPROP_P(iteration_params), not_empty);
+                if (Z_TYPE_P(iteration_params) == IS_ARRAY || Z_TYPE_P(iteration_params) == IS_OBJECT) {
+                    BLITZ_ARG_NOT_EMPTY(*arg, HASH_OF(iteration_params), not_empty);
                 }
 
                 if (not_empty == -1) {
@@ -2600,7 +2593,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
                 p_arg = node->args + i;
                 wrapper_args_num++;
                 if (p_arg->type == BLITZ_ARG_TYPE_VAR) {
-                    if ((iteration_params && SUCCESS == zend_hash_find(Z_ARRVAL_P(iteration_params),p_arg->name,1+p_arg->len,(void**)&z))
+                    if ((iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, p_arg->name, p_arg->len + 1, (void **) &z))
                         || (SUCCESS == zend_hash_find(tpl->hash_globals,p_arg->name,1+p_arg->len,(void**)&z)))
                     {
                         convert_to_string_ex(z);
@@ -2689,7 +2682,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
                     if (predefined >= 0) {
                         ZVAL_LONG(pargs[i], (long)predefined);
                     } else {
-                        if ((has_iterations && (SUCCESS == zend_hash_find(Z_ARRVAL_PP(iteration_params),i_arg->name,1+i_arg->len,(void**)&ztmp)))
+                        if ((has_iterations && SUCCESS == BLITZ_HASH_FIND_P(*iteration_params, i_arg->name, i_arg->len + 1, (void **) &ztmp))
                             || (SUCCESS == zend_hash_find(tpl->hash_globals,i_arg->name,1+i_arg->len,(void**)&ztmp)))
                         {
                             args[i] = ztmp;
@@ -3103,12 +3096,8 @@ static inline unsigned int blitz_extract_var (
     if (is_path) {
         return blitz_fetch_var_by_path(z, name, len, params, tpl TSRMLS_CC);
     } else {
-        if (params) {
-            if (IS_ARRAY == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_ARRVAL_P(params), name, len_p1, (void**)z)) {
-                return 1;
-            } else if (IS_OBJECT == Z_TYPE_P(params) && SUCCESS == zend_hash_find(Z_OBJPROP_P(params), name, len_p1, (void**)z)) {
-                return 1;
-            }
+        if (params && SUCCESS == BLITZ_HASH_FIND_P(params, name, len_p1, (void **) z)) {
+            return 1;
         }
 
         if (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, name, len_p1, (void**)z))) {
@@ -3143,10 +3132,8 @@ static inline void blitz_check_arg (
         *not_empty = 1;
     } else {
         if (arg->type == BLITZ_ARG_TYPE_VAR) {
-            if (parent_params && Z_TYPE_P(parent_params) == IS_ARRAY) {
-                BLITZ_ARG_NOT_EMPTY(*arg, Z_ARRVAL_P(parent_params), *not_empty);
-            } else if (parent_params && Z_TYPE_P(parent_params) == IS_OBJECT) {
-                BLITZ_ARG_NOT_EMPTY(*arg, Z_OBJPROP_P(parent_params), *not_empty);
+            if (parent_params && (Z_TYPE_P(parent_params) == IS_ARRAY || Z_TYPE_P(parent_params) == IS_OBJECT)) {
+                BLITZ_ARG_NOT_EMPTY(*arg, HASH_OF(parent_params), *not_empty);
             } else {
                 *not_empty = -1;
             } 
