@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.9"
+#define BLITZ_VERSION_STRING "0.8.10"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -1126,8 +1126,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     *true_lexem_len = 0; /* used for parameters only */
 
     i_pos = 0;
-    /* parameter or method? */
-    if (var_prefix && *c == var_prefix) { /* scan parameter */
+    if (var_prefix && *c == var_prefix) { /* scan prefixed parameter */
         ++c;
         ++pos;
         BLITZ_SCAN_VAR_NOCOPY(c, i_pos, i_symb, is_path);
@@ -1144,12 +1143,21 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
             state = BLITZ_CALL_STATE_FINISHED;
             pos += i_pos;
         }
-    } else if (BLITZ_IS_ALPHA(*c)) { /* scan function */
+    } else if (BLITZ_IS_ALPHA(*c) || (*c == '\\')) { /* scan method/callback (can go with a namespace) or unprefixed parameter */
         is_path = 0;
-        BLITZ_SCAN_VAR_NOCOPY(c, i_pos, i_symb, is_path);
+        if (*c == '\\') {
+            BLITZ_SCAN_NAMESPACE_NOCOPY(c, i_pos, i_symb, is_path);
+        } else {
+            BLITZ_SCAN_VAR_NOCOPY(c, i_pos, i_symb, is_path);
+        }
+
         if (i_pos > 0) {
+            if (*c == '\\') { // Space\Class with no leading "\"
+                BLITZ_SCAN_NAMESPACE_NOCOPY(c, i_pos, i_symb, is_path);
+            }
+
             p_end = text + pos + i_pos;
-            if (*p_end == ':' && *(p_end + 1) == ':') { // static calls for plugins
+            if (*p_end == ':' && *(p_end + 1) == ':') { // :: separates helper classname/namespace path and the callback name
                 has_namespace = 1;
                 i_pos += 2;
                 c = text + pos + i_pos;

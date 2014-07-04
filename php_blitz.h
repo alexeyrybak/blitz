@@ -534,6 +534,13 @@ typedef struct _blitz_analizer_ctx {
         ++(len);                                                                                   \
     }                                                                                              \
 
+#define BLITZ_SCAN_NAMESPACE_NOCOPY(c, len, symb, is_path)                                         \
+    while(((symb) = *(c)) &&                                                                       \
+        (BLITZ_IS_NUMBER(symb) || BLITZ_IS_ALPHA(symb) || (symb == '\\'))) {                       \
+        ++(c);                                                                                     \
+        ++(len);                                                                                   \
+    }                                                                                              \
+
 
 #define BLITZ_SCAN_EXPR_OPERATOR(c, i_len, i_type)                                                  \
     if (*(c) == '>') {                                                                              \

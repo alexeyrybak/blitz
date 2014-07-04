@@ -1,4 +1,11 @@
 ===================================================================================================
+0.8.10 version 4 july 2014. С днём незави... не, с прошедшим днём ГИБДД!
+===================================================================================================
+- ADD: new magic variables $_top and $_parent, referencing parent and 
+  first-in-the-list iteration parameters, thanks to Nikolas Van Eenaeme
+- FIX: namespace separators work in callbacks properly {{ [\]Space\Class::bla() }} 
+
+===================================================================================================
 0.8.9 version 28 may 2014. С днём пограничника!
 ===================================================================================================
 - FIX: looping through a list of objects, accessing their attributes; thanks to Nikolas Van Eenaeme, 
