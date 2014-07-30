@@ -2651,7 +2651,8 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
     call_arg *i_arg = NULL;
     char i_arg_type = 0;
     char cl = 0;
-    int predefined = -1, has_iterations = 0;
+    long predefined = -1;
+    int has_iterations = 0, found = 0;
     zval **old_caller_iteration = NULL; 
     blitz_tpl *tpl_caller = NULL;
     HashTable *function_table = NULL;
@@ -2686,17 +2687,12 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
                     }
                 } else {
                     predefined = -1;
-                    BLITZ_GET_PREDEFINED_VAR(tpl, i_arg->name, i_arg->len, predefined);
+                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, *iteration_params, &predefined, &ztmp);
                     if (predefined >= 0) {
                         ZVAL_LONG(pargs[i], (long)predefined);
-                    } else {
-                        if ((has_iterations && SUCCESS == BLITZ_HASH_FIND_P(*iteration_params, i_arg->name, i_arg->len + 1, (void **) &ztmp))
-                            || (SUCCESS == zend_hash_find(tpl->hash_globals,i_arg->name,1+i_arg->len,(void**)&ztmp)))
-                        {
-                            args[i] = ztmp;
-                        }
+                    } else if (found) {
+                        args[i] = ztmp;
                     }
-
                 }
 
             } else if (i_arg_type == BLITZ_ARG_TYPE_VAR_PATH) {
@@ -3098,6 +3094,17 @@ static inline unsigned int blitz_extract_var (
     BLITZ_GET_PREDEFINED_VAR(tpl, name, len, *l);
 
     if (*l >= 0) {
+        return 1;
+    }
+
+    if (BLITZ_IS_PREDEFINED_TOP(name, len)) {
+        if (BLITZ_DEBUG) php_printf("predefined var _top\n");
+        *z = &tpl->scope_stack[0];
+        return 1;
+    } else if (BLITZ_IS_PREDEFINED_PARENT(name, len)) {
+        if (BLITZ_DEBUG) php_printf("predefined path _parent\n");
+        int magic_stack = (tpl->scope_stack_pos > 2 ? tpl->scope_stack_pos - 2 : 0); /* keep track of the current magic scope to enable things like _parent._parent */
+        *z = &tpl->scope_stack[magic_stack];
         return 1;
     }
 
