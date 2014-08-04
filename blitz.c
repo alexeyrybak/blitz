@@ -3888,7 +3888,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
     register const char *p = path;
     register int pmax = path_len;
     char buffer[BLITZ_CONTEXT_PATH_MAX_LEN];
-    char *key = NULL;
+    char *key = NULL, *tmp_key;
     zval **dummy;
     unsigned long index = 0;
 
@@ -3933,7 +3933,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
             /* 'parent' => [0 => {'child' => {'var' => 'val'}] (parent iterations is array with numerical indexes) */
             /* and 'block' => {'child' => {'var' => 'val'}} (just an assosiative array) */
             zend_hash_internal_pointer_end(HASH_OF(*tmp));
-            if (zend_hash_get_current_key(HASH_OF(*tmp), &key, &index, 0) == HASH_KEY_IS_LONG) {
+            if (zend_hash_get_current_key(HASH_OF(*tmp), &tmp_key, &index, 0) == HASH_KEY_IS_LONG) {
                 if (SUCCESS != zend_hash_get_current_data(HASH_OF(*tmp), (void **) &entry)) {
                     return 0;
                 }
@@ -3941,11 +3941,11 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
                     php_printf("moving to the last array element:\n");
                     php_var_dump(entry, 0 TSRMLS_CC);
                 }
-                if (SUCCESS != zend_hash_find(HASH_OF(*entry),key,key_len+1,(void **) &tmp)) {
+                if (SUCCESS != zend_hash_find(HASH_OF(*entry), key, key_len + 1, (void **) &tmp)) {
                     return 0;
                 }
             } else {
-                if (SUCCESS != zend_hash_find(HASH_OF(*tmp),key,key_len+1,(void **) &tmp)) {
+                if (SUCCESS != zend_hash_find(HASH_OF(*tmp), key, key_len + 1, (void **) &tmp)) {
                     return 0;
                 }
             }
@@ -3971,7 +3971,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
     zend_hash_internal_pointer_end(HASH_OF(*tmp));
 
     /* if not array - stop searching, otherwise get the latest data */
-    if (zend_hash_get_current_key(HASH_OF(*tmp), &key, &index, 0) == HASH_KEY_IS_STRING) {
+    if (zend_hash_get_current_key(HASH_OF(*tmp), &tmp_key, &index, 0) == HASH_KEY_IS_STRING) {
         *iteration = *tmp;
         *iteration_parent = *tmp;
         return 1;
