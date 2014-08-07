@@ -1,4 +1,11 @@
 ===================================================================================================
+0.8.11 version 7 aug 2014. С днём Спецсвязи ФСО!
+===================================================================================================
+- FIX: critical memory corruption fix. Incorrect array looping in 0.8.10 could lead to crazy
+  behaviour: undefined constants that were previously defined, disappearing values that were set 
+  before et cetera. Thanks to Antony "tony2001" Dovgal and the Badoo Features Team. 
+
+===================================================================================================
 0.8.10 version 4 july 2014. С днём незави... не, с прошедшим днём ГИБДД!
 ===================================================================================================
 - ADD: new magic variables $_top and $_parent, referencing parent and 
