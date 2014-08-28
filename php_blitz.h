@@ -298,6 +298,8 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_ESCAPE_YES        2
 #define BLITZ_ESCAPE_NL2BR      3
 
+#define BLITZ_CONSTANT_FLAGS (CONST_CS | CONST_PERSISTENT)
+
 /* simple string with length */
 typedef struct {
     char *s;

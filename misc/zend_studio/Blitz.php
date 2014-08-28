@@ -3,6 +3,48 @@
   // simply add it to your Zend Studio project
   
   if (!extension_loaded('Blitz')) {
+
+    define('BLITZ_TYPE_VAR', 1);
+    define('BLITZ_TYPE_METHOD', 2);
+
+    define('BLITZ_ARG_TYPE_VAR', 1);
+    define('BLITZ_ARG_TYPE_VAR_PATH', 2);
+    define('BLITZ_ARG_TYPE_STR', 4);
+    define('BLITZ_ARG_TYPE_NUM', 8);
+    define('BLITZ_ARG_TYPE_BOOL', 16);
+    define('BLITZ_ARG_TYPE_FLOAT', 32);
+    define('BLITZ_ARG_TYPE_EXPR_SHIFT', 128);
+
+    define('BLITZ_EXPR_OPERATOR_GE', 128);
+    define('BLITZ_EXPR_OPERATOR_G', 129);
+    define('BLITZ_EXPR_OPERATOR_LE', 130);
+    define('BLITZ_EXPR_OPERATOR_L', 131);
+    define('BLITZ_EXPR_OPERATOR_NE', 132);
+    define('BLITZ_EXPR_OPERATOR_E', 133);
+    define('BLITZ_EXPR_OPERATOR_LA', 134);
+    define('BLITZ_EXPR_OPERATOR_LO', 135);
+
+    define('BLITZ_NODE_TYPE_COMMENT', 0);
+    define('BLITZ_NODE_TYPE_IF', 6);
+    define('BLITZ_NODE_TYPE_UNLESS', 10);
+    define('BLITZ_NODE_TYPE_INCLUDE', 14);
+    define('BLITZ_NODE_TYPE_END', 22);
+    define('BLITZ_NODE_TYPE_CONTEXT', 26);
+    define('BLITZ_NODE_TYPE_CONDITION', 30);
+
+    define('BLITZ_NODE_TYPE_WRAPPER_ESCAPE', 46);
+    define('BLITZ_NODE_TYPE_WRAPPER_DATE', 50);
+    define('BLITZ_NODE_TYPE_WRAPPER_UPPER', 54);
+    define('BLITZ_NODE_TYPE_WRAPPER_LOWER', 58);
+    define('BLITZ_NODE_TYPE_WRAPPER_TRIM', 62);
+
+    define('BLITZ_NODE_TYPE_IF_CONTEXT', 94);
+    define('BLITZ_NODE_TYPE_UNLESS_CONTEXT', 98);
+    define('BLITZ_NODE_TYPE_ELSEIF_CONTEXT', 106);
+    define('BLITZ_NODE_TYPE_ELSE_CONTEXT', 114);
+
+    define('BLITZ_NODE_TYPE_VAR', 5);
+    define('BLITZ_NODE_TYPE_VAR_PATH', 9); 
     
     class Blitz 
     {
@@ -166,7 +208,24 @@
        * @return bool
        */
       public function setGlobal($parameters)
-      {}      
+      {}
+
+      /**
+       * Returns template path list.
+       *
+       * @return array
+       */
+      public function getStructure()
+      {}
+
+      /**
+       * Returns tokenized template structure.
+       * Just like dumpStruct but returns structure array.
+       *
+       * @return array
+       */
+      public function getTokens()
+      {}
     }
     
   }

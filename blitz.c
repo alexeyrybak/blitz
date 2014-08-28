@@ -837,6 +837,75 @@ static void php_blitz_dump_struct(blitz_tpl *tpl) /* {{{ */
 }
 /* }}} */
 
+static void php_blitz_get_node_tokens(blitz_node *node, zval *list) /* {{{ */
+{
+    unsigned long j = 0;
+    blitz_node *child = NULL;
+    zval *node_token;
+    zval *args_list;
+    zval *child_list;
+    zval *arg;
+
+    if (!node) {
+        return;
+    }
+
+    ALLOC_INIT_ZVAL(node_token);
+    array_init(node_token);
+
+    add_assoc_string(node_token, "lexem", node->lexem, 1);
+    add_assoc_long(node_token, "type", (unsigned int)node->type);
+    add_assoc_long(node_token, "begin", node->pos_begin);
+    add_assoc_long(node_token, "begin_shift", node->pos_begin_shift);
+    add_assoc_long(node_token, "end", node->pos_end);
+    add_assoc_long(node_token, "end_shift", node->pos_end_shift);
+
+    if (BLITZ_IS_METHOD(node->type)) {
+
+        if( node->n_args > 0 ) {
+            ALLOC_INIT_ZVAL(args_list);
+            array_init(args_list);
+            for (j = 0; j < node->n_args; ++j) {
+                ALLOC_INIT_ZVAL(arg);
+                array_init(arg);
+                add_assoc_stringl(arg, "name", node->args[j].name, node->args[j].len, 1);
+                add_assoc_long(arg, "type", node->args[j].type);
+
+                add_next_index_zval(args_list, arg);
+            }
+
+            add_assoc_zval(node_token, "args", args_list);
+        }
+
+        if (node->first_child) {
+            child = node->first_child;
+            ALLOC_INIT_ZVAL(child_list);
+            array_init(child_list);
+            while (child) {
+                php_blitz_get_node_tokens(child, child_list);
+                child = child->next;
+            }
+
+            add_assoc_zval(node_token, "children", child_list);
+        }
+    }
+
+    add_next_index_zval(list, node_token);
+}
+/* }}} */
+
+static void php_blitz_get_tokens(blitz_tpl *tpl, zval *list) /* {{{ */
+{
+    blitz_node *node = NULL;
+    node = tpl->static_data.nodes;
+
+    while (node) {
+        php_blitz_get_node_tokens(node, list);
+        node = node->next;
+    }
+}
+/* }}} */
+
 void blitz_warn_context_duplicates(blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     zval *path_list = NULL;
@@ -4344,6 +4413,55 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr TSR
 }
 /* }}} */
 
+static void blitz_register_constants(INIT_FUNC_ARGS) /* {{{ */
+{
+    //basic types
+    REGISTER_LONG_CONSTANT("BLITZ_TYPE_VAR", BLITZ_TYPE_VAR, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_TYPE_METHOD", BLITZ_TYPE_METHOD, BLITZ_CONSTANT_FLAGS);
+
+    //arg type constants
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_VAR", BLITZ_ARG_TYPE_VAR, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_VAR_PATH", BLITZ_ARG_TYPE_VAR_PATH, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_STR", BLITZ_ARG_TYPE_STR, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_NUM", BLITZ_ARG_TYPE_NUM, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_BOOL", BLITZ_ARG_TYPE_BOOL, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_FLOAT", BLITZ_ARG_TYPE_FLOAT, BLITZ_CONSTANT_FLAGS);    
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_EXPR_SHIFT", BLITZ_ARG_TYPE_EXPR_SHIFT, BLITZ_CONSTANT_FLAGS);
+
+    //expr type constants
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_GE", BLITZ_EXPR_OPERATOR_GE, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_G", BLITZ_EXPR_OPERATOR_G, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_LE", BLITZ_EXPR_OPERATOR_LE, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_L", BLITZ_EXPR_OPERATOR_L, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_NE", BLITZ_EXPR_OPERATOR_NE, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_E", BLITZ_EXPR_OPERATOR_E, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_LA", BLITZ_EXPR_OPERATOR_LA, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_EXPR_OPERATOR_LO", BLITZ_EXPR_OPERATOR_LO, BLITZ_CONSTANT_FLAGS);
+
+    //node type constants
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_COMMENT", BLITZ_NODE_TYPE_COMMENT, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_IF", BLITZ_NODE_TYPE_IF, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_UNLESS", BLITZ_NODE_TYPE_UNLESS, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_INCLUDE", BLITZ_NODE_TYPE_INCLUDE, BLITZ_CONSTANT_FLAGS);    
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_END", BLITZ_NODE_TYPE_END, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_CONTEXT", BLITZ_NODE_TYPE_CONTEXT, BLITZ_CONSTANT_FLAGS);
+
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_ESCAPE", BLITZ_NODE_TYPE_WRAPPER_ESCAPE, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_DATE", BLITZ_NODE_TYPE_WRAPPER_DATE, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_UPPER", BLITZ_NODE_TYPE_WRAPPER_UPPER, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_LOWER", BLITZ_NODE_TYPE_WRAPPER_LOWER, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_TRIM", BLITZ_NODE_TYPE_WRAPPER_TRIM, BLITZ_CONSTANT_FLAGS);
+
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_IF_CONTEXT", BLITZ_NODE_TYPE_IF_CONTEXT, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_UNLESS_CONTEXT", BLITZ_NODE_TYPE_UNLESS_CONTEXT, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_ELSEIF_CONTEXT", BLITZ_NODE_TYPE_ELSEIF_CONTEXT, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_ELSE_CONTEXT", BLITZ_NODE_TYPE_ELSE_CONTEXT, BLITZ_CONSTANT_FLAGS);
+
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_VAR", BLITZ_NODE_TYPE_VAR, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_VAR_PATH", BLITZ_NODE_TYPE_VAR_PATH, BLITZ_CONSTANT_FLAGS);
+}
+/* }}} */
+
 /**********************************************************************************************************************
 * Blitz CLASS methods
 **********************************************************************************************************************/
@@ -4438,6 +4556,20 @@ static PHP_FUNCTION(blitz_dump_struct)
     php_blitz_dump_struct(tpl);
 
     RETURN_TRUE;
+}
+/* }}} */
+
+/* {{{ proto array Blitz->getTokens(void) */
+static PHP_FUNCTION(blitz_get_tokens)
+{
+    zval *id, **desc;
+    blitz_tpl *tpl;
+
+    BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
+
+    array_init(return_value);
+
+    php_blitz_get_tokens(tpl, return_value);
 }
 /* }}} */
 
@@ -5075,6 +5207,7 @@ static const zend_function_entry blitz_functions[] = {
     PHP_FALIAS(fetch,               blitz_fetch,                NULL)
     PHP_FALIAS(clean,               blitz_clean,                NULL)
     PHP_FALIAS(dumpstruct,          blitz_dump_struct,          NULL)
+    PHP_FALIAS(gettokens,           blitz_get_tokens,           NULL)
     PHP_FALIAS(getstruct,           blitz_get_struct,           NULL)
     PHP_FALIAS(getiterations,       blitz_get_iterations,       NULL)
     PHP_FALIAS(hascontext,          blitz_has_context,          NULL)
@@ -5098,6 +5231,7 @@ PHP_MINIT_FUNCTION(blitz) /* {{{ */
 
     INIT_CLASS_ENTRY(blitz_class_entry, "blitz", blitz_functions);
     zend_register_internal_class(&blitz_class_entry TSRMLS_CC);
+    blitz_register_constants(INIT_FUNC_ARGS_PASSTHRU);
 
     return SUCCESS;
 }
