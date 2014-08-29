@@ -4,20 +4,20 @@
   +----------------------------------------------------------------------+
   | Downloads and online documentation:                                  |
   |     http://alexeyrybak.com/blitz/                                    |
-  |     http://sourceforge.net/projects/blitz-templates/                 |
-  |                                                                      |
+  |     http://github.com/alexeyrybak/blitz/                             |
   | Author:                                                              |
   |     Alexey Rybak [fisher] <alexey.rybak at gmail dot com>            |
   | Bugfixes and patches:                                                |
   |     Antony Dovgal [tony2001] <tony at daylessday dot org>            |
   |     Konstantin Baryshnikov [fixxxer] <konstantin at symbi dot info>  |
+  |     and many others, please see full list on github                  |
   | Mailing list:                                                        |
   |     blitz-php at googlegroups dot com                                |
   +----------------------------------------------------------------------+
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.12"
+#define BLITZ_VERSION_STRING "0.8.13"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -3276,6 +3276,8 @@ static inline void blitz_check_arg (
             (d) = (double)Z_LVAL_PP(z);                                                         \
         } else if (Z_TYPE_PP(z) == IS_DOUBLE) {                                                 \
             (d) = Z_DVAL_PP(z);                                                                 \
+        } else if (Z_TYPE_PP(z) == IS_STRING) {                                                 \
+            (d) = atof(Z_STRVAL_PP(z));                                                         \
         } else {                                                                                \
             t = BLITZ_COMPARE_UNKNOWN;                                                          \
         }                                                                                       \
@@ -3348,22 +3350,30 @@ static inline void blitz_check_expr (
             c = BLITZ_COMPARE_STRING;
         }
         if (BLITZ_DEBUG) 
-            php_printf("type#%lu = %u\n", i, c);
+            php_printf("argument %s type#%lu = %u\n", arg->name, i, c);
 
         t[i] = c;
     }
 
     if ((t[0] == BLITZ_COMPARE_UNKNOWN) || (t[1] == BLITZ_COMPARE_UNKNOWN)) {
-        *is_true = - 1;
+        if (BLITZ_DEBUG)
+            php_printf("one of the varibles is of incorrect type, result is error\n");
+        *is_true = -1;
     } else if ((t[0] == BLITZ_COMPARE_UNDEFINED_VAR) || (t[1] == BLITZ_COMPARE_UNDEFINED_VAR)) {
+        if (BLITZ_DEBUG)
+            php_printf("one of the varibles is undefined, result is false\n");
         switch (expr_arg->type) {
             case BLITZ_EXPR_OPERATOR_E: *is_true = 0; break;
             default: *is_true = 0;
         }
     } else {
         if ((t[0] == BLITZ_COMPARE_STRING) && (t[1] == BLITZ_COMPARE_STRING)) {
+            if (BLITZ_DEBUG)
+                php_printf("both variables are strings, cast to strings\n");
             BLITZ_DO_CAST_TO_STRING(s1, l1, z[0], a[0]);
             BLITZ_DO_CAST_TO_STRING(s2, l2, z[1], a[1]);
+            if (BLITZ_DEBUG)
+                php_printf("casted s1 = %s, s2 = %s\n", s1, s2);
 
             cmp = strncmp(s1, s2, MAX(l1, l2));
 
@@ -3378,8 +3388,12 @@ static inline void blitz_check_expr (
             }
 
         } else {
+            if (BLITZ_DEBUG)
+                php_printf("one of the variables is not string, cast to double\n");
             BLITZ_DO_CAST_TO_DOUBLE(t[0], l1, d1, z[0], a[0]);
             BLITZ_DO_CAST_TO_DOUBLE(t[1], l1, d2, z[1], a[1]);
+            if (BLITZ_DEBUG)
+                php_printf("casted d1 = %f, d2 = %f\n", d1, d2);
 
             if ((t[0] == BLITZ_COMPARE_UNKNOWN) || (t[1] == BLITZ_COMPARE_UNKNOWN)) {
                 *is_true = 0;

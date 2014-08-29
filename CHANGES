@@ -1,4 +1,12 @@
 ===================================================================================================
+0.8.13 version 29 aug 2014
+===================================================================================================
+- FIX: bugs in expressions fixed, string varibles comparison didn't work properly (bug#327)
+- ADD: get_tokens() function was added (thanks to Dmitry Saprykin). This function returns template
+  structure with lots of details in just one big array, and should be easier to use than old 
+  get_struct/dump_struct functions.
+
+===================================================================================================
 0.8.12 version 25 aug 2014
 ===================================================================================================
 - FIX: $_top and $_parent magic variables work in callbacks
