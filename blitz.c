@@ -2382,7 +2382,7 @@ static inline int blitz_scope_stack_find(blitz_tpl *tpl, char *key, unsigned lon
 
     while (i <= lookup_limit) {
         data = tpl->scope_stack[tpl->scope_stack_pos - i - 1];
-        if (SUCCESS == BLITZ_HASH_FIND_P(data, key, key_len, (void **) zparam)) {
+        if (SUCCESS == BLITZ_HASH_FIND_P(data, key, key_len, (void **) zparam TSRMLS_CC)) {
             return i;
         }
         i++;
@@ -2423,7 +2423,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                 magic_stack = (magic_stack > magic_offset ? magic_stack - magic_offset : 0); /* keep track of the current magic scope to enable things like _parent._parent */
                 *zparam = &tpl->scope_stack[magic_stack];
             } else if (0 == root_found) { /* globals or params? */
-                root_found = (params && SUCCESS == BLITZ_HASH_FIND_P(params, key, key_len + 1, (void **) zparam));
+                root_found = (params && SUCCESS == BLITZ_HASH_FIND_P(params, key, key_len + 1, (void **) zparam TSRMLS_CC));
                 if (!root_found) {
                     root_found = (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, key, key_len + 1, (void**)zparam)));
                     if (!root_found) {
@@ -2439,7 +2439,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                 }
             } else if (*zparam) { /* just propagate through elem */
                 if (Z_TYPE_PP(*zparam) == IS_ARRAY) {
-                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam)) {
+                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam TSRMLS_CC)) {
                         // when using scope 'list.item' can be 1) list->item and 2) list->[loop_index]->item
                         // thus when list->item is not found whe have to test list->[loop_index]->item
                         if (found_in_scope == 0) {
@@ -2457,7 +2457,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                         }
                     }
                 } else if (Z_TYPE_PP(*zparam) == IS_OBJECT) {
-                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam)) {
+                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam TSRMLS_CC)) {
                         return 0;
                     }
                 } else {
@@ -2565,7 +2565,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             if (is_var || is_var_path) { /* argument is variable  */
                 if (is_var &&
                     (
-                        (iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, arg->name, arg->len + 1, (void **) &z))
+                        (iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, arg->name, arg->len + 1, (void **) &z TSRMLS_CC))
                         || (SUCCESS == zend_hash_find(tpl->hash_globals, arg->name, 1 + arg->len, (void**)&z))
                     ))
                 {
@@ -2618,7 +2618,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
 
         if (arg_type != BLITZ_ARG_TYPE_STR) {
             if (arg_type == BLITZ_ARG_TYPE_VAR) {
-                if ((iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, arg->name, arg->len + 1, (void **) &z))
+                if ((iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, arg->name, arg->len + 1, (void **) &z TSRMLS_CC))
                     || (SUCCESS == zend_hash_find(tpl->hash_globals,arg->name,1+arg->len,(void**)&z)))
                 {
                     found = 1;
@@ -2670,7 +2670,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
                 p_arg = node->args + i;
                 wrapper_args_num++;
                 if (p_arg->type == BLITZ_ARG_TYPE_VAR) {
-                    if ((iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, p_arg->name, p_arg->len + 1, (void **) &z))
+                    if ((iteration_params && SUCCESS == BLITZ_HASH_FIND_P(iteration_params, p_arg->name, p_arg->len + 1, (void **) &z TSRMLS_CC))
                         || (SUCCESS == zend_hash_find(tpl->hash_globals,p_arg->name,1+p_arg->len,(void**)&z)))
                     {
                         convert_to_string_ex(z);
@@ -2756,7 +2756,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
                     }
                 } else {
                     predefined = -1;
-                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, *iteration_params, &predefined, &ztmp);
+                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, *iteration_params, &predefined, &ztmp TSRMLS_CC);
                     if (predefined >= 0) {
                         ZVAL_LONG(pargs[i], (long)predefined);
                     } else if (found) {
@@ -3180,7 +3180,7 @@ static inline unsigned int blitz_extract_var (
     if (is_path) {
         return blitz_fetch_var_by_path(z, name, len, params, tpl TSRMLS_CC);
     } else {
-        if (params && SUCCESS == BLITZ_HASH_FIND_P(params, name, len_p1, (void **) z)) {
+        if (params && SUCCESS == BLITZ_HASH_FIND_P(params, name, len_p1, (void **) z TSRMLS_CC)) {
             return 1;
         }
 
