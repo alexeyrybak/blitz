@@ -3171,8 +3171,9 @@ static inline unsigned int blitz_extract_var (
         *z = &tpl->scope_stack[0];
         return 1;
     } else if (BLITZ_IS_PREDEFINED_PARENT(name, len)) {
+        int magic_stack;
         if (BLITZ_DEBUG) php_printf("predefined path _parent\n");
-        int magic_stack = (tpl->scope_stack_pos > 2 ? tpl->scope_stack_pos - 2 : 0); /* keep track of the current magic scope to enable things like _parent._parent */
+        magic_stack = (tpl->scope_stack_pos > 2 ? tpl->scope_stack_pos - 2 : 0); /* keep track of the current magic scope to enable things like _parent._parent */
         *z = &tpl->scope_stack[magic_stack];
         return 1;
     }
