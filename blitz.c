@@ -2438,7 +2438,25 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                     }
                 }
             } else if (*zparam) { /* just propagate through elem */
-                if (Z_TYPE_PP(*zparam) == IS_ARRAY) {
+                int predefined = -1;
+
+                BLITZ_GET_PREDEFINED_VAR_EX(tpl, key, key_len, predefined, magic_stack);
+                if (predefined >= 0) {
+                    /* found a predefined var */
+                    zval **item, *tmp;
+
+                    /* create zval to hold the predefined var value and store it in the stack to be destroyed later */
+                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) &item TSRMLS_CC)) {
+                        MAKE_STD_ZVAL(tmp);
+                        ZVAL_LONG(tmp, predefined);
+                        zend_hash_add(HASH_OF(**zparam), key, key_len + 1, &tmp, sizeof(zval *), NULL);
+                        *zparam = &tmp;
+                    } else {
+                        zval_dtor(*item);
+                        ZVAL_LONG(*item, predefined);
+                        *zparam = item;
+                    }
+                } else if (Z_TYPE_PP(*zparam) == IS_ARRAY) {
                     if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam TSRMLS_CC)) {
                         // when using scope 'list.item' can be 1) list->item and 2) list->[loop_index]->item
                         // thus when list->item is not found whe have to test list->[loop_index]->item
