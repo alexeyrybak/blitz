@@ -69,6 +69,9 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
     unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC);
+static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first, zval *id,
+    char **result, unsigned long *result_len, unsigned long *result_alloc_len,
+    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data, int push_stack TSRMLS_DC);
 static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC);
 static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC);
 static inline unsigned int blitz_extract_var(blitz_tpl *tpl, char *name, unsigned long len, unsigned char is_path, zval *params, long *l, zval ***z TSRMLS_DC);
@@ -2438,7 +2441,25 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                     }
                 }
             } else if (*zparam) { /* just propagate through elem */
-                if (Z_TYPE_PP(*zparam) == IS_ARRAY) {
+                int predefined = -1;
+
+                BLITZ_GET_PREDEFINED_VAR_EX(tpl, key, key_len, predefined, magic_stack);
+                if (predefined >= 0) {
+                    /* found a predefined var */
+                    zval **item, *tmp;
+
+                    /* create zval to hold the predefined var value and store it in the stack to be destroyed later */
+                    if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) &item TSRMLS_CC)) {
+                        MAKE_STD_ZVAL(tmp);
+                        ZVAL_LONG(tmp, predefined);
+                        zend_hash_add(HASH_OF(**zparam), key, key_len + 1, &tmp, sizeof(zval *), NULL);
+                        *zparam = &tmp;
+                    } else {
+                        zval_dtor(*item);
+                        ZVAL_LONG(*item, predefined);
+                        *zparam = item;
+                    }
+                } else if (Z_TYPE_PP(*zparam) == IS_ARRAY) {
                     if (SUCCESS != BLITZ_HASH_FIND_P(**zparam, key, key_len + 1, (void **) zparam TSRMLS_CC)) {
                         // when using scope 'list.item' can be 1) list->item and 2) list->[loop_index]->item
                         // thus when list->item is not found whe have to test list->[loop_index]->item
@@ -3482,10 +3503,11 @@ static void blitz_exec_if_context(
             }
         } else {
             // run nodes over parent_params
-            blitz_exec_nodes(tpl, node->first_child, id,
+            // but don't push the stack, since IF isn't another scope level
+            blitz_exec_nodes_ex(tpl, node->first_child, id,
                 result, result_len, result_alloc_len,
                 node->pos_begin_shift, node->pos_end_shift,
-                parent_params TSRMLS_CC
+                parent_params, 0 TSRMLS_CC
             );
 
             // find the end of this chain
@@ -3510,6 +3532,15 @@ static void blitz_exec_if_context(
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
     zval *id, char **result, unsigned long *result_len, unsigned long *result_alloc_len,
     unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC)
+{
+    return blitz_exec_nodes_ex(tpl, first_child, id, result, result_len, result_alloc_len, parent_begin, parent_end, parent_ctx_data, 1 TSRMLS_CC);
+}
+/* }}} */
+
+/* {{{ int blitz_exec_nodes_ex() */
+static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
+    zval *id, char **result, unsigned long *result_len, unsigned long *result_alloc_len,
+    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data, int push_stack TSRMLS_DC)
 {
     char *p_result = NULL;
     unsigned long buf_len = 0, new_len = 0;
@@ -3539,7 +3570,9 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
     }
 
-    BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
+    if (push_stack) {
+        BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
+    }
 
     node = first_child;
     while (node) {
@@ -3611,7 +3644,9 @@ static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
         }
     }
 
-    BLITZ_SCOPE_STACK_SHIFT(tpl);
+    if (push_stack) {
+        BLITZ_SCOPE_STACK_SHIFT(tpl);
+    }
 
     if (BLITZ_DEBUG)
         php_printf("== D:b3  %ld,%ld,%ld\n",last_close,parent_begin,parent_end);
