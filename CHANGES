@@ -1,4 +1,11 @@
 ===================================================================================================
+0.8.14 version 23 oct 2014
+===================================================================================================
+- FIX: _parent._predefined_var syntax was fixed (bug #329), thanks to Anton "tony2001" Dovgal
+- FIX: _parent._parent issues inside IF/INLESS nodes were fixed, thanks to Anton "tony2001" Dovgal
+- FIX: minor compulation issues were fixed, thanks to Alex Sladkov  
+
+===================================================================================================
 0.8.13 version 29 aug 2014
 ===================================================================================================
 - FIX: bugs in expressions fixed, string varibles comparison didn't work properly (bug#327)
