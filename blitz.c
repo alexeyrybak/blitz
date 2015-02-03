@@ -2730,7 +2730,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
 /* }}} */
 
 /* {{{ int blitz_exec_user_method() */
-static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval **iteration_params, zval *obj, char **result, char **p_result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
+static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval *iteration_params, zval *obj, char **result, char **p_result, unsigned long *result_len, unsigned long *result_alloc_len TSRMLS_DC)
 {
     zval *retval = NULL, *zmethod = NULL, **ztmp = NULL;
     int method_res = 0;
@@ -2750,7 +2750,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
     MAKE_STD_ZVAL(zmethod);
     ZVAL_STRING(zmethod, node->lexem, 1);
 
-    has_iterations = ((iteration_params > 0) && (*iteration_params) > 0); // fetch has NULL *iteration_params
+    has_iterations = (iteration_params != NULL); // fetch has NULL *iteration_params
 
     /* prepare arguments if needed */
     /* 2DO: probably there's much more easy way to prepare arguments without two emalloc */
@@ -2761,9 +2761,11 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
         args = emalloc(node->n_args*sizeof(zval*));
         pargs = emalloc(node->n_args*sizeof(zval));
         for (i = 0; i < node->n_args; i++) {
-            args[i] = NULL;
-            ALLOC_INIT_ZVAL(pargs[i]);
-            ZVAL_NULL(pargs[i]);
+            zval *arg;
+
+            args[i] = pargs[i] = NULL;
+            ALLOC_INIT_ZVAL(arg);
+            ZVAL_NULL(arg);
             i_arg  = node->args + i;
             i_arg_type = i_arg->type;
             if (i_arg_type == BLITZ_ARG_TYPE_VAR) {
@@ -2771,37 +2773,47 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
                 // magic $_, as all predefined are casted to long, treat this separately
                 if (i_arg->len == 1 && i_arg->name[0] == '_') {
                     if (has_iterations) {
-                        args[i] = iteration_params;
-                        zval_copy_ctor(**(args + i));
-                        INIT_PZVAL(**(args + i));
+                        *arg = *iteration_params;
+                        Z_SET_REFCOUNT_P(arg, 1);
+                        Z_UNSET_ISREF_P(arg);
+                        zval_copy_ctor(arg);
                     }
                 } else {
                     predefined = -1;
-                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, *iteration_params, &predefined, &ztmp TSRMLS_CC);
+                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp TSRMLS_CC);
                     if (predefined >= 0) {
-                        ZVAL_LONG(pargs[i], (long)predefined);
+                        ZVAL_LONG(arg, (long)predefined);
                     } else if (found) {
                         args[i] = ztmp;
                     }
                 }
 
             } else if (i_arg_type == BLITZ_ARG_TYPE_VAR_PATH) {
-                if (has_iterations && blitz_fetch_var_by_path(&ztmp, i_arg->name, i_arg->len, *iteration_params, tpl TSRMLS_CC)) {
+                if (has_iterations && blitz_fetch_var_by_path(&ztmp, i_arg->name, i_arg->len, iteration_params, tpl TSRMLS_CC)) {
                     args[i] = ztmp;
                 }
             } else if (i_arg_type == BLITZ_ARG_TYPE_NUM) {
-                ZVAL_LONG(pargs[i],atol(i_arg->name));
+                ZVAL_LONG(arg, atol(i_arg->name));
             } else if (i_arg_type == BLITZ_ARG_TYPE_BOOL) {
                 cl = *i_arg->name;
                 if (cl == 't') { 
-                    ZVAL_TRUE(pargs[i]);
+                    ZVAL_TRUE(arg);
                 } else if (cl == 'f') {
-                    ZVAL_FALSE(pargs[i]);
+                    ZVAL_FALSE(arg);
                 }
             } else { 
-                ZVAL_STRING(pargs[i],i_arg->name,1);
+                ZVAL_STRING(arg, i_arg->name, 1);
             }
-            if (!args[i]) args[i] = & pargs[i];
+
+            if (args[i]) {
+                zval_ptr_dtor(&arg);
+            } else {
+                pargs[i] = arg;
+            }
+
+            if (!args[i]) {
+                args[i] = &pargs[i];
+            }
         }
     } 
 
@@ -2821,7 +2833,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
     }
 
     old_caller_iteration = tpl_caller->caller_iteration;
-    tpl_caller->caller_iteration = iteration_params;
+    tpl_caller->caller_iteration = &iteration_params;
 
     /*
         CALLBACK SETTINGS:
@@ -2888,7 +2900,10 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
     if (pargs) {
          for(i=0; i<node->n_args; i++) {
-             zval_ptr_dtor(pargs + i);
+             zval *arg = pargs[i];
+             if (arg) {
+                 zval_ptr_dtor(&arg);
+             }
          }
          efree(args);
          efree(pargs);
@@ -3616,7 +3631,7 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
                     } else {
                         if (BLITZ_G(enable_callbacks)) {
                             blitz_exec_user_method(
-                                tpl, node, &iteration_params, id,
+                                tpl, node, iteration_params, id,
                                 result, &p_result, result_len, result_alloc_len TSRMLS_CC
                             );
                         } else {
