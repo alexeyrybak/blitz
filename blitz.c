@@ -3061,6 +3061,7 @@ static inline void blitz_exec_var(
                 BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
                 p_result = (char*)memcpy(p_result, escaped, var_len);
             }
+            efree(escaped);
         } else {
             var_len = Z_STRLEN_PP(zparam);
             BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
