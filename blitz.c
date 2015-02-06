@@ -3113,7 +3113,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     }
 
     if (BLITZ_DEBUG) php_printf("data found in parent params for key %s\n",arg->name);
-    if (Z_TYPE_PP(ctx_iterations) == IS_ARRAY && zend_hash_num_elements(HASH_OF(*ctx_iterations))) {
+    if ((Z_TYPE_PP(ctx_iterations) == IS_ARRAY || Z_TYPE_PP(ctx_iterations) == IS_OBJECT) && zend_hash_num_elements(HASH_OF(*ctx_iterations))) {
         if (BLITZ_DEBUG) php_printf("will walk through iterations\n");
 
         zend_hash_internal_pointer_reset_ex(HASH_OF(*ctx_iterations), &pos);
