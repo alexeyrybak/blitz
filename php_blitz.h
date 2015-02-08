@@ -89,8 +89,6 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_ARG_TYPE_VAR_PATH	    2
 #define BLITZ_ARG_TYPE_STR          4 
 #define BLITZ_ARG_TYPE_NUM          8
-#define BLITZ_ARG_TYPE_BOOL         16
-#define BLITZ_ARG_TYPE_FLOAT        32
 #define BLITZ_ARG_TYPE_EXPR_SHIFT               128
 #define BLITZ_EXPR_OPERATOR_GE                  128
 #define BLITZ_EXPR_OPERATOR_G                   129
@@ -103,6 +101,9 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_EXPR_OPERATOR_N                   136
 #define BLITZ_EXPR_OPERATOR_LP                  137
 #define BLITZ_EXPR_OPERATOR_RP                  138
+#define BLITZ_ARG_TYPE_FALSE        16
+#define BLITZ_ARG_TYPE_TRUE         32
+#define BLITZ_ARG_TYPE_FLOAT        64
 
 #define BLITZ_TAG_VAR_PREFIX    		'$'
 #define BLITZ_TAG_VAR_PREFIX_S  		"$"
@@ -647,8 +648,10 @@ typedef struct _blitz_analizer_ctx {
         } else {                                                                                  \
             res = 0;                                                                              \
         }                                                                                         \
-    } else if((a).type == BLITZ_ARG_TYPE_BOOL) {                                                  \
-        res = ('t' == (a).name[0]) ? 1 : 0;                                                       \
+    } else if((a).type == BLITZ_ARG_TYPE_FALSE) {                                                 \
+        res = 0;                                                                                  \
+    } else if((a).type == BLITZ_ARG_TYPE_TRUE) {                                                  \
+        res = 1;                                                                                  \
     } else {                                                                                      \
         res = 0;                                                                                  \
     }

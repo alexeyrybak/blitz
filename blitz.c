@@ -1139,16 +1139,15 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     } else if (BLITZ_IS_ALPHA(symb)){
         is_path = 0;
         BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path);
-        i_type = BLITZ_ARG_TYPE_BOOL;
         i_len = i_pos;
         if (i_pos != 0) {
             ok = 1;
             if (BLITZ_STRING_IS_TRUE(token_out, i_len)) {
-                token_out[0] = 't';
-                i_len = 1;
+                i_len = 0;
+                i_type = BLITZ_ARG_TYPE_TRUE;
             } else if (BLITZ_STRING_IS_FALSE(token_out, i_len)){
-                token_out[0] = 'f';
-                i_len = 1;
+                i_len = 0;
+                i_type = BLITZ_ARG_TYPE_FALSE;
             } else { /* treat this just as variable used without var prefix */
                 i_len = i_pos;
                 i_type = is_path ? BLITZ_ARG_TYPE_VAR_PATH : BLITZ_ARG_TYPE_VAR;
@@ -2791,14 +2790,11 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
                 }
             } else if (i_arg_type == BLITZ_ARG_TYPE_NUM) {
                 ZVAL_LONG(pargs[i],atol(i_arg->name));
-            } else if (i_arg_type == BLITZ_ARG_TYPE_BOOL) {
-                cl = *i_arg->name;
-                if (cl == 't') { 
-                    ZVAL_TRUE(pargs[i]);
-                } else if (cl == 'f') {
-                    ZVAL_FALSE(pargs[i]);
-                }
-            } else { 
+            } else if (i_arg_type == BLITZ_ARG_TYPE_FALSE) {
+                ZVAL_FALSE(pargs[i]);
+			} else if (i_arg_type == BLITZ_ARG_TYPE_TRUE) {
+				ZVAL_TRUE(pargs[i]);
+            } else {
                 ZVAL_STRING(pargs[i],i_arg->name,1);
             }
             if (!args[i]) args[i] = & pargs[i];
@@ -3243,8 +3239,6 @@ static inline void blitz_check_arg (
 		} else {
 			*not_empty = 0; // "unknown" is equal to "empty"
 		}
-	} else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
-		*not_empty = (arg->name[0] == 't');
 	} else {
 		BLITZ_ARG_NOT_EMPTY(*arg, NULL, *not_empty);
 	}
@@ -3286,12 +3280,10 @@ static inline void blitz_check_arg (
             t = BLITZ_COMPARE_UNKNOWN;                                                          \
         }                                                                                       \
     } else {                                                                                    \
-        if ((a)->type == BLITZ_ARG_TYPE_BOOL) {                                                 \
-            if ('t' == (a)->name[0]) {                                                          \
-                (d) = 1.0;                                                                      \
-            } else {                                                                            \
-                (d) = 0.0;                                                                      \
-            }                                                                                   \
+        if ((a)->type == BLITZ_ARG_TYPE_FALSE) {                                                \
+            (d) = 0.0;                                                                          \
+		} else if ((a)->type == BLITZ_ARG_TYPE_TRUE) {                                          \
+			(d) = 1.0;                                                                          \
         } else if ((a)->type == BLITZ_ARG_TYPE_NUM || (a)->type == BLITZ_ARG_TYPE_FLOAT) {      \
             (d) = atof((a)->name);                                                              \
         }                                                                                       \
@@ -3344,7 +3336,7 @@ static inline void blitz_check_expr (
             } else {
                 c = BLITZ_COMPARE_UNDEFINED_VAR;
             }
-        } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
+        } else if (arg->type == BLITZ_ARG_TYPE_FALSE || arg->type == BLITZ_ARG_TYPE_TRUE) {
             c = BLITZ_CAST_ARG_BOOL;
         } else if (arg->type == BLITZ_ARG_TYPE_FLOAT) {
             c = BLITZ_CAST_ARG_DOUBLE;
@@ -4456,7 +4448,8 @@ static void blitz_register_constants(INIT_FUNC_ARGS) /* {{{ */
     REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_VAR_PATH", BLITZ_ARG_TYPE_VAR_PATH, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_STR", BLITZ_ARG_TYPE_STR, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_NUM", BLITZ_ARG_TYPE_NUM, BLITZ_CONSTANT_FLAGS);
-    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_BOOL", BLITZ_ARG_TYPE_BOOL, BLITZ_CONSTANT_FLAGS);
+	REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_FALSE", BLITZ_ARG_TYPE_FALSE, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_TRUE", BLITZ_ARG_TYPE_TRUE, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_FLOAT", BLITZ_ARG_TYPE_FLOAT, BLITZ_CONSTANT_FLAGS);    
     REGISTER_LONG_CONSTANT("BLITZ_ARG_TYPE_EXPR_SHIFT", BLITZ_ARG_TYPE_EXPR_SHIFT, BLITZ_CONSTANT_FLAGS);
 
