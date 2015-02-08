@@ -3228,44 +3228,26 @@ static inline void blitz_check_arg (
     zval *parent_params,
     int *not_empty TSRMLS_DC)
 {
-    int predefined = -1, use_scope = 0;
+    long predefined = -1;
     call_arg *arg = NULL;
     zval **z = NULL;
 
-    arg = node->args;
-    BLITZ_GET_PREDEFINED_VAR(tpl, arg->name, arg->len, predefined);
-    if (predefined > 0) {
-        *not_empty = 1;
-    } else {
-        if (arg->type == BLITZ_ARG_TYPE_VAR) {
-            if (parent_params && (Z_TYPE_P(parent_params) == IS_ARRAY || Z_TYPE_P(parent_params) == IS_OBJECT)) {
-                BLITZ_ARG_NOT_EMPTY(*arg, HASH_OF(parent_params), *not_empty);
-            } else {
-                *not_empty = -1;
-            } 
-
-            if (*not_empty == -1) {
-                BLITZ_ARG_NOT_EMPTY(*arg, tpl->hash_globals, *not_empty);
-                if (*not_empty == -1) {
-                    use_scope = BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos;
-                    if (use_scope && blitz_scope_stack_find(tpl, arg->name, arg->len + 1, &z TSRMLS_CC)) {
-                        BLITZ_ZVAL_NOT_EMPTY(z, *not_empty);
-                    }
-                }
-            }
-        } else if (arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
-            if (blitz_fetch_var_by_path(&z, arg->name, arg->len, parent_params, tpl TSRMLS_CC)) {
-                BLITZ_ZVAL_NOT_EMPTY(z, *not_empty);
-            }
-        } else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
-            *not_empty = (arg->name[0] == 't');
-        } else {
-            BLITZ_ARG_NOT_EMPTY(*arg, NULL, *not_empty);
-        }
-
-        if (*not_empty == -1) // "unknown" is equal to "empty"
-            *not_empty = 0; 
-    }
+	arg = node->args;
+	if (arg->type == BLITZ_ARG_TYPE_VAR || arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
+		if (blitz_extract_var(tpl, arg->name, arg->len, (arg->type == BLITZ_ARG_TYPE_VAR_PATH), parent_params, &predefined, &z TSRMLS_CC) != 0) {
+			if (predefined >= 0) {
+				*not_empty = (predefined == 0 ? 0 : 1);
+			} else {
+				BLITZ_ZVAL_NOT_EMPTY(z, *not_empty)
+			}
+		} else {
+			*not_empty = 0; // "unknown" is equal to "empty"
+		}
+	} else if (arg->type == BLITZ_ARG_TYPE_BOOL) {
+		*not_empty = (arg->name[0] == 't');
+	} else {
+		BLITZ_ARG_NOT_EMPTY(*arg, NULL, *not_empty);
+	}
 }
 /* }}} */
 
