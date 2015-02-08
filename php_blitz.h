@@ -100,6 +100,9 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_EXPR_OPERATOR_E                   133
 #define BLITZ_EXPR_OPERATOR_LA                  134
 #define BLITZ_EXPR_OPERATOR_LO                  135
+#define BLITZ_EXPR_OPERATOR_N                   136
+#define BLITZ_EXPR_OPERATOR_LP                  137
+#define BLITZ_EXPR_OPERATOR_RP                  138
 
 #define BLITZ_TAG_VAR_PREFIX    		'$'
 #define BLITZ_TAG_VAR_PREFIX_S  		"$"
