@@ -462,6 +462,11 @@ typedef struct _blitz_analizer_ctx {
     || ((c)>=BLITZ_ISALPHA_BIG_MIN && (c)<=BLITZ_ISALPHA_BIG_MAX)              \
   )
 
+#define BLITZ_IS_OPERATOR(c)                                                   \
+  ( (c) == '=' || (c) == '>' || (c) == '<' || (c) == '&' || (c) == '|'         \
+    || (c) == '!' || (c) == '(' || (c) == ')'                                  \
+  )
+
 #define BLITZ_SCAN_SINGLE_QUOTED(c, p, pos, len, ok)                           \
     was_escaped = 0;                                                           \
     ok = 0;                                                                    \
@@ -563,19 +568,29 @@ typedef struct _blitz_analizer_ctx {
             i_type = BLITZ_EXPR_OPERATOR_L;                                                         \
             i_len = 1;                                                                              \
         }                                                                                           \
-    } else if ((*(c) == '!') && ((c) + 1) && (*((c) + 1) == '=')) {                                 \
-        i_type = BLITZ_EXPR_OPERATOR_NE;                                                            \
-        i_len = 2;                                                                                  \
+    } else if (*(c) == '!') {                                                                       \
+        if (((c) + 1) && (*((c) + 1) == '=')) {                                                     \
+            i_type = BLITZ_EXPR_OPERATOR_NE;                                                        \
+            i_len = 2;                                                                              \
+        } else {                                                                                    \
+            i_type = BLITZ_EXPR_OPERATOR_N;                                                         \
+            i_len = 1;                                                                              \
+        }                                                                                           \
     } else if ((*(c) == '=') && ((c) + 1) && (*((c) + 1) == '=')) {                                 \
         i_type = BLITZ_EXPR_OPERATOR_E;                                                             \
         i_len = 2;                                                                                  \
     } else if ((*(c) == '&') && ((c) + 1) && (*((c) + 1) == '&')) {                                 \
         i_type = BLITZ_EXPR_OPERATOR_LA;                                                            \
         i_len = 2;                                                                                  \
-                                                                                                    \
     } else if ((*(c) == '|') && ((c) + 1) && (*((c) + 1) == '|')) {                                 \
         i_type = BLITZ_EXPR_OPERATOR_LO;                                                            \
         i_len = 2;                                                                                  \
+    } else if (*(c) == '(') {                                                                       \
+        i_type = BLITZ_EXPR_OPERATOR_LP;                                                            \
+        i_len = 1;                                                                                  \
+    } else if (*(c) == ')') {                                                                       \
+        i_type = BLITZ_EXPR_OPERATOR_RP;                                                            \
+        i_len = 1;                                                                                  \
     }                                                                                               \
 
 #define BLITZ_CALL_STATE_NEXT_ARG    1
