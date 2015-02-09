@@ -663,15 +663,12 @@ typedef struct _blitz_analizer_ctx {
         }                                                                                         \
     }                                                                                             
 
-inline int BLITZ_HASH_FIND_P(zval *data, const char *key, uint key_len, void **output TSRMLS_DC) {
-    if (Z_TYPE_P(data) == IS_ARRAY) {
-        return zend_hash_find(Z_ARRVAL_P(data), key, key_len, (void **) output);
-    } else if (Z_TYPE_P(data) == IS_OBJECT) {
-        return zend_hash_find(Z_OBJPROP_P(data), key, key_len, (void **) output);
-    } else {
-        return FAILURE;
-    }
-}
+#define BLITZ_HASH_FIND_P(z, k, k_len, out)                                                       \
+    ( (Z_TYPE_P(z) == IS_ARRAY) ? zend_hash_find(Z_ARRVAL_P(z), k, k_len, (void **)out) :         \
+       ( (Z_TYPE_P(z) == IS_OBJECT) ? zend_hash_find(Z_OBJPROP_P(z), k, k_len, (void **)out) :    \
+          FAILURE                                                                                 \
+       )                                                                                          \
+    )
 
 // switch (Z_TYPE_PP(z)) : see 10 lines upper
 // well, we cannot set non-scalar template value, but if ever...
