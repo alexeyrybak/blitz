@@ -84,26 +84,27 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_TYPE_METHOD       2	
 #define BLITZ_IS_VAR(type)      (type & BLITZ_TYPE_VAR)
 #define BLITZ_IS_METHOD(type)   (type & BLITZ_TYPE_METHOD)
+#define BLITZ_IS_ARG_EXPR(type) (type & BLITZ_ARG_TYPE_EXPR_SHIFT)
 
 #define BLITZ_ARG_TYPE_VAR		    1
 #define BLITZ_ARG_TYPE_VAR_PATH	    2
 #define BLITZ_ARG_TYPE_STR          4 
 #define BLITZ_ARG_TYPE_NUM          8
-#define BLITZ_ARG_TYPE_EXPR_SHIFT               128
-#define BLITZ_EXPR_OPERATOR_GE                  128
-#define BLITZ_EXPR_OPERATOR_G                   129
-#define BLITZ_EXPR_OPERATOR_LE                  130
-#define BLITZ_EXPR_OPERATOR_L                   131
-#define BLITZ_EXPR_OPERATOR_NE                  132
-#define BLITZ_EXPR_OPERATOR_E                   133
-#define BLITZ_EXPR_OPERATOR_LA                  134
-#define BLITZ_EXPR_OPERATOR_LO                  135
-#define BLITZ_EXPR_OPERATOR_N                   136
-#define BLITZ_EXPR_OPERATOR_LP                  137
-#define BLITZ_EXPR_OPERATOR_RP                  138
 #define BLITZ_ARG_TYPE_FALSE        16
 #define BLITZ_ARG_TYPE_TRUE         32
 #define BLITZ_ARG_TYPE_FLOAT        64
+#define BLITZ_ARG_TYPE_EXPR_SHIFT   128
+#define BLITZ_EXPR_OPERATOR_GE      (1 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_G       (2 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_LE      (3 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_L       (4 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_NE      (5 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_E       (6 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_LA      (7 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_LO      (8 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_N       (9 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_LP      (10 | BLITZ_ARG_TYPE_EXPR_SHIFT)
+#define BLITZ_EXPR_OPERATOR_RP      (11 | BLITZ_ARG_TYPE_EXPR_SHIFT)
 
 #define BLITZ_TAG_VAR_PREFIX    		'$'
 #define BLITZ_TAG_VAR_PREFIX_S  		"$"
@@ -295,6 +296,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 
 #define BLITZ_LOOP_STACK_MAX    32
 #define BLITZ_SCOPE_STACK_MAX   128
+#define BLITZ_IF_STACK_MAX      32
 
 #define BLITZ_ESCAPE_DEFAULT    0
 #define BLITZ_ESCAPE_NO         1
@@ -468,6 +470,40 @@ typedef struct _blitz_analizer_ctx {
     || (c) == '!' || (c) == '(' || (c) == ')'                                  \
   )
 
+#define BLITZ_OPERATOR_HAS_PRECEDENCE(a, b)                                    \
+  ( BLITZ_OPERATOR_GET_PRECEDENCE(a) <= BLITZ_OPERATOR_GET_PRECEDENCE(b)       \
+  )
+
+#define BLITZ_OPERATOR_GET_PRECEDENCE(c)                                       \
+  (                                                                            \
+    ((c) == BLITZ_EXPR_OPERATOR_LP || (c) == BLITZ_EXPR_OPERATOR_RP) ? 0 :     \
+    ((c) == BLITZ_EXPR_OPERATOR_N) ? 1 :                                       \
+    ((c) == BLITZ_EXPR_OPERATOR_LE || (c) == BLITZ_EXPR_OPERATOR_L             \
+     || (c) == BLITZ_EXPR_OPERATOR_GE || (c) == BLITZ_EXPR_OPERATOR_G) ? 2 :   \
+    ((c) == BLITZ_EXPR_OPERATOR_E || (c) == BLITZ_EXPR_OPERATOR_NE) ? 3 :      \
+    ((c) == BLITZ_EXPR_OPERATOR_LA) ? 4 :                                      \
+    ((c) == BLITZ_EXPR_OPERATOR_LO) ? 5 :                                      \
+    6                                                                          \
+  )
+
+#define BLITZ_OPERATOR_GET_NUM_OPERANDS(c)                                     \
+  ( (c) == BLITZ_EXPR_OPERATOR_N ? 1 : 2                                       \
+  )
+
+#define BLITZ_OPERATOR_TO_STRING(c)                                            \
+  ( (c) == BLITZ_EXPR_OPERATOR_GE ? ">=" :                                     \
+    (c) == BLITZ_EXPR_OPERATOR_G ? ">" :                                       \
+    (c) == BLITZ_EXPR_OPERATOR_LE ? "<=" :                                     \
+    (c) == BLITZ_EXPR_OPERATOR_L ? "<" :                                       \
+    (c) == BLITZ_EXPR_OPERATOR_NE ? "!=" :                                     \
+    (c) == BLITZ_EXPR_OPERATOR_E ? "==" :                                      \
+    (c) == BLITZ_EXPR_OPERATOR_LA ? "&&" :                                     \
+    (c) == BLITZ_EXPR_OPERATOR_LO ? "||" :                                     \
+    (c) == BLITZ_EXPR_OPERATOR_N ? "!" :                                       \
+    (c) == BLITZ_EXPR_OPERATOR_LP ? "(" :                                      \
+    (c) == BLITZ_EXPR_OPERATOR_RP ? ")" : "<UNKNOWN>"                          \
+  )
+
 #define BLITZ_SCAN_SINGLE_QUOTED(c, p, pos, len, ok)                           \
     was_escaped = 0;                                                           \
     ok = 0;                                                                    \
@@ -606,6 +642,7 @@ typedef struct _blitz_analizer_ctx {
 #define BLITZ_CALL_ERROR             1
 #define BLITZ_CALL_ERROR_IF          2
 #define BLITZ_CALL_ERROR_INCLUDE     3
+#define BLITZ_CALL_ERROR_IF_CONTEXT  4
 
 #define BLITZ_ZVAL_NOT_EMPTY(z, res)                                                              \
     switch (Z_TYPE_PP(z)) {                                                                       \
@@ -746,6 +783,32 @@ typedef struct _blitz_analizer_ctx {
             "Too deep iteration set, lookup scope depth is too high, lookup stack is broken "     \
             "and variables can be resolved improperly. To fix this rebuild blitz extension with " \
             "increased BLITZ_SCOPE_STACK_MAX constant in php_blitz.h"                             \
+        );                                                                                        \
+    }                                                                                             \
+
+#define BLITZ_IF_STACK_PUSH(stack, stack_level, argument)                                         \
+    if ((stack_level + 1) < BLITZ_IF_STACK_MAX) {                                                 \
+        ++stack_level;                                                                            \
+        stack[stack_level] = argument;                                                            \
+    } else {                                                                                      \
+        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+            "Too complex conditional, operator stack depth is too high and broken, operators "    \
+            "will  be resolved improperly. To fix this rebuild blitz extension with increased "   \
+            "BLITZ_IF_STACK_MAX constant in php_blitz.h"                                          \
+        );                                                                                        \
+    }                                                                                             \
+
+#define BLITZ_EXPR_STACK_PUSH(stack, stack_level, aname, alen, atype)                             \
+    if ((stack_level + 1) < BLITZ_IF_STACK_MAX) {                                                 \
+        ++stack_level;                                                                            \
+        stack[stack_level].name = (aname);                                                        \
+        stack[stack_level].len = (alen);                                                          \
+        stack[stack_level].type = (atype);                                                        \
+    } else {                                                                                      \
+        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+            "Too complex conditional, operator stack depth is too high and broken, operators "    \
+            "will  be resolved improperly. To fix this rebuild blitz extension with increased "   \
+            "BLITZ_IF_STACK_MAX constant in php_blitz.h"                                          \
         );                                                                                        \
     }                                                                                             \
 
