@@ -1,4 +1,10 @@
 ===================================================================================================
+0.8.15 version 10 feb 2014. In loving memory of Clifford Lee Burton.
+===================================================================================================
+- FIX: a couple of memleaks and other minor fixes, thanks to Anton "tony2001" Dovgal
+- ADD: BEGIN statement now supports objects (see begin_object.phpt), thanks to Maurus Cuelenaere
+
+===================================================================================================
 0.8.14 version 23 oct 2014
 ===================================================================================================
 - FIX: _parent._predefined_var syntax was fixed (bug #329), thanks to Anton "tony2001" Dovgal
