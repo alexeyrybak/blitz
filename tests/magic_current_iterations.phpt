@@ -35,14 +35,12 @@ var_dump($T->getIterations());
 
 ?>
 --EXPECT--
-array(4) {
+array(3) {
   ["variable1"]=>
   string(6) "value1"
   ["variable2"]=>
   string(6) "value2"
   ["b_calls"]=>
-  int(1)
-  ["a_calls"]=>
   int(1)
 }
 array(4) {
@@ -53,7 +51,7 @@ array(4) {
   ["b_calls"]=>
   int(2)
   ["a_calls"]=>
-  int(2)
+  int(1)
 }
 
 
