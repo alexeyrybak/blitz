@@ -2775,7 +2775,8 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
         for (i = 0; i < node->n_args; i++) {
             zval *arg;
 
-            args[i] = pargs[i] = NULL;
+            args[i] = NULL;
+            pargs[i] = NULL;
             ALLOC_INIT_ZVAL(arg);
             ZVAL_NULL(arg);
             i_arg  = node->args + i;
