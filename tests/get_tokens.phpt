@@ -1,5 +1,9 @@
 --TEST--
 get template tokens
+--SKIPIF--
+<?php
+	if (!extension_loaded("json")) die("skip no JSON extension");
+?>
 --FILE--
 <?php
 

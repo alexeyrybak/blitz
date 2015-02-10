@@ -194,6 +194,18 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 /* }}} */
 
+inline int BLITZ_HASH_FIND_P(zval *data, const char *key, uint key_len, void **output TSRMLS_DC) /* {{{ */
+{
+    if (Z_TYPE_P(data) == IS_ARRAY) {
+        return zend_hash_find(Z_ARRVAL_P(data), key, key_len, (void **) output);
+    } else if (Z_TYPE_P(data) == IS_OBJECT) {
+        return zend_hash_find(Z_OBJPROP_P(data), key, key_len, (void **) output);
+    } else {
+        return FAILURE;
+    }
+}
+/* }}} */
+
 static void blitz_error (blitz_tpl *tpl TSRMLS_DC, unsigned int level, char *format, ...) { /* {{{ */
     char *msg = NULL;
     unsigned char free_msg = 0;
@@ -3064,6 +3076,7 @@ static inline void blitz_exec_var(
                 BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
                 p_result = (char*)memcpy(p_result, escaped, var_len);
             }
+            efree(escaped);
         } else {
             var_len = Z_STRLEN_PP(zparam);
             BLITZ_REALLOC_RESULT(var_len, new_len, *result_len, *result_alloc_len, *result, p_result);
