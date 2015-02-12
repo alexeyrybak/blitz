@@ -23,6 +23,9 @@
     define('BLITZ_EXPR_OPERATOR_E', 133);
     define('BLITZ_EXPR_OPERATOR_LA', 134);
     define('BLITZ_EXPR_OPERATOR_LO', 135);
+    define('BLITZ_EXPR_OPERATOR_N', 136);
+    define('BLITZ_EXPR_OPERATOR_LP', 137);
+    define('BLITZ_EXPR_OPERATOR_RP', 138);
 
     define('BLITZ_NODE_TYPE_COMMENT', 0);
     define('BLITZ_NODE_TYPE_IF', 6);
