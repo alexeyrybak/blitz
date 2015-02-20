@@ -1189,7 +1189,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     if (BLITZ_DEBUG) {
         char *tmp = estrndup((char *)text, len_text + 1);
         tmp[len_text] = '\x0';
-        php_printf("*** FUNCTION *** blitz_parse_call, started at pos=%u, c=%c\n", pos, *c);
+        php_printf("*** FUNCTION *** blitz_parse_call, started at pos=%u, c=%c, len=%u\n", pos, *c, len_text);
         php_printf("text: %s\n", tmp);
         efree(tmp);
     }
@@ -1398,8 +1398,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         // Push left bracket onto the stack
 						BLITZ_IF_STACK_PUSH(op_stack, op_len, BLITZ_EXPR_OPERATOR_LP);
 
-						// While we have an argument
-                        while (i_pos) {
+						// While we have an argument and we have still text to parse
+                        while (i_pos && pos < len_text) {
                             pos += i_pos;
                             c = text + pos;
 
@@ -1454,6 +1454,10 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                             }
 
                             BLITZ_SKIP_BLANK(c,i_pos,pos);
+                            if (pos >= len_text) {
+                                // If we're at the end of our text, break and don't do the blitz_parse_arg call again (just optimalization)
+                                break;
+                            }
 
 							// Check if we can scan another argument (and loop again)
                             i_len = i_pos = i_type = 0;
@@ -3572,7 +3576,7 @@ static void blitz_exec_if_context(
         }
 
         if (BLITZ_DEBUG) {
-            php_printf("checking context %s (type=%u)\n", node->lexem, node->type);
+            php_printf("checking context %s (type=%u, args=%u)\n", node->lexem, node->type, node->n_args);
             php_printf("condition = %u, is_true = %u\n", condition, is_true);
         }
 
