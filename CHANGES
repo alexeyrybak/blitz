@@ -3,7 +3,7 @@
 ===================================================================================================
 - CHANGE: big rework in condition parsing, added complex conditions support (many conditions, 
   parentheses, new ! operator - see examples in tests/complex_conditions.phpt), 
-  thanks to Nikolas Van Eenaeme
+  thanks to Nicolas Van Eenaeme
 
 ===================================================================================================
 0.8.15 version 10 feb 2015. In loving memory of Clifford Lee Burton.
@@ -42,16 +42,16 @@
 0.8.10 version 4 july 2014. С днём незави... не, с прошедшим днём ГИБДД!
 ===================================================================================================
 - ADD: new magic variables $_top and $_parent, referencing parent and 
-  first-in-the-list iteration parameters, thanks to Nikolas Van Eenaeme
+  first-in-the-list iteration parameters, thanks to Nicolas Van Eenaeme
 - FIX: namespace separators work in callbacks properly {{ [\]Space\Class::bla() }} 
 
 ===================================================================================================
 0.8.9 version 28 may 2014. С днём пограничника!
 ===================================================================================================
-- FIX: looping through a list of objects, accessing their attributes; thanks to Nikolas Van Eenaeme, 
+- FIX: looping through a list of objects, accessing their attributes; thanks to Nicolas Van Eenaeme, 
   patches were taken from https://gist.github.com/poison/27e1ffb71fc682ee4ec4)
 - FIX: objects were always "empty" in expressions, now it's empty only when no attributes (bug#321);
-  thanks to Nikolas Van Eenaeme
+  thanks to Nicolas Van Eenaeme
 - FIX: deep nesting loop with overlapping wasn't working properly (bug#320)
 - ADD: experimental magic variable $_ to access current iteration parameters; 
   thanks to Kostya "fixxxer" Baryshnikov (bug#183)

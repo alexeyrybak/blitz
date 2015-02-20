@@ -3379,7 +3379,7 @@ static inline void blitz_check_expr (
     unsigned long i = 0, j = 0;
     call_arg *arg = NULL, *expr_arg = NULL;
 	call_arg a_stack[BLITZ_IF_STACK_MAX];
-	int num_a = -1, operands_needed = 0, found = 0, expression;
+	int num_a = -1, operands_needed = 0, found = 0, expression, not_empty;
 	zval **zval = NULL;
 	double operands_d[2] = {0.0, 0.0};
 	char *operands_s[2] = {NULL, NULL};
@@ -3423,6 +3423,10 @@ static inline void blitz_check_expr (
 							types[j] = BLITZ_COMPARE_DOUBLE;
 						} else if (Z_TYPE_PP(zval) == IS_DOUBLE) {
 							operands_d[j] = Z_DVAL_PP(zval);
+							types[j] = BLITZ_COMPARE_DOUBLE;
+						} else if ((Z_TYPE_PP(zval) == IS_ARRAY) || (Z_TYPE_PP(zval) == IS_OBJECT)) {
+							BLITZ_ZVAL_NOT_EMPTY(zval, not_empty);
+							operands_d[j] = (not_empty ? 1.0 : 0.0);
 							types[j] = BLITZ_COMPARE_DOUBLE;
 						} else {
 							types[j] = BLITZ_COMPARE_UNKNOWN;
