@@ -3432,6 +3432,10 @@ static inline void blitz_check_expr (
                             BLITZ_ZVAL_NOT_EMPTY(zval, not_empty);
                             operands_d[j] = (not_empty ? 1.0 : 0.0);
                             types[j] = BLITZ_COMPARE_DOUBLE;
+                        } else if (Z_TYPE_PP(zval) == IS_NULL) {
+                            BLITZ_ZVAL_NOT_EMPTY(zval, not_empty);
+                            operands_d[j] = 0.0;
+                            types[j] = BLITZ_COMPARE_DOUBLE;
                         } else {
                             types[j] = BLITZ_COMPARE_UNKNOWN;
                         }
