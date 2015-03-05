@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.17"
+#define BLITZ_VERSION_STRING "0.8.18"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -3463,9 +3463,11 @@ static inline void blitz_check_expr (
             }
 
             // Execute the operator
-            switch(expr_arg->type) {
+            switch (expr_arg->type) {
                 case BLITZ_EXPR_OPERATOR_N:
-                    if (types[0] == BLITZ_COMPARE_UNKNOWN) {
+                    if (types[0] == BLITZ_COMPARE_STRING) {
+                        expression = (operands_s_len[0] == 0) ? 1 : -1;
+                    } else if (types[0] == BLITZ_COMPARE_UNKNOWN) {
                         if (BLITZ_DEBUG)
                             php_printf("operand is of incorrect type, result is error\n");
                         expression = -1;
