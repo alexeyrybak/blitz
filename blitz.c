@@ -2856,8 +2856,8 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
         /* dirty trick to pass arguments */
         /* pargs are zval ** with parameter data */
         /* args just point to pargs */
-        args = emalloc(node->n_args*sizeof(zval*));
-        pargs = emalloc(node->n_args*sizeof(zval));
+        args = emalloc(node->n_args*sizeof(args));
+        pargs = emalloc(node->n_args*sizeof(pargs));
         for (i = 0; i < node->n_args; i++) {
             zval *arg;
 
