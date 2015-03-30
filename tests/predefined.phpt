@@ -1,12 +1,12 @@
 --TEST--
-predefined loop variables: $_total, $_num, $_even, $_odd, $_first, $_last
+predefined loop variables: $_total, $_i, $_num, $_even, $_odd, $_first, $_last
 --FILE--
 <?php
 include('common.inc');
 
 $body = 'predefined loop variables
-{{ BEGIN root }} root: {{ $i }}, total: {{ $_total }}, num: {{ $_num }}, even: {{ $_even }}, {{ $_odd }}; attrs: {{ if($_even,"+even"); }}{{ if($_odd,"+odd"); }}{{ if($_first,"+first"); }}{{ if($_last,"+last"); }}
-{{ BEGIN child }} ==== child: {{ $j }}, total: {{ $_total }}, num: {{ $_num }}, even: {{ $_even }}, {{ $_odd }}; attrs: {{ if($_even,"+even"); }}{{ if($_odd,"+odd"); }}{{ if($_first,"+first"); }}{{ if($_last,"+last"); }}
+{{ BEGIN root }} root: {{ $i }}, total: {{ $_total }}, i: {{ $_i }}, num: {{ $_num }}, even: {{ $_even }}, {{ $_odd }}; attrs: {{ if($_even,"+even"); }}{{ if($_odd,"+odd"); }}{{ if($_first,"+first"); }}{{ if($_last,"+last"); }}
+{{ BEGIN child }} ==== child: {{ $j }}, total: {{ $_total }}, i: {{ $_i }}, num: {{ $_num }}, even: {{ $_even }}, {{ $_odd }}; attrs: {{ if($_even,"+even"); }}{{ if($_odd,"+odd"); }}{{ if($_first,"+first"); }}{{ if($_last,"+last"); }}
 {{ END }}
 {{ END }}';
 
@@ -50,24 +50,24 @@ echo $T->parse();
 ?>
 --EXPECT--
 predefined loop variables
- root: 1, total: 4, num: 1, even: 1, 0; attrs: +even+first
+ root: 1, total: 4, i: 0, num: 1, even: 1, 0; attrs: +even+first
 
- root: 2, total: 4, num: 2, even: 0, 1; attrs: +odd
+ root: 2, total: 4, i: 1, num: 2, even: 0, 1; attrs: +odd
 
- root: 3, total: 4, num: 3, even: 1, 0; attrs: +even
- ==== child: 1, total: 3, num: 1, even: 1, 0; attrs: +even+first
- ==== child: 2, total: 3, num: 2, even: 0, 1; attrs: +odd
- ==== child: 3, total: 3, num: 3, even: 1, 0; attrs: +even+last
+ root: 3, total: 4, i: 2, num: 3, even: 1, 0; attrs: +even
+ ==== child: 1, total: 3, i: 0, num: 1, even: 1, 0; attrs: +even+first
+ ==== child: 2, total: 3, i: 1, num: 2, even: 0, 1; attrs: +odd
+ ==== child: 3, total: 3, i: 2, num: 3, even: 1, 0; attrs: +even+last
 
- root: 4, total: 4, num: 4, even: 0, 1; attrs: +odd+last
- ==== child: 1, total: 10, num: 1, even: 1, 0; attrs: +even+first
- ==== child: 2, total: 10, num: 2, even: 0, 1; attrs: +odd
- ==== child: 3, total: 10, num: 3, even: 1, 0; attrs: +even
- ==== child: 4, total: 10, num: 4, even: 0, 1; attrs: +odd
- ==== child: 5, total: 10, num: 5, even: 1, 0; attrs: +even
- ==== child: 6, total: 10, num: 6, even: 0, 1; attrs: +odd
- ==== child: 7, total: 10, num: 7, even: 1, 0; attrs: +even
- ==== child: 8, total: 10, num: 8, even: 0, 1; attrs: +odd
- ==== child: 9, total: 10, num: 9, even: 1, 0; attrs: +even
- ==== child: 10, total: 10, num: 10, even: 0, 1; attrs: +odd+last
+ root: 4, total: 4, i: 3, num: 4, even: 0, 1; attrs: +odd+last
+ ==== child: 1, total: 10, i: 0, num: 1, even: 1, 0; attrs: +even+first
+ ==== child: 2, total: 10, i: 1, num: 2, even: 0, 1; attrs: +odd
+ ==== child: 3, total: 10, i: 2, num: 3, even: 1, 0; attrs: +even
+ ==== child: 4, total: 10, i: 3, num: 4, even: 0, 1; attrs: +odd
+ ==== child: 5, total: 10, i: 4, num: 5, even: 1, 0; attrs: +even
+ ==== child: 6, total: 10, i: 5, num: 6, even: 0, 1; attrs: +odd
+ ==== child: 7, total: 10, i: 6, num: 7, even: 1, 0; attrs: +even
+ ==== child: 8, total: 10, i: 7, num: 8, even: 0, 1; attrs: +odd
+ ==== child: 9, total: 10, i: 8, num: 9, even: 1, 0; attrs: +even
+ ==== child: 10, total: 10, i: 9, num: 10, even: 0, 1; attrs: +odd+last
 
