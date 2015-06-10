@@ -1076,6 +1076,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
 
     return 1;
 }
+/* }}} */
 
 /*
 
@@ -1162,6 +1163,7 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     *len = i_len;
     *pos_out = pos + i_pos;
 }
+/* }}} */
 
 /* {{{ void blitz_parse_call() */
 static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_node *node, 
@@ -2049,7 +2051,6 @@ static inline void blitz_analizer_process_node (analizer_ctx *ctx, unsigned int 
 }
 /* }}} */
 
-/* {{{ int blitz_analize(blitz_tpl *tpl TSRMLS_DC) */
 static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     unsigned int i = 0, is_last = 0;
@@ -3175,6 +3176,7 @@ static inline void blitz_exec_var(
     p_result += *result_len;
     (*result)[*result_len] = '\0';
 }
+/* }}} */
 
 /* {{{ int blitz_exec_context() */
 static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_params, zval *id,
@@ -5337,7 +5339,6 @@ static PHP_FUNCTION(blitz_clean)
 }
 /* }}} */
 
-
 /* {{{ string Blitz->getError() */
 static PHP_FUNCTION(blitz_get_error)
 {
@@ -5345,7 +5346,7 @@ static PHP_FUNCTION(blitz_get_error)
     blitz_tpl *tpl;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
-    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "|")) {
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "")) {
         return;
     }
 
@@ -5361,43 +5362,128 @@ static PHP_FUNCTION(blitz_get_error)
 }
 /* }}} */
 
+/* {{{ arginfo */
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_init, 0, 0, 0)
+    ZEND_ARG_INFO(0, filename)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_load, 0, 0, 1)
+    ZEND_ARG_INFO(0, body)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_dump_struct, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_tokens, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_struct, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_iterations, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_set_global, 0, 0, 1)
+    ZEND_ARG_INFO(0, values)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_globals, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_clean_globals, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_has_context, 0, 0, 1)
+    ZEND_ARG_INFO(0, context)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_parse, 0, 0, 0)
+    ZEND_ARG_INFO(0, iterations)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_display, 0, 0, 0)
+    ZEND_ARG_INFO(0, iterations)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_context, 0, 0, 1)
+    ZEND_ARG_INFO(0, path)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_context, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_iterate, 0, 0, 0)
+    ZEND_ARG_INFO(0, path)
+    ZEND_ARG_INFO(0, nonexistent)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_set, 0, 0, 1)
+    ZEND_ARG_INFO(0, input)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_block, 0, 0, 1)
+    ZEND_ARG_INFO(0, p1)
+    ZEND_ARG_INFO(0, p2)
+    ZEND_ARG_INFO(0, nonexistent)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_include, 0, 0, 1)
+    ZEND_ARG_INFO(0, input)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_fetch, 0, 0, 1)
+    ZEND_ARG_INFO(0, path)
+    ZEND_ARG_INFO(0, params)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_clean, 0, 0, 0)
+    ZEND_ARG_INFO(0, path)
+    ZEND_ARG_INFO(0, warn_not_found)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_error, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+/* }}} */
+
+#define BLITZ_ALIAS(method, func) PHP_FALIAS(method, func, arginfo_ ## func)
 
 /* {{{ blitz_functions[] : Blitz class */
 static const zend_function_entry blitz_functions[] = {
-    PHP_FALIAS(blitz,               blitz_init,                 NULL)
-    PHP_FALIAS(load,                blitz_load,                 NULL)
-    PHP_FALIAS(dump_struct,         blitz_dump_struct,          NULL)
-    PHP_FALIAS(get_struct,          blitz_get_struct,           NULL)
-    PHP_FALIAS(get_iterations,      blitz_get_iterations,       NULL)
-    PHP_FALIAS(get_context,         blitz_get_context,          NULL)
-    PHP_FALIAS(has_context,         blitz_has_context,          NULL)
-    PHP_FALIAS(set_global,          blitz_set_global,           NULL)
-    PHP_FALIAS(set_globals,         blitz_set_global,           NULL)
-    PHP_FALIAS(get_globals,         blitz_get_globals,          NULL)
-    PHP_FALIAS(clean_globals,       blitz_clean_globals,        NULL)
-    PHP_FALIAS(set,                 blitz_set,                  NULL)
-    PHP_FALIAS(assign,              blitz_set,                  NULL)
-    PHP_FALIAS(parse,               blitz_parse,                NULL)
-    PHP_FALIAS(display,             blitz_display,              NULL)
-    PHP_FALIAS(include,             blitz_include,              NULL)
-    PHP_FALIAS(iterate,             blitz_iterate,              NULL)
-    PHP_FALIAS(context,             blitz_context,              NULL)
-    PHP_FALIAS(block,               blitz_block,                NULL)
-    PHP_FALIAS(fetch,               blitz_fetch,                NULL)
-    PHP_FALIAS(clean,               blitz_clean,                NULL)
-    PHP_FALIAS(dumpstruct,          blitz_dump_struct,          NULL)
-    PHP_FALIAS(gettokens,           blitz_get_tokens,           NULL)
-    PHP_FALIAS(getstruct,           blitz_get_struct,           NULL)
-    PHP_FALIAS(getiterations,       blitz_get_iterations,       NULL)
-    PHP_FALIAS(hascontext,          blitz_has_context,          NULL)
-    PHP_FALIAS(getcontext,          blitz_get_context,          NULL)
-    PHP_FALIAS(setglobal,           blitz_set_global,           NULL)
-    PHP_FALIAS(setglobals,          blitz_set_global,           NULL)
-    PHP_FALIAS(getglobals,          blitz_get_globals,          NULL)
-    PHP_FALIAS(cleanglobals,        blitz_clean_globals,        NULL)
-    PHP_FALIAS(geterror,            blitz_get_error,            NULL)
-    PHP_FALIAS(get_error,           blitz_get_error,            NULL)
+    BLITZ_ALIAS(blitz,               blitz_init)
+    BLITZ_ALIAS(load,                blitz_load)
+    BLITZ_ALIAS(dump_struct,         blitz_dump_struct)
+    BLITZ_ALIAS(get_struct,          blitz_get_struct)
+    BLITZ_ALIAS(get_iterations,      blitz_get_iterations)
+    BLITZ_ALIAS(get_context,         blitz_get_context)
+    BLITZ_ALIAS(has_context,         blitz_has_context)
+    BLITZ_ALIAS(set_global,          blitz_set_global)
+    BLITZ_ALIAS(set_globals,         blitz_set_global)
+    BLITZ_ALIAS(get_globals,         blitz_get_globals)
+    BLITZ_ALIAS(clean_globals,       blitz_clean_globals)
+    BLITZ_ALIAS(set,                 blitz_set)
+    BLITZ_ALIAS(assign,              blitz_set)
+    BLITZ_ALIAS(parse,               blitz_parse)
+    BLITZ_ALIAS(display,             blitz_display)
+    BLITZ_ALIAS(include,             blitz_include)
+    BLITZ_ALIAS(iterate,             blitz_iterate)
+    BLITZ_ALIAS(context,             blitz_context)
+    BLITZ_ALIAS(block,               blitz_block)
+    BLITZ_ALIAS(fetch,               blitz_fetch)
+    BLITZ_ALIAS(clean,               blitz_clean)
+    BLITZ_ALIAS(dumpstruct,          blitz_dump_struct)
+    BLITZ_ALIAS(gettokens,           blitz_get_tokens)
+    BLITZ_ALIAS(getstruct,           blitz_get_struct)
+    BLITZ_ALIAS(getiterations,       blitz_get_iterations)
+    BLITZ_ALIAS(hascontext,          blitz_has_context)
+    BLITZ_ALIAS(getcontext,          blitz_get_context)
+    BLITZ_ALIAS(setglobal,           blitz_set_global)
+    BLITZ_ALIAS(setglobals,          blitz_set_global)
+    BLITZ_ALIAS(getglobals,          blitz_get_globals)
+    BLITZ_ALIAS(cleanglobals,        blitz_clean_globals)
+    BLITZ_ALIAS(geterror,            blitz_get_error)
+    BLITZ_ALIAS(get_error,           blitz_get_error)
     {NULL, NULL, NULL}
 };
 /* }}} */
