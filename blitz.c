@@ -1424,6 +1424,12 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                                     // Push operator to the stack
                                     BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type);
                                 } else { // Right bracket
+                                    // Check if it was immediately preceded by a left bracket (= invalid syntax)
+                                    if (op_stack[op_len] == BLITZ_EXPR_OPERATOR_LP) {
+                                        if (BLITZ_DEBUG) php_printf("IF expression: empty expression in brackets: stack (%u)\n", op_len);
+                                        state = BLITZ_CALL_STATE_ERROR;
+                                        break;
+                                    }
                                     // While the top of the stack is not a left bracket
                                     while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
 
