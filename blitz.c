@@ -117,6 +117,9 @@ ZEND_GET_MODULE(blitz)
     i_arg->type = (i_type);                                                     \
     ++(n)->n_args;
 
+#define GET_CALL_ARGS_SIZE(n)                                                   \
+    ((n)->n_args)
+
 /* }}} */
 
 static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
@@ -1164,6 +1167,193 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
 }
 /* }}} */
 
+/* {{{ void blitz_parse_if() */
+static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node *node, char var_prefix,
+    unsigned int *pos_out, char *error_out TSRMLS_DC)
+{
+    char *c = text;
+    unsigned int pos = 0, i_pos = 0, i_len = 0, args_on_list = 0, args_since_bracket = 0;
+    char buf[BLITZ_MAX_LEXEM_LEN];
+    unsigned char i_type = 0;
+    unsigned char op_stack[BLITZ_IF_STACK_MAX];
+    int op_len = -1;
+    call_arg *i_arg = NULL;
+
+    *error_out = 0;
+    *pos_out = 0;
+
+    if (BLITZ_DEBUG) {
+        char *tmp = estrndup((char *)text, len_text + 1);
+        tmp[len_text] = '\x0';
+        php_printf("*** FUNCTION *** blitz_parse_if, started at pos=%u, c=%c, len=%u\n", pos, *c, len_text);
+        php_printf("text: %s\n", tmp);
+        efree(tmp);
+    }
+
+    /* This function used to have the following logic:
+       1) parse an arg (if failed => ERROR)
+       2) add arg to call stack
+       3) parse an operator (if failed => FINISHED; eg. IF a)
+       4) add operator to the call stack
+       5) parse an arg (if failed => ERROR)
+       6) add arg to the call stack (eg. IF a == b)
+
+       But now we accept more complex if's we need to convert the arguments to the postfix notation (see http://en.wikipedia.org/wiki/Reverse_Polish_notation)
+       See inline code on documentation
+    */
+
+    // Check for at least 1 valid argument
+    blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
+    if (!i_pos) {
+        *error_out = BLITZ_CALL_ERROR_IF_CONTEXT;
+        return;
+    }
+
+    // Push left bracket onto the stack
+    BLITZ_IF_STACK_PUSH(op_stack, op_len, BLITZ_EXPR_OPERATOR_LP, *error_out);
+    if (*error_out) {
+        return;
+    }
+
+    args_since_bracket = 0;
+
+    // While we have an argument and we have still text to parse
+    while (i_pos && pos < len_text) {
+        pos += i_pos;
+        c = text + pos;
+
+        if (BLITZ_IS_ARG_EXPR(i_type)) {
+            // Argument is an operator
+            if (i_type == BLITZ_EXPR_OPERATOR_LP) { // Left bracket, just add it to the stack
+                BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type, *error_out);
+                if (*error_out) {
+                    return;
+                }
+
+                args_since_bracket = 0;
+            } else if (i_type != BLITZ_EXPR_OPERATOR_RP) { // Not a right bracket
+                // Add all the previous operations
+                while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP && BLITZ_OPERATOR_HAS_PRECEDENCE(op_stack[op_len], i_type)) {
+
+                    // Check if we have sufficient args on the stack
+                    if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
+                        // Possibly not enough arguments to execute this operator
+                        *error_out = BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS;
+                        return;
+                    }
+
+                    args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
+
+                    ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+                    --op_len;
+
+                    if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
+                        *error_out = BLITZ_CALL_ERROR_IF_TOO_COMPLEX;
+                        return;
+                    }
+                }
+
+                // Push operator to the stack
+                BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type, *error_out);
+                if (*error_out) {
+                    return;
+                }
+            } else { // Right bracket
+                // Check if it was immediately preceded by a left bracket (= invalid syntax)
+                if (op_stack[op_len] == BLITZ_EXPR_OPERATOR_LP) {
+                    if (BLITZ_DEBUG) php_printf("IF expression: empty expression in brackets: stack (%u - %u - %u)\n", op_len, args_on_list, args_since_bracket);
+                    *error_out = (args_since_bracket > 0 ? BLITZ_CALL_ERROR_IF_MISSING_BRACKETS : BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION);
+                    return;
+                }
+
+                // While the top of the stack is not a left bracket
+                while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
+
+                    // Check if we have sufficient args on the stack
+                    if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
+                        // Possibly not enough arguments to execute this operator
+                        *error_out = BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS;
+                        return;
+                    }
+
+                    args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
+
+                    ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+                    --op_len;
+
+                    if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
+                        *error_out = BLITZ_CALL_ERROR_IF_TOO_COMPLEX;
+                        return;
+                    }
+                }
+
+                if (op_len < 0 || op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
+                    if (BLITZ_DEBUG) php_printf("IF expression: missing left bracket: stack (%u), mismatch?\n", op_len);
+                    *error_out = BLITZ_CALL_ERROR_IF_MISSING_BRACKETS;
+                    return;
+                }
+
+                // Discard left paren
+                op_len--;
+            }
+        } else {
+            // operand
+            ADD_CALL_ARGS(node, buf, i_len, i_type);
+            args_on_list++;
+            args_since_bracket++;
+
+            if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
+                *error_out = BLITZ_CALL_ERROR_IF_TOO_COMPLEX;
+                return;
+            }
+        }
+
+        BLITZ_SKIP_BLANK(c,i_pos,pos);
+        if (pos >= len_text) {
+            // If we're at the end of our text, break and don't do the blitz_parse_arg call again (just optimalization)
+            break;
+        }
+
+        // Check if we can scan another argument (and loop again)
+        i_len = i_pos = i_type = 0;
+        blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
+    }
+
+    // Finished parsing all arguments, now do some closing, and finish the parsing tree
+    while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
+
+        // Check if we have sufficient args on the stack
+        if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
+            // Possibly not enough arguments to execute this operator
+
+            *error_out = BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS;
+            return;
+        }
+
+        args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
+
+        ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+        --op_len;
+
+        if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
+            *error_out = BLITZ_CALL_ERROR_IF_TOO_COMPLEX;
+            return;
+        }
+    }
+
+    if (op_len != 0 || args_on_list != 1) {
+        if (BLITZ_DEBUG) php_printf("IF expression: missing %s at the begin of stack, mismatch?\n", (op_len < 0 ? "left bracket" : args_on_list == 1 ? "right bracket" : "operand"));
+        *error_out = BLITZ_CALL_ERROR_IF_MISSING_BRACKETS;
+        return;
+    }
+
+    *pos_out = pos + i_pos;
+
+    // We finished parsing all arguments, in RPN!!! Remember that IF a <operator> b became a b <operator>
+    return;
+}
+/* }}} */
+
 /* {{{ void blitz_parse_call() */
 static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_node *node, 
     unsigned int *true_lexem_len, char var_prefix, char *error TSRMLS_DC)
@@ -1173,11 +1363,9 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     char symb = 0, i_symb = 0, is_path = 0;
     char state = BLITZ_CALL_STATE_ERROR;
     char ok = 0;
-    unsigned int pos = 0, i_pos = 0, i_len = 0, args_on_list = 0;
+    unsigned int pos = 0, i_pos = 0, i_len = 0;
     char buf[BLITZ_MAX_LEXEM_LEN];
     unsigned char i_type = 0;
-    unsigned char op_stack[BLITZ_IF_STACK_MAX];
-    int op_len = -1;
     call_arg *i_arg = NULL;
     char *p_end = NULL;
     char has_namespace = 0;
@@ -1282,7 +1470,6 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     state = BLITZ_CALL_STATE_FINISHED;
                 } else {
                     INIT_CALL_ARGS(node);
-                    args_on_list = 0;
                     state = BLITZ_CALL_STATE_NEXT_ARG;
 
                     /* predefined method? */
@@ -1309,27 +1496,22 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                 ok = 1;
                 if (BLITZ_STRING_IS_BEGIN(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS(node);
-                    args_on_list = 0;
                     state = BLITZ_CALL_STATE_BEGIN;
                     node->type = BLITZ_NODE_TYPE_BEGIN;
                 } else if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS(node);
-                    args_on_list = 0;
                     state = BLITZ_CALL_STATE_IF;
                     node->type = BLITZ_NODE_TYPE_IF_NF;
                 } else if (BLITZ_STRING_IS_UNLESS(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS(node);
-                    args_on_list = 0;
                     state = BLITZ_CALL_STATE_IF;
                     node->type = BLITZ_NODE_TYPE_UNLESS_NF;
                 } else if (BLITZ_STRING_IS_ELSEIF(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS(node);
-                    args_on_list = 0;
                     state = BLITZ_CALL_STATE_IF;
                     node->type = BLITZ_NODE_TYPE_ELSEIF_NF;
                 } else if (BLITZ_STRING_IS_ELSE(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS(node);
-                    args_on_list = 0;
                     state = BLITZ_CALL_STATE_ELSE;
                     node->type = BLITZ_NODE_TYPE_ELSE_NF;
                 } else if (BLITZ_STRING_IS_END(node->lexem, node->lexem_len)) {
@@ -1376,125 +1558,14 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     break;
                case BLITZ_CALL_STATE_IF:
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
-                    is_path = i_len = i_pos = i_type = ok = 0;
+                    is_path = i_len = i_pos = i_type = 0;
 
-                    /* This function used to have the following logic:
-                       1) parse an arg (if failed => ERROR)
-                       2) add arg to call stack
-                       3) parse an operator (if failed => FINISHED; eg. IF a)
-                       4) add operator to the call stack
-                       5) parse an arg (if failed => ERROR)
-                       6) add arg to the call stack (eg. IF a == b)
-
-                       But now we accept more complex if's we need to convert the arguments to the postfix notation (see http://en.wikipedia.org/wiki/Reverse_Polish_notation)
-                       See inline code on documentation
-                    */
-
-                    // Check for at least 1 valid argument
-                    blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
-                    if (i_pos) {
-
-                        // Push left bracket onto the stack
-                        BLITZ_IF_STACK_PUSH(op_stack, op_len, BLITZ_EXPR_OPERATOR_LP);
-
-                        // While we have an argument and we have still text to parse
-                        while (i_pos && pos < len_text) {
-                            pos += i_pos;
-                            c = text + pos;
-
-                            if (BLITZ_IS_ARG_EXPR(i_type)) {
-                                // Argument is an operator
-                                if (i_type == BLITZ_EXPR_OPERATOR_LP) { // Left bracket, just add it to the stack
-                                    BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type);
-                                } else if (i_type != BLITZ_EXPR_OPERATOR_RP) { // Not a right bracket
-                                    // Add all the previous operations
-                                    while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP && BLITZ_OPERATOR_HAS_PRECEDENCE(op_stack[op_len], i_type)) {
-
-                                        // Check if we have sufficient args on the stack
-                                        if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
-                                            // Possibly not enough arguments to execute this operator
-                                            state = BLITZ_CALL_STATE_ERROR;
-                                            break;
-                                        }
-                                        args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
-
-                                        ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
-                                        --op_len;
-                                    }
-                                    // Push operator to the stack
-                                    BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type);
-                                } else { // Right bracket
-                                    // Check if it was immediately preceded by a left bracket (= invalid syntax)
-                                    if (op_stack[op_len] == BLITZ_EXPR_OPERATOR_LP) {
-                                        if (BLITZ_DEBUG) php_printf("IF expression: empty expression in brackets: stack (%u)\n", op_len);
-                                        state = BLITZ_CALL_STATE_ERROR;
-                                        break;
-                                    }
-                                    // While the top of the stack is not a left bracket
-                                    while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
-
-                                        // Check if we have sufficient args on the stack
-                                        if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
-                                            // Possibly not enough arguments to execute this operator
-                                            state = BLITZ_CALL_STATE_ERROR;
-                                            break;
-                                        }
-                                        args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
-
-                                        ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
-                                        --op_len;
-                                    }
-                                    if (op_len < 0 || op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
-                                        if (BLITZ_DEBUG) php_printf("IF expression: missing left bracket: stack (%u), mismatch?\n", op_len);
-                                        state = BLITZ_CALL_STATE_ERROR;
-                                        break;
-                                    }
-                                    // Discard left paren
-                                    op_len--;
-                                }
-                            } else {
-                                // operand
-                                ADD_CALL_ARGS(node, buf, i_len, i_type);
-                                args_on_list++;
-                            }
-
-                            BLITZ_SKIP_BLANK(c,i_pos,pos);
-                            if (pos >= len_text) {
-                                // If we're at the end of our text, break and don't do the blitz_parse_arg call again (just optimalization)
-                                break;
-                            }
-
-                            // Check if we can scan another argument (and loop again)
-                            i_len = i_pos = i_type = 0;
-                            blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
-                        }
-
-                        // Finished parsing all arguments, now do some closing, and finish the parsing tree
-                        while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
-
-                            // Check if we have sufficient args on the stack
-                            if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
-                                // Possibly not enough arguments to execute this operator
-                                state = BLITZ_CALL_STATE_ERROR;
-                                break;
-                            }
-                            args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
-
-                            ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
-                            --op_len;
-                        }
-                        if (op_len != 0 || args_on_list != 1) {
-                            if (BLITZ_DEBUG) php_printf("IF expression: missing %s at the begin of stack, mismatch?\n", (op_len < 0 ? "left bracket" : args_on_list == 1 ? "right bracket" : "operand"));
-                            state = BLITZ_CALL_STATE_ERROR;
-                            break;
-                        }
-
-                        // We finished parsing all arguments, in RPN!!! Remember that IF a <operator> b became a b <operator>
-                        state = BLITZ_CALL_STATE_FINISHED;
-                        ok = 1;
-                    } else {
-                        state = BLITZ_CALL_STATE_ERROR;
+                    blitz_parse_if(c, len_text-pos, node, var_prefix, &i_pos, error TSRMLS_CC);
+                    if (*error != 0) {
+                        return;
                     }
+                    pos += i_pos; i_pos = 0;
+                    state = BLITZ_CALL_STATE_FINISHED;
                     break;
                 case BLITZ_CALL_STATE_ELSE:
                     i_pos = 0;
@@ -1938,15 +2009,35 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
                 "SYNTAX ERROR: invalid <if> syntax, only 2 or 3 arguments allowed (%s: line %lu, pos %lu)",
                 tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_CONTEXT) {
-            blitz_error(tpl TSRMLS_CC, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, probably a bracket mismatch but could be wrong operands too (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-                );
         } else if (i_error == BLITZ_CALL_ERROR_INCLUDE) {
             blitz_error(tpl TSRMLS_CC, E_WARNING,
                 "SYNTAX ERROR: invalid <inlcude> syntax, only 1 argument allowed (%s: line %lu, pos %lu)",
                 tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+            );
+        } else if (i_error == BLITZ_CALL_ERROR_IF_CONTEXT) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "SYNTAX ERROR: invalid <if> syntax, probably a bracket mismatch but could be wrong operands too (%s: line %lu, pos %lu, e %d)",
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open), (int)i_error
+            );
+        } else if (i_error == BLITZ_CALL_ERROR_IF_MISSING_BRACKETS) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "SYNTAX ERROR: invalid <if> syntax, bracket mismatch (%s: line %lu, pos %lu)",
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+            );
+        } else if (i_error == BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "SYNTAX ERROR: invalid <if> syntax, wrong number of operands (%s: line %lu, pos %lu)",
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+            );
+        } else if (i_error == BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "SYNTAX ERROR: invalid <if> syntax, empty expression between the brackets (%s: line %lu, pos %lu)",
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+            );
+        } else if (i_error == BLITZ_CALL_ERROR_IF_TOO_COMPLEX) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "SYNTAX ERROR: invalid <if> syntax, the expression is too complex, consider raising BLITZ_IF_STACK_MAX=%d (%s: line %lu, pos %lu)",
+                BLITZ_IF_STACK_MAX, tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
         }
     } else {
@@ -2054,6 +2145,7 @@ static inline void blitz_analizer_process_node (analizer_ctx *ctx, unsigned int 
 }
 /* }}} */
 
+/* {{{ int blitz_analize(blitz_tpl *tpl TSRMLS_DC) */
 static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     unsigned int i = 0, is_last = 0;

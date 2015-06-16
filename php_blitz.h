@@ -472,7 +472,7 @@ typedef struct _blitz_analizer_ctx {
   )
 
 #define BLITZ_OPERATOR_HAS_PRECEDENCE(a, b)                                    \
-  ( BLITZ_OPERATOR_GET_PRECEDENCE(a) <= BLITZ_OPERATOR_GET_PRECEDENCE(b)       \
+  ( BLITZ_OPERATOR_GET_PRECEDENCE(a) < BLITZ_OPERATOR_GET_PRECEDENCE(b)        \
   )
 
 #define BLITZ_OPERATOR_GET_PRECEDENCE(c)                                       \
@@ -645,6 +645,11 @@ typedef struct _blitz_analizer_ctx {
 #define BLITZ_CALL_ERROR_INCLUDE     3
 #define BLITZ_CALL_ERROR_IF_CONTEXT  4
 
+#define BLITZ_CALL_ERROR_IF_MISSING_BRACKETS     5
+#define BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS  6
+#define BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION     7
+#define BLITZ_CALL_ERROR_IF_TOO_COMPLEX          8
+
 #define BLITZ_ZVAL_NOT_EMPTY(z, res)                                                              \
     switch (Z_TYPE_PP(z)) {                                                                       \
         case IS_BOOL: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
@@ -783,7 +788,7 @@ typedef struct _blitz_analizer_ctx {
         );                                                                                        \
     }                                                                                             \
 
-#define BLITZ_IF_STACK_PUSH(stack, stack_level, argument)                                         \
+#define BLITZ_IF_STACK_PUSH(stack, stack_level, argument, error)                                  \
     if ((stack_level + 1) < BLITZ_IF_STACK_MAX) {                                                 \
         ++stack_level;                                                                            \
         stack[stack_level] = argument;                                                            \
@@ -793,6 +798,7 @@ typedef struct _blitz_analizer_ctx {
             "will  be resolved improperly. To fix this rebuild blitz extension with increased "   \
             "BLITZ_IF_STACK_MAX constant in php_blitz.h"                                          \
         );                                                                                        \
+        error = BLITZ_CALL_ERROR_IF_TOO_COMPLEX;                                                  \
     }                                                                                             \
 
 #define BLITZ_EXPR_STACK_PUSH(stack, stack_level, aname, alen, atype)                             \
