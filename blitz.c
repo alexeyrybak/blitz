@@ -93,20 +93,20 @@ ZEND_GET_MODULE(blitz)
         *pos = erealloc(*pos, alloc_size * sizeof(tag_pos));                    \
     }                                                                           
 
-#define INIT_CALL_ARGS                                                          \
-    node->args = ecalloc(BLITZ_CALL_ALLOC_ARG_INIT, sizeof(call_arg));          \
-    node->n_args = 0;                                                           \
-    n_arg_alloc = BLITZ_CALL_ALLOC_ARG_INIT;
+#define INIT_CALL_ARGS(n)                                                       \
+    (n)->args = ecalloc(BLITZ_CALL_ALLOC_ARG_INIT, sizeof(call_arg));           \
+    (n)->n_args = 0;                                                            \
+    (n)->n_arg_alloc = BLITZ_CALL_ALLOC_ARG_INIT;
 
-#define REALLOC_ARG_IF_EXCEEDS                                                  \
-    if (arg_id >= n_arg_alloc) {                                                \
-        n_arg_alloc = n_arg_alloc << 1;                                         \
-        node->args = erealloc(node->args,n_arg_alloc*sizeof(call_arg));         \
+#define REALLOC_ARG_IF_EXCEEDS(n)                                               \
+    if ((n)->n_args >= (n)->n_arg_alloc) {                                      \
+        (n)->n_arg_alloc = (n)->n_arg_alloc << 1;                               \
+        (n)->args = erealloc((n)->args,(n)->n_arg_alloc*sizeof(call_arg));      \
     }  
 
-#define ADD_CALL_ARGS(buf, i_len, i_type)                                       \
-    REALLOC_ARG_IF_EXCEEDS;                                                     \
-    i_arg = node->args + arg_id;                                                \
+#define ADD_CALL_ARGS(n, buf, i_len, i_type)                                    \
+    REALLOC_ARG_IF_EXCEEDS(n);                                                  \
+    i_arg = (n)->args + (n)->n_args;                                            \
     if (i_len) {                                                                \
         i_arg->name = estrndup((char *)(buf),(i_len));                          \
         i_arg->len = (i_len);                                                   \
@@ -115,8 +115,7 @@ ZEND_GET_MODULE(blitz)
         i_arg->len = 0;                                                         \
     }                                                                           \
     i_arg->type = (i_type);                                                     \
-    ++arg_id;                                                                   \
-    node->n_args = arg_id;                                                     
+    ++(n)->n_args;
 
 /* }}} */
 
@@ -1176,9 +1175,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
     char ok = 0;
     unsigned int pos = 0, i_pos = 0, i_len = 0, args_on_list = 0;
     char buf[BLITZ_MAX_LEXEM_LEN];
-    char n_arg_alloc = 0;
     unsigned char i_type = 0;
-    unsigned char arg_id = 0;
     unsigned char op_stack[BLITZ_IF_STACK_MAX];
     int op_len = -1;
     call_arg *i_arg = NULL;
@@ -1284,7 +1281,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     ++pos;
                     state = BLITZ_CALL_STATE_FINISHED;
                 } else {
-                    INIT_CALL_ARGS;
+                    INIT_CALL_ARGS(node);
                     args_on_list = 0;
                     state = BLITZ_CALL_STATE_NEXT_ARG;
 
@@ -1311,27 +1308,27 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
             } else {
                 ok = 1;
                 if (BLITZ_STRING_IS_BEGIN(node->lexem, node->lexem_len)) {
-                    INIT_CALL_ARGS; 
+                    INIT_CALL_ARGS(node);
                     args_on_list = 0;
                     state = BLITZ_CALL_STATE_BEGIN;
                     node->type = BLITZ_NODE_TYPE_BEGIN;
                 } else if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
-                    INIT_CALL_ARGS;
+                    INIT_CALL_ARGS(node);
                     args_on_list = 0;
                     state = BLITZ_CALL_STATE_IF;
                     node->type = BLITZ_NODE_TYPE_IF_NF;
                 } else if (BLITZ_STRING_IS_UNLESS(node->lexem, node->lexem_len)) {
-                    INIT_CALL_ARGS;
+                    INIT_CALL_ARGS(node);
                     args_on_list = 0;
                     state = BLITZ_CALL_STATE_IF;
                     node->type = BLITZ_NODE_TYPE_UNLESS_NF;
                 } else if (BLITZ_STRING_IS_ELSEIF(node->lexem, node->lexem_len)) {
-                    INIT_CALL_ARGS;
+                    INIT_CALL_ARGS(node);
                     args_on_list = 0;
                     state = BLITZ_CALL_STATE_IF;
                     node->type = BLITZ_NODE_TYPE_ELSEIF_NF;
                 } else if (BLITZ_STRING_IS_ELSE(node->lexem, node->lexem_len)) {
-                    INIT_CALL_ARGS;
+                    INIT_CALL_ARGS(node);
                     args_on_list = 0;
                     state = BLITZ_CALL_STATE_ELSE;
                     node->type = BLITZ_NODE_TYPE_ELSE_NF;
@@ -1363,7 +1360,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     if (i_len!=0) {
                         ok = 1; 
                         pos += i_len;
-                        ADD_CALL_ARGS(buf, i_len, is_path ? BLITZ_ARG_TYPE_VAR_PATH : i_type);
+                        ADD_CALL_ARGS(node, buf, i_len, is_path ? BLITZ_ARG_TYPE_VAR_PATH : i_type);
                         state = BLITZ_CALL_STATE_FINISHED;
                     } else {
                         state = BLITZ_CALL_STATE_ERROR;
@@ -1421,7 +1418,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                                         }
                                         args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
-                                        ADD_CALL_ARGS(NULL, 0, op_stack[op_len]);
+                                        ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
                                         --op_len;
                                     }
                                     // Push operator to the stack
@@ -1438,7 +1435,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                                         }
                                         args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
-                                        ADD_CALL_ARGS(NULL, 0, op_stack[op_len]);
+                                        ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
                                         --op_len;
                                     }
                                     if (op_len < 0 || op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP) {
@@ -1451,7 +1448,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                                 }
                             } else {
                                 // operand
-                                ADD_CALL_ARGS(buf, i_len, i_type);
+                                ADD_CALL_ARGS(node, buf, i_len, i_type);
                                 args_on_list++;
                             }
 
@@ -1477,7 +1474,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                             }
                             args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
-                            ADD_CALL_ARGS(NULL, 0, op_stack[op_len]);
+                            ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
                             --op_len;
                         }
                         if (op_len != 0 || args_on_list != 1) {
@@ -1506,7 +1503,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     if (i_pos && !BLITZ_IS_ARG_EXPR(i_type)) {
                         pos += i_pos;
                         c = text + pos;
-                        ADD_CALL_ARGS(buf, i_len, i_type);
+                        ADD_CALL_ARGS(node, buf, i_len, i_type);
                         state = BLITZ_CALL_STATE_HAS_NEXT;
                     } else {
                         state = BLITZ_CALL_STATE_ERROR;

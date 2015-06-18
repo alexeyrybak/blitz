@@ -347,6 +347,7 @@ typedef struct _blitz_node {
     unsigned long lexem_len;
     call_arg *args;
     unsigned char n_args;
+    unsigned char n_arg_alloc;
     struct _blitz_node *first_child;
     struct _blitz_node *next;
     unsigned int pos_in_list;
