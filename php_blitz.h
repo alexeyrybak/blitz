@@ -491,6 +491,17 @@ typedef struct _blitz_analizer_ctx {
   ( (c) == BLITZ_EXPR_OPERATOR_N ? 1 : 2                                       \
   )
 
+#define BLITZ_ARG_TO_STRING(c)                                                 \
+  ( (c) == BLITZ_ARG_TYPE_VAR ? "var" :                                        \
+    (c) == BLITZ_ARG_TYPE_VAR_PATH ? "var_path" :                              \
+    (c) == BLITZ_ARG_TYPE_STR ? "str" :                                        \
+    (c) == BLITZ_ARG_TYPE_NUM ? "num" :                                        \
+    (c) == BLITZ_ARG_TYPE_FALSE ? "false" :                                    \
+    (c) == BLITZ_ARG_TYPE_TRUE ? "true" :                                      \
+    (c) == BLITZ_ARG_TYPE_FLOAT ? "float" :                                    \
+    BLITZ_OPERATOR_TO_STRING(c)                                                \
+  )
+
 #define BLITZ_OPERATOR_TO_STRING(c)                                            \
   ( (c) == BLITZ_EXPR_OPERATOR_GE ? ">=" :                                     \
     (c) == BLITZ_EXPR_OPERATOR_G ? ">" :                                       \

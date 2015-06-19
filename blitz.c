@@ -41,6 +41,10 @@
 #include "Zend/zend_exceptions.h"
 #include <fcntl.h>
 
+#ifdef BLITZ_DEBUG
+#include "ext/standard/php_smart_str.h"
+#endif
+
 #ifdef PHP_WIN32
 #include "win32/time.h"
 #else
@@ -3432,6 +3436,53 @@ static inline unsigned int blitz_extract_var (
 }
 /* }}} */
 
+/* {{{ int blitz_arg_to_zval(blitz_tpl *tpl, blitz_node *node, zval *parent_params, call_arg **arg, zval **result) */
+static inline int blitz_arg_to_zval(
+    blitz_tpl *tpl,
+    blitz_node *node,
+    zval *parent_params,
+    call_arg *arg,
+    zval **return_value TSRMLS_DC)
+{
+    long predefined = -1;
+    zval **ztmp = NULL;
+
+    if (BLITZ_DEBUG) php_printf("*** FUNCTION *** blitz_arg_to_zval: %s[%lu] (type=%d: %s)\n", arg->name, arg->len, arg->type, BLITZ_ARG_TO_STRING(arg->type));
+
+    if (arg->type == BLITZ_ARG_TYPE_VAR || arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
+        if (blitz_extract_var(tpl, arg->name, arg->len, (arg->type == BLITZ_ARG_TYPE_VAR_PATH), parent_params, &predefined, &ztmp TSRMLS_CC) != 0) {
+            if (predefined >= 0) {
+                ZVAL_DOUBLE(*return_value, (double)predefined);
+            } else {
+                *return_value = *ztmp;
+            }
+        } else {
+            // UNDEFINED
+            if (BLITZ_DEBUG) php_printf("--> not found\n");
+            ZVAL_NULL(*return_value);
+            return 0;
+        }
+    } else if (arg->type == BLITZ_ARG_TYPE_STR) {
+        ZVAL_STRINGL(*return_value, arg->name, arg->len, 0); // Don't duplicate
+    } else if (arg->type == BLITZ_ARG_TYPE_FALSE) {
+        ZVAL_FALSE(*return_value);
+    } else if (arg->type == BLITZ_ARG_TYPE_TRUE) {
+        ZVAL_TRUE(*return_value);
+    } else {
+        ZVAL_DOUBLE(*return_value, atof(arg->name));
+    }
+
+    if (BLITZ_DEBUG) {
+        smart_str buf = {0};
+        php_var_export_ex(return_value, 1, &buf TSRMLS_CC);
+        smart_str_0 (&buf);
+        php_printf("--> type:%s value:%s\n", zend_zval_type_name(*return_value), buf.c);
+        smart_str_free(&buf);
+    }
+
+    return 1;
+}
+
 /* {{{ int blitz_check_arg() */
 static inline void blitz_check_arg (
     blitz_tpl *tpl,
@@ -3463,13 +3514,6 @@ static inline void blitz_check_arg (
 }
 /* }}} */
 
-#define BLITZ_PHP_TYPE_MAX IS_CONSTANT_ARRAY
-#define BLITZ_COMPARE_UNKNOWN       0
-#define BLITZ_COMPARE_UNDEFINED_VAR 1
-#define BLITZ_COMPARE_DOUBLE        2
-#define BLITZ_COMPARE_STRING        3
-#define BLITZ_COMPARE_BOOL          4
-
 /* {{{ int blitz_check_expr() */
 static inline void blitz_check_expr (
     blitz_tpl *tpl,
@@ -3477,17 +3521,13 @@ static inline void blitz_check_expr (
     zval *parent_params,
     int *is_true TSRMLS_DC)
 {
-    long predefined = -1, cmp = 0;
     unsigned long i = 0, j = 0;
     call_arg *arg = NULL, *expr_arg = NULL;
     call_arg a_stack[BLITZ_IF_STACK_MAX];
-    int num_a = -1, operands_needed = 0, found = 0, expression, not_empty;
-    zval **zval = NULL;
-    zend_bool operands_b[2] = {0, 0};
-    double operands_d[2] = {0.0, 0.0};
-    char *operands_s[2] = {NULL, NULL};
-    long operands_s_len[2] = {0, 0};
-    unsigned char types[2] = {0, 0};
+    zval operands[2]; // Hold the memory for simple values
+    zval *op_ptr[2] = {NULL, NULL};
+    int num_a = -1, operands_needed = 0, found = 0, expression, arguments_are_undefined;
+    zval resval;
 
     if (BLITZ_DEBUG)
         php_printf("*** FUNCTION *** blitz_check_expr argcnt=%d\n", node->n_args);
@@ -3507,138 +3547,52 @@ static inline void blitz_check_expr (
             }
             // Prepare the operands
             expr_arg = arg;
+            arguments_are_undefined = 0;
             for (j = 0; j < operands_needed; j++) {
                 arg = &a_stack[num_a--]; // This reverses the operands, remember! So if it was a b <operator> we'll get them as 0 => b, 1 => a
-                types[j] = 0; operands_d[j] = 0.0; operands_s[j] = NULL; operands_s_len[j] = 0;
-                if (arg->type == BLITZ_ARG_TYPE_VAR || arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
-                    found = blitz_extract_var(tpl, arg->name, arg->len, (arg->type == BLITZ_ARG_TYPE_VAR_PATH), parent_params, &predefined, &zval TSRMLS_CC);
-                    if (predefined >= 0) {
-                        operands_d[j] = (double)predefined;
-                        operands_b[j] = (operands_d[j] == 0.0 ? 0 : 1);
-                        types[j] = BLITZ_COMPARE_DOUBLE;
-                    } else if (found > 0) {
-                        if (Z_TYPE_PP(zval) == IS_STRING) {
-                            operands_d[j] = atof(Z_STRVAL_PP(zval)); // Cast double val too, for just in case
-                            operands_s[j] = Z_STRVAL_PP(zval);
-                            operands_s_len[j] = Z_STRLEN_PP(zval);
-                            operands_b[j] = (operands_s_len[j] == 0 ? 0 : 1);
-                            types[j] = BLITZ_COMPARE_STRING;
-                        } else if ((Z_TYPE_PP(zval) == IS_LONG) || (Z_TYPE_PP(zval) == IS_BOOL)) {
-                            operands_d[j] = (double)Z_LVAL_PP(zval);
-                            operands_b[j] = (operands_d[j] == 0.0 ? 0 : 1);
-                            types[j] = BLITZ_COMPARE_DOUBLE;
-                        } else if (Z_TYPE_PP(zval) == IS_DOUBLE) {
-                            operands_d[j] = Z_DVAL_PP(zval);
-                            operands_b[j] = (operands_d[j] == 0.0 ? 0 : 1);
-                            types[j] = BLITZ_COMPARE_DOUBLE;
-                        } else if ((Z_TYPE_PP(zval) == IS_ARRAY) || (Z_TYPE_PP(zval) == IS_OBJECT)) {
-                            BLITZ_ZVAL_NOT_EMPTY(zval, not_empty);
-                            operands_d[j] = (not_empty ? 1.0 : 0.0);
-                            operands_b[j] = (not_empty ? 1 : 0);
-                            types[j] = BLITZ_COMPARE_DOUBLE;
-                        } else if (Z_TYPE_PP(zval) == IS_NULL) {
-                            operands_d[j] = -1.0; // Special one, we don't want NULL to match with anything, only with itself
-                            operands_b[j] = 0;
-                            types[j] = BLITZ_COMPARE_DOUBLE;
-                        } else {
-                            types[j] = BLITZ_COMPARE_UNKNOWN;
-                        }
-                    } else {
-                        types[j] = BLITZ_COMPARE_UNDEFINED_VAR;
-                    }
-                } else if (arg->type == BLITZ_ARG_TYPE_STR) {
-                    operands_d[j] = atof(arg->name); // Cast double val too, for just in case
-                    operands_s[j] = arg->name;
-                    operands_s_len[j] = arg->len;
-                    operands_b[j] = (operands_s_len[j] == 0 ? 0 : 1);
-                    types[j] = BLITZ_COMPARE_STRING;
-                } else if (arg->type == BLITZ_ARG_TYPE_FALSE) {
-                    operands_d[j] = 0.0;
-                    operands_b[j] = 0;
-                    types[j] = BLITZ_COMPARE_BOOL;
-                } else if (arg->type == BLITZ_ARG_TYPE_TRUE) {
-                    operands_d[j] = 1.0;
-                    operands_b[j] = 1;
-                    types[j] = BLITZ_COMPARE_BOOL;
-                } else {
-                    operands_d[j] = atof(arg->name);
-                    operands_b[j] = (operands_d[j] == 0.0 ? 0 : 1);
-                    types[j] = BLITZ_COMPARE_DOUBLE;
-                }
+                op_ptr[j] = &operands[j];
+                found = blitz_arg_to_zval(tpl, node, parent_params, arg, &op_ptr[j]);
+                if (found == 0)
+                    arguments_are_undefined = 1;
 
-                if (BLITZ_DEBUG)
-                    php_printf("operands %s type#%lu = %s(%u) (dval:%f sval:%s(len=%ld) bval:%f)\n", arg->name, j, BLITZ_OPERATOR_TO_STRING(types[j]), types[j], operands_d[j], (operands_s[j] == NULL ? "NULL" : operands_s[j]), operands_s_len[j], operands_d[j]);
+                if (BLITZ_DEBUG) {
+                    php_printf("operands:%lu [%s] = name:%s (type:%s) %p cmp:%s\n", j, (found == 1  ? "FOUND" : "UNKNOWN"), arg->name, zend_zval_type_name(op_ptr[j]), &op_ptr[j], BLITZ_OPERATOR_TO_STRING(expr_arg->type));
+                }
             }
 
             // Execute the operator
-            switch (expr_arg->type) {
-                case BLITZ_EXPR_OPERATOR_N:
-                    if (types[0] == BLITZ_COMPARE_UNKNOWN) {
-                        if (BLITZ_DEBUG)
-                            php_printf("operand is of incorrect type, result is error\n");
-                        expression = -1;
-                    } else if (types[0] == BLITZ_COMPARE_UNDEFINED_VAR) {
-                        if (BLITZ_DEBUG)
-                            php_printf("operand is undefined, result is true\n");
-                        expression = 1;
-                    } else {
-                        if (BLITZ_DEBUG)
-                            php_printf("using bool variable for the NOT operator\n");
-                        expression = !(operands_b[0]);
+            if (expr_arg->type == BLITZ_EXPR_OPERATOR_N) {
+                // If our operand is undefined, return true
+                if (arguments_are_undefined == 1) {
+                    expression = 1;
+                    if (BLITZ_DEBUG) php_printf("operand is undefined, result is true\n");
+                } else {
+                    expression = (zend_is_true(op_ptr[0]) == 1 ? 0 : 1);
+                }
+            } else if (expr_arg->type == BLITZ_EXPR_OPERATOR_LA) {
+                expression = (zend_is_true(op_ptr[0]) == 1 && zend_is_true(op_ptr[1]) == 1 ? 1 : 0);
+            } else if (expr_arg->type == BLITZ_EXPR_OPERATOR_LO) {
+                expression = (zend_is_true(op_ptr[0]) == 1 || zend_is_true(op_ptr[1]) == 1 ? 1 : 0);
+            } else {
+                INIT_ZVAL(resval);
+                if (arguments_are_undefined == 1) {
+                    if (BLITZ_DEBUG) php_printf("one of the operands is undefined, result is false\n");
+                    expression = 0;
+                } else if (compare_function(&resval, op_ptr[1], op_ptr[0] TSRMLS_CC) == FAILURE) {
+                    if (BLITZ_DEBUG) php_printf("one of the operands is of incorrect type, or failed to run compare_function, result is error\n");
+                    expression = -1;
+                } else {
+                    switch (expr_arg->type) {
+                        case BLITZ_EXPR_OPERATOR_E:  expression = (Z_LVAL(resval) == 0) ? 1 : 0; break;
+                        case BLITZ_EXPR_OPERATOR_NE: expression = (Z_LVAL(resval) != 0) ? 1 : 0; break;
+                        case BLITZ_EXPR_OPERATOR_G:  expression = (Z_LVAL(resval) > 0) ? 1 : 0; break;
+                        case BLITZ_EXPR_OPERATOR_GE: expression = (Z_LVAL(resval) >= 0) ? 1 : 0; break;
+                        case BLITZ_EXPR_OPERATOR_L:  expression = (Z_LVAL(resval) < 0) ? 1 : 0; break;
+                        case BLITZ_EXPR_OPERATOR_LE: expression = (Z_LVAL(resval) <= 0) ? 1 : 0; break;
+                        default: expression = 0;
                     }
-                    break;
-                default:
-                    if (types[0] == BLITZ_COMPARE_UNKNOWN || types[1] == BLITZ_COMPARE_UNKNOWN) {
-                        if (BLITZ_DEBUG)
-                            php_printf("one of the operands is of incorrect type, result is error\n");
-                        expression = -1;
-                    } else if (types[0] == BLITZ_COMPARE_UNDEFINED_VAR || types[1] == BLITZ_COMPARE_UNDEFINED_VAR) {
-                        if (BLITZ_DEBUG)
-                            php_printf("one of the operands is undefined, result is false\n");
-                        expression = 0;
-                    } else if (types[0] == BLITZ_COMPARE_BOOL || types[1] == BLITZ_COMPARE_BOOL) {
-                        if (BLITZ_DEBUG)
-                            php_printf("one of the operands is bool, cast to bool\n");
-                        switch (expr_arg->type) {
-                            case BLITZ_EXPR_OPERATOR_E:  expression = (operands_b[1] == operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_NE: expression = (operands_b[1] != operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_G:  expression = (operands_b[1] >  operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_GE: expression = (operands_b[1] >= operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_L:  expression = (operands_b[1] <  operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LE: expression = (operands_b[1] <= operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LA: expression = (operands_b[1] && operands_b[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LO: expression = (operands_b[1] || operands_b[0]) ? 1 : 0; break;
-                            default: expression = 0;
-                        }
-                    } else if (types[0] == BLITZ_COMPARE_STRING && types[1] == BLITZ_COMPARE_STRING) {
-                        if (BLITZ_DEBUG)
-                            php_printf("both operands are strings, cast to strings\n");
-                        cmp = strncmp(operands_s[1], operands_s[0], MAX(operands_s_len[1], operands_s_len[0]));
-                        switch (expr_arg->type) {
-                            case BLITZ_EXPR_OPERATOR_E:  expression = (cmp == 0) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_NE: expression = (cmp != 0) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_G:  expression = (cmp >  0) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_GE: expression = (cmp >= 0) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_L:  expression = (cmp <  0) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LE: expression = (cmp <= 0) ? 1 : 0; break;
-                            default: expression = 0;
-                        }
-                    } else {
-                        if (BLITZ_DEBUG)
-                            php_printf("one of the operands is not string, cast to double\n");
-                        switch (expr_arg->type) {
-                            case BLITZ_EXPR_OPERATOR_E:  expression = (operands_d[1] == operands_d[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_NE: expression = (operands_d[1] != operands_d[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_G:  expression = (operands_d[1] >  operands_d[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_GE: expression = (operands_d[1] >= operands_d[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_L:  expression = (operands_d[1] <  operands_d[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LE: expression = (operands_d[1] <= operands_d[0]) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LA: expression = (operands_d[1] != 0.0 && operands_d[0] != 0.0) ? 1 : 0; break;
-                            case BLITZ_EXPR_OPERATOR_LO: expression = (operands_d[1] != 0.0 || operands_d[0] != 0.0) ? 1 : 0;break;
-                            default: expression = 0;
-                        }
-                    }
-                    break;
+                    if (BLITZ_DEBUG) php_printf("compare function resulted in %ld\n", Z_LVAL(resval));
+                }
             }
 
             // Push it to the stack
