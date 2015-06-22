@@ -348,6 +348,7 @@ typedef struct _blitz_node {
     call_arg *args;
     unsigned char n_args;
     unsigned char n_arg_alloc;
+    unsigned char n_if_args; // number of args in the IF()/UNLESS() statement
     struct _blitz_node *first_child;
     struct _blitz_node *next;
     unsigned int pos_in_list;
@@ -649,6 +650,7 @@ typedef struct _blitz_analizer_ctx {
 #define BLITZ_CALL_STATE_END         5
 #define BLITZ_CALL_STATE_IF          6
 #define BLITZ_CALL_STATE_ELSE        7
+#define BLITZ_CALL_STATE_NEXT_ARG_IF 8
 #define BLITZ_CALL_STATE_ERROR       0
 
 #define BLITZ_CALL_ERROR             1

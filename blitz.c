@@ -79,6 +79,8 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first, zval *id,
 static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC);
 static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC);
 static inline unsigned int blitz_extract_var(blitz_tpl *tpl, char *name, unsigned long len, unsigned char is_path, zval *params, long *l, zval ***z TSRMLS_DC);
+static inline void blitz_check_arg(blitz_tpl *tpl, blitz_node *node, zval *parent_params, int *not_empty TSRMLS_DC);
+static inline void blitz_check_expr(blitz_tpl *tpl, blitz_node *node, unsigned int node_count, zval *parent_params, int *is_true TSRMLS_DC);
 
 static int le_blitz;
 
@@ -100,6 +102,7 @@ ZEND_GET_MODULE(blitz)
 #define INIT_CALL_ARGS(n)                                                       \
     (n)->args = ecalloc(BLITZ_CALL_ALLOC_ARG_INIT, sizeof(call_arg));           \
     (n)->n_args = 0;                                                            \
+    (n)->n_if_args = 0;                                                         \
     (n)->n_arg_alloc = BLITZ_CALL_ALLOC_ARG_INIT;
 
 #define REALLOC_ARG_IF_EXCEEDS(n)                                               \
@@ -1249,6 +1252,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                     args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
                     ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+                    ++node->n_if_args;
                     --op_len;
 
                     if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
@@ -1283,6 +1287,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                     args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
                     ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+                    ++node->n_if_args;
                     --op_len;
 
                     if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
@@ -1303,6 +1308,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
         } else {
             // operand
             ADD_CALL_ARGS(node, buf, i_len, i_type);
+            ++node->n_if_args;
             args_on_list++;
             args_since_bracket++;
 
@@ -1337,6 +1343,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
         args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
         ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+        ++node->n_if_args;
         --op_len;
 
         if (GET_CALL_ARGS_SIZE(node) >= BLITZ_IF_STACK_MAX) {
@@ -1480,8 +1487,10 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     if (has_namespace == 0) {
                         if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
                             node->type = BLITZ_NODE_TYPE_IF;
+                            state = BLITZ_CALL_STATE_NEXT_ARG_IF;
                         } else if (BLITZ_STRING_IS_UNLESS(node->lexem, node->lexem_len)) {
                             node->type = BLITZ_NODE_TYPE_UNLESS;
+                            state = BLITZ_CALL_STATE_NEXT_ARG_IF;
                         } else if (BLITZ_STRING_IS_INCLUDE(node->lexem, node->lexem_len)) {
                             node->type = BLITZ_NODE_TYPE_INCLUDE;
                         } else if (BLITZ_STRING_IS_ESCAPE(node->lexem, node->lexem_len)) {
@@ -1579,6 +1588,18 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     }
                     state = BLITZ_CALL_STATE_FINISHED;
                     break;
+                case BLITZ_CALL_STATE_NEXT_ARG_IF:
+                    BLITZ_SKIP_BLANK(c,i_pos,pos);
+                    is_path = i_len = i_pos = i_type = 0;
+
+                    blitz_parse_if(c, len_text-pos, node, var_prefix, &i_pos, error TSRMLS_CC);
+                    if (*error != 0) {
+                        return;
+                    }
+                    pos += i_pos; i_pos = 0;
+					c = text + pos;
+                    state = BLITZ_CALL_STATE_HAS_NEXT;
+                    break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
                     blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
                     if (i_pos && !BLITZ_IS_ARG_EXPR(i_type)) {
@@ -1643,7 +1664,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
         *error = BLITZ_CALL_ERROR_IF_CONTEXT;
     } else if (state != BLITZ_CALL_STATE_FINISHED) {
         *error = BLITZ_CALL_ERROR;
-    } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && (node->n_args<2 || node->n_args > 3)) {
+    } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && ((node->n_args - node->n_if_args) < 1 || (node->n_args - node->n_if_args) > 2)) {
         *error = BLITZ_CALL_ERROR_IF;
     } else if ((node->type == BLITZ_NODE_TYPE_INCLUDE) && (node->n_args != 1)) {
         *error = BLITZ_CALL_ERROR_INCLUDE;
@@ -1961,6 +1982,7 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
 
     i_node->args = NULL;
     i_node->n_args = 0;
+    i_node->n_if_args = 0;
     i_node->pos_in_list = ctx->n_nodes;
     i_node->hidden = 0;
     i_node->pos_begin_shift = 0;
@@ -2702,70 +2724,38 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
     char predefined_buf[BLITZ_PREDEFINED_BUF_LEN];
 
     if (node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) {
-        char not_empty = 0;
-        int predefined = -1;
-        unsigned int i_arg = 0;
+        int is_true = 0, predefined = -1;
+        unsigned int arg_offset = 1;
         call_arg *arg = NULL;
-        zval **z = NULL;
-        unsigned int use_scope = 0;
 
-        arg = node->args;
-        BLITZ_GET_PREDEFINED_VAR(tpl, arg->name, arg->len, predefined);
-        if (predefined >=0) {
-            if (predefined != 0) {
-                not_empty = 1;
-            }
-        } else if (arg->type == BLITZ_ARG_TYPE_VAR) {
-            if (iteration_params) {
-                if (Z_TYPE_P(iteration_params) == IS_ARRAY || Z_TYPE_P(iteration_params) == IS_OBJECT) {
-                    BLITZ_ARG_NOT_EMPTY(*arg, HASH_OF(iteration_params), not_empty);
-                }
-
-                if (not_empty == -1) {
-                    BLITZ_ARG_NOT_EMPTY(*arg, tpl->hash_globals, not_empty);
-                    if (not_empty == -1) {
-                        use_scope = BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos;
-                        if (use_scope && blitz_scope_stack_find(tpl, arg->name, arg->len + 1, &z TSRMLS_CC)) {
-                            BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
-                        }
-                    }
-                }
-            }
-        } else if (arg->type == BLITZ_ARG_TYPE_VAR_PATH) {
-            if (blitz_fetch_var_by_path(&z, arg->name, arg->len, iteration_params, tpl TSRMLS_CC)) {
-                BLITZ_ZVAL_NOT_EMPTY(z, not_empty);
-            }
+        if (node->n_if_args > 1) {
+            blitz_check_expr(tpl, node, node->n_if_args, iteration_params, &is_true TSRMLS_CC);
+            /* complex if structures have as result there's a variable number of node args (say if you have if(a||b, "true", "false")),
+             * node_args will be [ var b, var a, operator ||, literal "true", literal "false" ].
+             * we need to know the position where the real arguments start.
+            */
+            arg_offset = node->n_if_args;
         } else {
-            BLITZ_ARG_NOT_EMPTY(*arg, NULL, not_empty);
+            blitz_check_arg(tpl, node, iteration_params, &is_true TSRMLS_CC);
         }
 
-        /* not_empty = 
-            1: found, not empty 
-            0: found, empty 
-           -1: not found, "empty" */
-        if (not_empty == 1) { 
-            if (node->type == BLITZ_NODE_TYPE_IF) {
-                i_arg = 1; /* if ($a, 1) or if ($a, 1, 2) and $a is not empty */
-            } else {
-                if (node->n_args == 3) { 
-                    i_arg = 2; /* unless($a, 1, 2) and $a is not empty */
-                } else {
+        if (node->type == BLITZ_NODE_TYPE_UNLESS) {
+            if (is_true) {
+                ++arg_offset;
+                if (arg_offset >= node->n_args) {
                     return 1;  /* unless($a, 1) and $a is not empty */
                 }
             }
         } else {
-            if (node->type == BLITZ_NODE_TYPE_UNLESS) {
-                i_arg = 1; /* unless($a, 1) or unless($a, 1, 2) and $a is empty */
-            } else {
-                if (node->n_args == 3) { 
-                    i_arg = 2; /* if($a, 1, 2) and $a is empty */
-                } else { 
+            if (!is_true) {
+                ++arg_offset;
+                if (arg_offset >= node->n_args) {
                     return 1; /* if($a, 1) and $a is empty */
                 }
             }
         }
 
-        arg = node->args + i_arg;
+        arg = node->args + arg_offset;
         BLITZ_GET_PREDEFINED_VAR(tpl, arg->name, arg->len, predefined);
         if (predefined >= 0) {
             snprintf(predefined_buf, BLITZ_PREDEFINED_BUF_LEN, "%u", predefined);
@@ -2808,7 +2798,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
 // FIXME: escape !!!
                 buf_len = (unsigned long)arg->len;
                 BLITZ_REALLOC_RESULT(buf_len, new_len, *result_len, *result_alloc_len, *result, *p_result);
-                *p_result = (char*)memcpy(*p_result, node->args[i_arg].name, buf_len);
+                *p_result = (char*)memcpy(*p_result, arg->name, buf_len);
                 *result_len += buf_len;
                 p_result+=*result_len;
                 (*result)[*result_len] = '\0';
@@ -3483,7 +3473,7 @@ static inline int blitz_arg_to_zval(
     return 1;
 }
 
-/* {{{ int blitz_check_arg() */
+/* {{{ int blitz_check_arg(blitz_tpl *tpl, blitz_node *node, zval *parent_params, int *not_empty) */
 static inline void blitz_check_arg (
     blitz_tpl *tpl,
     blitz_node *node,
@@ -3514,10 +3504,11 @@ static inline void blitz_check_arg (
 }
 /* }}} */
 
-/* {{{ int blitz_check_expr() */
+/* {{{ int blitz_check_expr(blitz_tpl *tpl, blitz_node *node, unsigned int node_count, zval *parent_params, int *is_true) */
 static inline void blitz_check_expr (
     blitz_tpl *tpl,
     blitz_node *node,
+    unsigned int node_count,
     zval *parent_params,
     int *is_true TSRMLS_DC)
 {
@@ -3530,9 +3521,9 @@ static inline void blitz_check_expr (
     zval resval;
 
     if (BLITZ_DEBUG)
-        php_printf("*** FUNCTION *** blitz_check_expr argcnt=%d\n", node->n_args);
+        php_printf("*** FUNCTION *** blitz_check_expr argcnt=%d\n", node_count);
 
-    for (i = 0; i < node->n_args; i++) {
+    for (i = 0; i < node_count; i++) {
         arg = &node->args[i];
         if (!BLITZ_IS_ARG_EXPR(arg->type)) {
             // No operator (so operand), just store the operand on the stack (and don't care about strings, we're just pointing, no need to copy the mem)
@@ -3643,7 +3634,7 @@ static void blitz_exec_if_context(
         } else { 
 
             if (node->n_args > 1) {
-                blitz_check_expr(tpl, node, parent_params, &is_true TSRMLS_CC);
+                blitz_check_expr(tpl, node, node->n_if_args, parent_params, &is_true TSRMLS_CC);
             } else {
                 blitz_check_arg(tpl, node, parent_params, &is_true TSRMLS_CC);
             }
