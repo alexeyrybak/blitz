@@ -9,14 +9,14 @@ class Template extends Blitz
     var $foo;
     var $bar;
 
-    function set($foo, $bar)
+    function setVar($foo, $bar)
     {
         $this->foo = $foo;
         $this->bar = $bar;
         return NULL;
     }
 
-    function get()
+    function getVar()
     {
         return $this->dump();
     }
@@ -29,8 +29,8 @@ class Template extends Blitz
 }
 
 $body = <<<BODY
-{{set('I am foo', 'I am bar')}}
-{{get()}}
+{{setVar('I am foo', 'I am bar')}}
+{{getVar()}}
 BODY;
 
 $Template = new Template();
