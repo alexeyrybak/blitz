@@ -1,7 +1,10 @@
 ===================================================================================================
-0.8.19 version 30 march 2015
+0.8.19 version 25 june 2015
 ===================================================================================================
 - FIX: added predefined constant $_i - loop identifier, same as $_num, but starts with 0. 
+- FIX: "native" if, also fixes some logical errors (thanks to Nicolas Van Eenaeme) 
+- FIX: arginfo added and a couple of other minor fixes (thanks to Anton "tony2001" Dovgal)
+- FIX: zephir integration fix (plain blitz::__construct declaration)
 
 ===================================================================================================
 0.8.18 version 5 mar 2015

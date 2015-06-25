@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.8.18"
+#define BLITZ_VERSION_STRING "0.8.19"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -5491,6 +5491,7 @@ ZEND_END_ARG_INFO()
 
 /* {{{ blitz_functions[] : Blitz class */
 static const zend_function_entry blitz_functions[] = {
+    BLITZ_ALIAS(__construct,         blitz_init)
     BLITZ_ALIAS(blitz,               blitz_init)
     BLITZ_ALIAS(load,                blitz_load)
     BLITZ_ALIAS(dump_struct,         blitz_dump_struct)

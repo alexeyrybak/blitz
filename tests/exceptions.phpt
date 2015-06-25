@@ -14,5 +14,5 @@ try {
 
 ?>
 --EXPECTF--	
-blitz::blitz(): unable to open file "%snofile.tpl"
+blitz::__construct(): unable to open file "%snofile.tpl"
 Exception: unable to open file "%snofile.tpl"
