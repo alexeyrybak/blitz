@@ -1,5 +1,5 @@
 ===================================================================================================
-0.8.19 version 25 june 2015
+0.9.1 version 25 june 2015
 ===================================================================================================
 - FIX: added predefined constant $_i - loop identifier, same as $_num, but starts with 0. 
 - FIX: "native" if, also fixes some logical errors (thanks to Nicolas Van Eenaeme) 
