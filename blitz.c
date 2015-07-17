@@ -2962,22 +2962,11 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
             if (i_arg_type == BLITZ_ARG_TYPE_VAR) {
                 predefined = -1;
-                // magic $_, as all predefined are casted to long, treat this separately
-                if (i_arg->len == 1 && i_arg->name[0] == '_') {
-                    if (has_iterations) {
-                        *arg = *iteration_params;
-                        Z_SET_REFCOUNT_P(arg, 1);
-                        Z_UNSET_ISREF_P(arg);
-                        zval_copy_ctor(arg);
-                    }
-                } else {
-                    predefined = -1;
-                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp TSRMLS_CC);
-                    if (predefined >= 0) {
-                        ZVAL_LONG(arg, (long)predefined);
-                    } else if (found) {
-                        args[i] = ztmp;
-                    }
+                found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp TSRMLS_CC);
+                if (predefined >= 0) {
+                    ZVAL_LONG(arg, (long)predefined);
+                } else if (found) {
+                    args[i] = ztmp;
                 }
             } else if (i_arg_type == BLITZ_ARG_TYPE_VAR_PATH) {
                 if (has_iterations && blitz_fetch_var_by_path(&ztmp, i_arg->name, i_arg->len, iteration_params, tpl TSRMLS_CC)) {
@@ -3401,6 +3390,9 @@ static inline unsigned int blitz_extract_var (
         if (BLITZ_DEBUG) php_printf("predefined path _parent\n");
         magic_stack = (tpl->scope_stack_pos > 2 ? tpl->scope_stack_pos - 2 : 0); /* keep track of the current magic scope to enable things like _parent._parent */
         *z = &tpl->scope_stack[magic_stack];
+        return 1;
+    } else if (len == 1 && name[0] == '_') {
+        *z = &tpl->scope_stack[tpl->scope_stack_pos-1];
         return 1;
     }
 
