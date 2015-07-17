@@ -1361,6 +1361,81 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 
     *pos_out = pos + i_pos;
 
+    return;
+}
+/* }}} */
+
+/* {{{ void blitz_parse_scope() */
+static inline void blitz_parse_scope (char *text, unsigned int len_text, blitz_node *node, char var_prefix,
+    unsigned int *pos_out, char *error_out TSRMLS_DC)
+{
+    char *c = text;
+    unsigned int pos = 0, i_pos = 0, i_len = 0, key_len = 0;
+    char key[BLITZ_MAX_LEXEM_LEN];
+    char buf[BLITZ_MAX_LEXEM_LEN];
+    unsigned char i_type = 0;
+    int has_key = 0;
+    call_arg *i_arg = NULL;
+
+    *error_out = 0;
+    *pos_out = 0;
+
+    if (BLITZ_DEBUG) {
+        char *tmp = estrndup((char *)text, len_text + 1);
+        tmp[len_text] = '\x0';
+        php_printf("*** FUNCTION *** blitz_parse_scope, started at pos=%u, c=%c, len=%u\n", pos, *c, len_text);
+        php_printf("text: %s\n", tmp);
+        efree(tmp);
+    }
+
+    i_pos = has_key = 0;
+
+    // While we have an argument and we have still text to parse
+    while (pos < len_text && *c != ')') {
+        pos += i_pos;
+        c = text + pos;
+
+        BLITZ_SKIP_BLANK(c,i_pos,pos);
+        if (pos >= len_text) {
+            // If we're at the end of our text, break and don't do the blitz_parse_arg call again (just optimalization)
+            break;
+        }
+
+        if (*c == ')') {
+            break;
+        } else if (has_key == 0 && *c == ',') {
+            i_pos = 1;
+            continue; // Okay!
+        } else if (has_key == 1 && *c == '=') {
+            i_pos = 1;
+            continue; // Okay!
+        } else if (has_key == 1) {
+            i_len = i_pos = i_type = 0;
+            blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
+            if (!i_pos || BLITZ_IS_ARG_EXPR(i_type)) {
+                *error_out = BLITZ_CALL_ERROR_SCOPE;
+                return;
+            }
+
+            // Add it to the zval
+            ADD_CALL_ARGS(node, key, key_len, BLITZ_ARG_TYPE_VAR)
+            ADD_CALL_ARGS(node, buf, i_len, i_type)
+
+            has_key = 0;
+        } else {
+            i_len = i_pos = i_type = 0;
+            blitz_parse_arg(c, var_prefix, key, &i_type, &i_len, &i_pos TSRMLS_CC);
+            if (!i_pos || i_type != BLITZ_ARG_TYPE_VAR) {
+                *error_out = BLITZ_CALL_ERROR_SCOPE;
+                return;
+            }
+            key_len = i_len;
+            has_key = 1;
+        }
+    }
+
+    *pos_out = pos;
+
     // We finished parsing all arguments, in RPN!!! Remember that IF a <operator> b became a b <operator>
     return;
 }
@@ -1601,6 +1676,18 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     c = text + pos;
                     state = BLITZ_CALL_STATE_HAS_NEXT;
                     break;
+                case BLITZ_CALL_STATE_NEXT_ARG_SCOPE:
+                    BLITZ_SKIP_BLANK(c,i_pos,pos);
+                    is_path = i_len = i_pos = i_type = 0;
+
+                    blitz_parse_scope(c, len_text-pos, node, var_prefix, &i_pos, error TSRMLS_CC);
+                    if (*error != 0) {
+                        return;
+                    }
+                    pos += i_pos; i_pos = 0;
+                    c = text + pos;
+                    state = BLITZ_CALL_STATE_HAS_NEXT;
+                    break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
                     blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos TSRMLS_CC);
                     if (i_pos && !BLITZ_IS_ARG_EXPR(i_type)) {
@@ -1616,7 +1703,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
                     symb = *c;
                     if (symb == ',') {
-                        state = BLITZ_CALL_STATE_NEXT_ARG;
+                        // Include supports a scope, so if node type is include, read scope
+                        state = (node->type == BLITZ_NODE_TYPE_INCLUDE ? BLITZ_CALL_STATE_NEXT_ARG_SCOPE : BLITZ_CALL_STATE_NEXT_ARG);
                         ++c; ++pos;
                     } else if (symb == ')') {
                         state = BLITZ_CALL_STATE_FINISHED;
@@ -1663,12 +1751,12 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
 
     if (state == BLITZ_CALL_STATE_ERROR && (node->type == BLITZ_NODE_TYPE_IF_NF || node->type == BLITZ_NODE_TYPE_UNLESS_NF || node->type == BLITZ_NODE_TYPE_ELSEIF_NF)) {
         *error = BLITZ_CALL_ERROR_IF_CONTEXT;
+    } else if (node->type == BLITZ_NODE_TYPE_INCLUDE && (node->n_args < 1 || (node->n_args % 2 != 1) || state == BLITZ_CALL_STATE_ERROR)) {
+        *error = BLITZ_CALL_ERROR_INCLUDE;
     } else if (state != BLITZ_CALL_STATE_FINISHED) {
         *error = BLITZ_CALL_ERROR;
     } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && ((node->n_args - node->n_if_args) < 1 || (node->n_args - node->n_if_args) > 2)) {
         *error = BLITZ_CALL_ERROR_IF;
-    } else if ((node->type == BLITZ_NODE_TYPE_INCLUDE) && (node->n_args != 1)) {
-        *error = BLITZ_CALL_ERROR_INCLUDE;
     } 
 
     /* FIXME: check arguments for wrappers (escape, date, trim) */
@@ -2038,7 +2126,12 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
             );
         } else if (i_error == BLITZ_CALL_ERROR_INCLUDE) {
             blitz_error(tpl TSRMLS_CC, E_WARNING,
-                "SYNTAX ERROR: invalid <inlcude> syntax, only 1 argument allowed (%s: line %lu, pos %lu)",
+                "SYNTAX ERROR: invalid <include> syntax, first param must be filename and there can be optional scope arguments (%s: line %lu, pos %lu)",
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+            );
+        } else if (i_error == BLITZ_CALL_ERROR_SCOPE) {
+            blitz_error(tpl TSRMLS_CC, E_WARNING,
+                "SYNTAX ERROR: invalid scope syntax, to define scope use key1 = value1, key2 = value2, ... while key is a literal var without quotes (%s: line %lu, pos %lu)",
                 tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
         } else if (i_error == BLITZ_CALL_ERROR_IF_CONTEXT) {
@@ -2806,13 +2899,16 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         }
     } else if (node->type == BLITZ_NODE_TYPE_INCLUDE) {
-        call_arg *arg = node->args; 
+        call_arg *arg = node->args, *tmp_arg = NULL;
+        zval tmp_z;
+        zval *scope_iteration = NULL, *tmp_z_ptr = NULL;
         char *filename = arg->name;
         unsigned int arg_type = arg->type;
         int filename_len = arg->len;
         char *inner_result = NULL;
         unsigned long inner_result_len = 0;
         blitz_tpl *itpl = NULL;
+        unsigned char i;
         int res = 0, found = 0;
 
         if (!BLITZ_G(enable_include)) {
@@ -2844,7 +2940,38 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         }
 
-        if (!blitz_include_tpl_cached(tpl, filename, filename_len, iteration_params, &itpl TSRMLS_CC)) {
+        // Check if we have scope provided
+        if (node->n_args > 1) {
+            MAKE_STD_ZVAL(scope_iteration);
+            array_init(scope_iteration);
+
+            for (i = 1; (i + 1) < node->n_args; i += 2) {
+                tmp_arg = node->args + i + 1;
+
+                tmp_z_ptr = &tmp_z;
+                if (blitz_arg_to_zval(tpl, node, parent_params, tmp_arg, &tmp_z_ptr) == 0) {
+                    continue;
+                }
+
+                tmp_arg = node->args + i;
+
+				Z_ADDREF_P(tmp_z_ptr); // Increment refcounter since we're adding it to the array
+                add_assoc_zval(scope_iteration, tmp_arg->name, tmp_z_ptr);
+            }
+
+            zend_hash_merge(HASH_OF(scope_iteration), HASH_OF(iteration_params), (void (*)(void *pData)) zval_add_ref, (void *) &tmp_z_ptr, sizeof(zval *), 0);
+
+            if (BLITZ_DEBUG) {
+                smart_str buf = {0};
+                php_var_export_ex(&scope_iteration, 1, &buf TSRMLS_CC);
+                smart_str_0 (&buf);
+                php_printf("--> scope_iteration:%s value:%s\n", zend_zval_type_name(scope_iteration), buf.c);
+                smart_str_free(&buf);
+            }
+
+        }
+
+        if (!blitz_include_tpl_cached(tpl, filename, filename_len, (scope_iteration ? scope_iteration : iteration_params), &itpl TSRMLS_CC)) {
             return 0;
         }
 
@@ -2859,6 +2986,10 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             if (res == 1) {
                 efree(inner_result);
             }
+        }
+
+        if (scope_iteration) {
+            zval_ptr_dtor(&scope_iteration);
         }
 
     } else if (node->type >= BLITZ_NODE_TYPE_WRAPPER_ESCAPE && node->type < BLITZ_NODE_TYPE_IF_NF) {
