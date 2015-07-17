@@ -72,13 +72,14 @@ static void blitz_error (blitz_tpl *tpl TSRMLS_DC, unsigned int level, char *for
 static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned long *result_len TSRMLS_DC);
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC);
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params TSRMLS_DC);
 static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data, int push_stack TSRMLS_DC);
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params, int push_stack TSRMLS_DC);
 static inline int blitz_analize (blitz_tpl *tpl TSRMLS_DC);
 static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl TSRMLS_DC);
 static inline unsigned int blitz_extract_var(blitz_tpl *tpl, char *name, unsigned long len, unsigned char is_path, zval *params, long *l, zval ***z TSRMLS_DC);
+static inline int blitz_arg_to_zval(blitz_tpl *tpl, blitz_node *node, zval *parent_params, call_arg *arg, zval **return_value TSRMLS_DC);
 static inline void blitz_check_arg(blitz_tpl *tpl, blitz_node *node, zval *parent_params, int *not_empty TSRMLS_DC);
 static inline void blitz_check_expr(blitz_tpl *tpl, blitz_node *node, unsigned int node_count, zval *parent_params, int *is_true TSRMLS_DC);
 
@@ -1597,7 +1598,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         return;
                     }
                     pos += i_pos; i_pos = 0;
-					c = text + pos;
+                    c = text + pos;
                     state = BLITZ_CALL_STATE_HAS_NEXT;
                     break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
@@ -2715,7 +2716,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
 /* }}} */
 
 /* {{{ int blitz_exec_predefined_method() */
-static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node, zval *iteration_params, zval *id,
+static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node, zval *iteration_params, zval *parent_params, zval *id,
     char **result, char **p_result, unsigned long *result_len, unsigned long *result_alloc_len, char *tmp_buf TSRMLS_DC)
 {
     zval **z = NULL;
@@ -3320,7 +3321,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                 result, result_len, result_alloc_len,
                 node->pos_begin_shift,
                 node->pos_end_shift,
-                *ctx_iterations TSRMLS_CC
+                *ctx_iterations, parent_params TSRMLS_CC
             );
         } else if (HASH_KEY_IS_LONG == check_key) {
             if (BLITZ_DEBUG) php_printf("KEY_CHECK: %lu <long>\n", key_index);
@@ -3350,7 +3351,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                     result,result_len,result_alloc_len,
                     node->pos_begin_shift,
                     node->pos_end_shift,
-                    *ctx_data TSRMLS_CC
+                    *ctx_data, parent_params TSRMLS_CC
                 );
                 BLITZ_LOOP_INCREMENT(tpl);
                 zend_hash_move_forward_ex(HASH_OF(*ctx_iterations), &pos);
@@ -3666,7 +3667,7 @@ static void blitz_exec_if_context(
             blitz_exec_nodes_ex(tpl, node->first_child, id,
                 result, result_len, result_alloc_len,
                 node->pos_begin_shift, node->pos_end_shift,
-                parent_params, 0 TSRMLS_CC
+                parent_params, parent_params, 0 TSRMLS_CC
             );
 
             // find the end of this chain
@@ -3690,27 +3691,27 @@ static void blitz_exec_if_context(
 /* {{{ int blitz_exec_nodes() */
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
     zval *id, char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data TSRMLS_DC)
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params TSRMLS_DC)
 {
-    return blitz_exec_nodes_ex(tpl, first_child, id, result, result_len, result_alloc_len, parent_begin, parent_end, parent_ctx_data, 1 TSRMLS_CC);
+    return blitz_exec_nodes_ex(tpl, first_child, id, result, result_len, result_alloc_len, parent_begin, parent_end, ctx_data, parent_params, 1 TSRMLS_CC);
 }
 /* }}} */
 
 /* {{{ int blitz_exec_nodes_ex() */
 static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
     zval *id, char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data, int push_stack TSRMLS_DC)
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params, int push_stack TSRMLS_DC)
 {
     char *p_result = NULL;
     unsigned long buf_len = 0, new_len = 0;
     unsigned long shift = 0, last_close = 0, current_open = 0, i = 0, n_jump = 0;
-    zval *parent_params = NULL;
+    zval *ctx = NULL;
     blitz_node *node = NULL;
 
     /* check parent data (once in the beginning) - user could put non-array here.  */
     /* if we use hash_find on non-array - we get segfaults. */
-    if (parent_ctx_data && (Z_TYPE_P(parent_ctx_data) == IS_ARRAY || Z_TYPE_P(parent_ctx_data) == IS_OBJECT)) {
-        parent_params = parent_ctx_data;
+    if (ctx_data && (Z_TYPE_P(ctx_data) == IS_ARRAY || Z_TYPE_P(ctx_data) == IS_OBJECT)) {
+        ctx = ctx_data;
     }
 
     p_result = *result;
@@ -3719,9 +3720,9 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
 
     if (BLITZ_DEBUG) {
         php_printf("*** FUNCTION *** blitz_exec_nodes\n");
-        if (parent_ctx_data) {
-            php_printf("parent_ctx_data (%p):\n", parent_ctx_data);
-            php_var_dump(&parent_ctx_data, 0 TSRMLS_CC);
+        if (ctx_data) {
+            php_printf("ctx_data (%p):\n", ctx_data);
+            php_var_dump(&ctx_data, 0 TSRMLS_CC);
         }
         if (parent_params) {
             php_printf("parent_params (%p):\n", parent_params);
@@ -3730,7 +3731,7 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
     }
 
     if (push_stack) {
-        BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
+        BLITZ_SCOPE_STACK_PUSH(tpl, ctx);
     }
 
     node = first_child;
@@ -3757,20 +3758,20 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
         if (node->lexem && !node->hidden) {
             if ((node->type == BLITZ_NODE_TYPE_VAR) || (node->type == BLITZ_NODE_TYPE_VAR_PATH)) { 
                 blitz_exec_var(tpl, node->lexem, node->lexem_len, node->type == BLITZ_NODE_TYPE_VAR_PATH, node->escape_mode, node->pos_begin, 
-                    parent_params, result, result_len, result_alloc_len TSRMLS_CC);
+                    ctx, result, result_len, result_alloc_len TSRMLS_CC);
             } else if (BLITZ_IS_METHOD(node->type)) {
                 if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
                     BLITZ_LOOP_MOVE_FORWARD(tpl);
-                    blitz_exec_context(tpl, node, parent_params, id, result, result_len, result_alloc_len TSRMLS_CC);
+                    blitz_exec_context(tpl, node, ctx, id, result, result_len, result_alloc_len TSRMLS_CC);
                     BLITZ_LOOP_MOVE_BACK(tpl);
                 } else if (node->type == BLITZ_NODE_TYPE_IF_CONTEXT || node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT) {
-                    blitz_exec_if_context(tpl, node->pos_in_list, parent_params, id,
+                    blitz_exec_if_context(tpl, node->pos_in_list, ctx, id,
                         result, result_len, result_alloc_len, &n_jump TSRMLS_CC);
                 } else {
-                    zval *iteration_params = parent_params ? parent_params : NULL;
+                    zval *iteration_params = ctx ? ctx : NULL;
                     if (BLITZ_IS_PREDEF_METHOD(node->type)) {
                         blitz_exec_predefined_method(
-                            tpl, node, iteration_params, id,
+                            tpl, node, iteration_params, parent_params, id,
                             result, &p_result, result_len, result_alloc_len, tpl->tmp_buf TSRMLS_CC
                         );
                     } else {
@@ -3872,7 +3873,7 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
         zend_hash_internal_pointer_reset(HASH_OF(tpl->iterations));
         if (HASH_KEY_IS_LONG != zend_hash_get_current_key_ex(HASH_OF(tpl->iterations), &key, &key_len, &key_index, 0, NULL)) {
             blitz_exec_nodes(tpl, tpl->static_data.nodes, id, result, result_len, &result_alloc_len, 0,
-                tpl->static_data.body_len, tpl->iterations TSRMLS_CC);
+                tpl->static_data.body_len, tpl->iterations, tpl->iterations TSRMLS_CC);
         } else {
             BLITZ_LOOP_INIT(tpl, zend_hash_num_elements(HASH_OF(tpl->iterations)));
             while (zend_hash_get_current_data(HASH_OF(tpl->iterations), (void**) &iteration_data) == SUCCESS) {
@@ -3884,7 +3885,7 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
                    continue;
                 }
                 blitz_exec_nodes(tpl, tpl->static_data.nodes, id, 
-                    result, result_len, &result_alloc_len, 0, tpl->static_data.body_len, *iteration_data TSRMLS_CC);
+                    result, result_len, &result_alloc_len, 0, tpl->static_data.body_len, *iteration_data, tpl->iterations TSRMLS_CC);
                 BLITZ_LOOP_INCREMENT(tpl);
                 zend_hash_move_forward(HASH_OF(tpl->iterations));
             }
@@ -4423,7 +4424,7 @@ static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, const char *path, 
         return blitz_exec_nodes(tpl, i_node->first_child, id,
             result, result_len, &result_alloc_len,
             i_node->pos_begin_shift, i_node->pos_end_shift,
-            input_params TSRMLS_CC
+            input_params, input_params TSRMLS_CC
         );
     } else {
         unsigned long rlen = i_node->pos_end_shift - i_node->pos_begin_shift;
