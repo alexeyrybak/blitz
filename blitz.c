@@ -127,6 +127,16 @@ ZEND_GET_MODULE(blitz)
 #define GET_CALL_ARGS_SIZE(n)                                                   \
     ((n)->n_args)
 
+#define DUMP_CALL_ARGS(n) {                                                     \
+    php_printf("[D] call args (%u):\n", (n)->n_args);                           \
+    call_arg *___n = (n)->args;                                                 \
+    for (int __n = 0; __n < (n)->n_args; __n++) {                               \
+        ___n = (n)->args + __n;                                                 \
+        php_printf("- %d: name:%s len:%lu type:%s (%d)\n", __n, ___n->name,     \
+            ___n->len, BLITZ_ARG_TO_STRING(___n->type), ___n->type);            \
+    }                                                                           \
+}
+
 /* }}} */
 
 static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
@@ -1108,7 +1118,7 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     char ok = 0;
     unsigned int pos = 0, i_pos = 0, i_len = 0;
     unsigned char i_type = 0;
-    char was_escaped = 0, has_dot = 0;
+    char was_escaped = 0, has_dot = 0, is_operator = 0;
     
     *type = 0;
     *len = 0;
@@ -1119,7 +1129,7 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
     i_len = i_pos = ok = 0;
     p = token_out;
 
-    if (BLITZ_DEBUG) php_printf("[F] blitz_parse_arg: %u\n", *c);
+    if (BLITZ_DEBUG) php_printf("[F] blitz_parse_arg: %u '%c'\n", *c, *c);
 
     if (var_prefix && (symb == var_prefix)) {
         ++c; ++pos;
@@ -1138,10 +1148,12 @@ static inline void blitz_parse_arg (char *text, char var_prefix,
         i_pos++;
         i_type = BLITZ_ARG_TYPE_STR;
     } else if (BLITZ_IS_NUMBER(symb)) {
-        has_dot = 0;
-        BLITZ_SCAN_NUMBER(c, p, i_pos, i_symb, has_dot);
+        has_dot = is_operator = 0;
+        BLITZ_SCAN_NUMBER(c, p, i_pos, i_symb, has_dot, is_operator);
         if (has_dot) {
             i_type = BLITZ_ARG_TYPE_FLOAT;
+        } else if (is_operator) { // Make sure we don't scan the operator '-' as a number
+            i_type = BLITZ_EXPR_OPERATOR_SUB;
         } else { 
             i_type = BLITZ_ARG_TYPE_NUM;
         }
@@ -1223,6 +1235,10 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
     }
 
     args_since_bracket = 0;
+    if (BLITZ_DEBUG) {
+        DUMP_CALL_ARGS(node);
+        DUMP_IF_STACK(op_stack, op_len);
+    }
 
     // While we have an argument and we have still text to parse
     while (i_pos && pos < len_text) {
@@ -1233,6 +1249,8 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
             // Argument is an operator
             if (i_type == BLITZ_EXPR_OPERATOR_LP) { // Left bracket, just add it to the stack
                 BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type, *error_out);
+                if (BLITZ_DEBUG) DUMP_IF_STACK(op_stack, op_len);
+
                 if (*error_out) {
                     return;
                 }
@@ -1240,7 +1258,9 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                 args_since_bracket = 0;
             } else if (i_type != BLITZ_EXPR_OPERATOR_RP) { // Not a right bracket
                 // Add all the previous operations
-                while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP && BLITZ_OPERATOR_HAS_PRECEDENCE(op_stack[op_len], i_type)) {
+                if (BLITZ_DEBUG) php_printf("Checking operator %s (%d) vs top stack (%d elements on stack): %s (%d)\n", BLITZ_OPERATOR_TO_STRING(i_type), BLITZ_OPERATOR_GET_PRECEDENCE(i_type), op_len + 1, op_len >= 0 ? BLITZ_OPERATOR_TO_STRING(op_stack[op_len]) : "-null-", op_len >= 0 ? BLITZ_OPERATOR_GET_PRECEDENCE(op_stack[op_len]) : -1);
+                while (op_len >= 0 && op_stack[op_len] != BLITZ_EXPR_OPERATOR_LP && BLITZ_OPERATOR_HAS_LOWER_PRECEDENCE(i_type, op_stack[op_len])) {
+                    if (BLITZ_DEBUG) php_printf("--> op %s has lower precedence (%d vs %d) over %s\n", BLITZ_OPERATOR_TO_STRING(i_type), BLITZ_OPERATOR_GET_PRECEDENCE(i_type), BLITZ_OPERATOR_GET_PRECEDENCE(op_stack[op_len]), BLITZ_OPERATOR_TO_STRING(op_stack[op_len]));
 
                     // Check if we have sufficient args on the stack
                     if (args_on_list < BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len])) {
@@ -1252,6 +1272,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                     args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
                     ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+                    if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
                     ++node->n_if_args;
                     --op_len;
 
@@ -1263,12 +1284,13 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 
                 // Push operator to the stack
                 BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type, *error_out);
+                if (BLITZ_DEBUG) DUMP_IF_STACK(op_stack, op_len);
                 if (*error_out) {
                     return;
                 }
             } else { // Right bracket
                 // Check if it was immediately preceded by a left bracket (= invalid syntax)
-                if (op_stack[op_len] == BLITZ_EXPR_OPERATOR_LP) {
+                if (args_since_bracket == 0 && op_stack[op_len] == BLITZ_EXPR_OPERATOR_LP) {
                     if (BLITZ_DEBUG) php_printf("IF expression: empty expression in brackets: stack (%u - %u - %u)\n", op_len, args_on_list, args_since_bracket);
                     *error_out = (args_since_bracket > 0 ? BLITZ_CALL_ERROR_IF_MISSING_BRACKETS : BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION);
                     return;
@@ -1287,6 +1309,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                     args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
                     ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+                    if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
                     ++node->n_if_args;
                     --op_len;
 
@@ -1308,6 +1331,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
         } else {
             // operand
             ADD_CALL_ARGS(node, buf, i_len, i_type);
+            if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
             ++node->n_if_args;
             args_on_list++;
             args_since_bracket++;
@@ -1343,6 +1367,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
         args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
         ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
+        if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
         ++node->n_if_args;
         --op_len;
 
@@ -1361,6 +1386,10 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
     *pos_out = pos + i_pos;
 
     // We finished parsing all arguments, in RPN!!! Remember that IF a <operator> b became a b <operator>
+    if (BLITZ_DEBUG) {
+        php_printf("Successfully parsed if: dumping...\n");
+        DUMP_CALL_ARGS(node);
+    }
     return;
 }
 /* }}} */
@@ -1597,7 +1626,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         return;
                     }
                     pos += i_pos; i_pos = 0;
-					c = text + pos;
+                    c = text + pos;
                     state = BLITZ_CALL_STATE_HAS_NEXT;
                     break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
@@ -2042,8 +2071,8 @@ static inline int blitz_analizer_add(analizer_ctx *ctx TSRMLS_DC) {
             );
         } else if (i_error == BLITZ_CALL_ERROR_IF_CONTEXT) {
             blitz_error(tpl TSRMLS_CC, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, probably a bracket mismatch but could be wrong operands too (%s: line %lu, pos %lu, e %d)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open), (int)i_error
+                "SYNTAX ERROR: invalid <if> syntax, probably a bracket mismatch but could be wrong operands too (%s: line %lu, pos %lu)",
+                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
             );
         } else if (i_error == BLITZ_CALL_ERROR_IF_MISSING_BRACKETS) {
             blitz_error(tpl TSRMLS_CC, E_WARNING,
@@ -3512,13 +3541,13 @@ static inline void blitz_check_expr (
     zval *parent_params,
     int *is_true TSRMLS_DC)
 {
-    unsigned long i = 0, j = 0;
-    call_arg *arg = NULL, *expr_arg = NULL;
-    call_arg a_stack[BLITZ_IF_STACK_MAX];
-    zval operands[2]; // Hold the memory for simple values
-    zval *op_ptr[2] = {NULL, NULL};
-    int num_a = -1, operands_needed = 0, found = 0, expression, arguments_are_undefined;
+    unsigned long i = 0;
+    call_arg *arg = NULL;
+    int num_a = -1, operands_needed = 0, found = 0, b, arguments_are_undefined = 0;
+    zval z_stack[BLITZ_IF_STACK_MAX];
     zval resval;
+    zval *z_stack_ptr[BLITZ_IF_STACK_MAX];
+    zend_native_function native_func;
 
     if (BLITZ_DEBUG)
         php_printf("*** FUNCTION *** blitz_check_expr argcnt=%d\n", node_count);
@@ -3527,7 +3556,21 @@ static inline void blitz_check_expr (
         arg = &node->args[i];
         if (!BLITZ_IS_ARG_EXPR(arg->type)) {
             // No operator (so operand), just store the operand on the stack (and don't care about strings, we're just pointing, no need to copy the mem)
-            BLITZ_EXPR_STACK_PUSH(a_stack, num_a, arg->name, arg->len, arg->type);
+            if (++num_a < BLITZ_IF_STACK_MAX) {
+                z_stack_ptr[num_a] = &z_stack[num_a];
+                found = blitz_arg_to_zval(tpl, node, parent_params, arg, &z_stack_ptr[num_a]);
+                if (found == 0) {
+                    arguments_are_undefined = 1;
+                }
+
+                if (BLITZ_DEBUG) {
+                    php_printf("operands[%s]: name:%s (type:%s) %p\n", (found == 1  ? "FOUND" : "UNKNOWN"), arg->name, zend_zval_type_name(z_stack_ptr[num_a]), &z_stack_ptr[num_a]);
+                }
+            } else {
+                blitz_error(NULL TSRMLS_CC, E_WARNING, "Too complex conditional, operator stack depth is too high and broken, operators will be resolved improperly. To fix this rebuild blitz extension with increased BLITZ_IF_STACK_MAX constant in php_blitz.h (%s: line %lu, pos %lu)", get_line_number(tpl->static_data.body, node->pos_begin), get_line_pos(tpl->static_data.body, node->pos_begin));
+                *is_true = -1;
+                return;
+            }
         } else {
             // Check if we have enough operands
             operands_needed = BLITZ_OPERATOR_GET_NUM_OPERANDS(arg->type);
@@ -3536,58 +3579,78 @@ static inline void blitz_check_expr (
                 *is_true = 0;
                 return;
             }
-            // Prepare the operands
-            expr_arg = arg;
-            arguments_are_undefined = 0;
-            for (j = 0; j < operands_needed; j++) {
-                arg = &a_stack[num_a--]; // This reverses the operands, remember! So if it was a b <operator> we'll get them as 0 => b, 1 => a
-                op_ptr[j] = &operands[j];
-                found = blitz_arg_to_zval(tpl, node, parent_params, arg, &op_ptr[j]);
-                if (found == 0)
-                    arguments_are_undefined = 1;
 
-                if (BLITZ_DEBUG) {
-                    php_printf("operands:%lu [%s] = name:%s (type:%s) %p cmp:%s\n", j, (found == 1  ? "FOUND" : "UNKNOWN"), arg->name, zend_zval_type_name(op_ptr[j]), &op_ptr[j], BLITZ_OPERATOR_TO_STRING(expr_arg->type));
-                }
-            }
+            // Prepare the operands
+            if (BLITZ_DEBUG) php_printf("executing operator:%s\n", BLITZ_OPERATOR_TO_STRING(arg->type));
 
             // Execute the operator
-            if (expr_arg->type == BLITZ_EXPR_OPERATOR_N) {
+            if (arg->type == BLITZ_EXPR_OPERATOR_N) {
                 // If our operand is undefined, return true
                 if (arguments_are_undefined == 1) {
-                    expression = 1;
+                    ZVAL_BOOL(&z_stack[num_a], 1);
                     if (BLITZ_DEBUG) php_printf("operand is undefined, result is true\n");
                 } else {
-                    expression = (zend_is_true(op_ptr[0]) == 1 ? 0 : 1);
+                    b = (zend_is_true(z_stack_ptr[num_a]) == 1 ? 0 : 1);
+                    ZVAL_BOOL(&z_stack[num_a], b);
                 }
-            } else if (expr_arg->type == BLITZ_EXPR_OPERATOR_LA) {
-                expression = (zend_is_true(op_ptr[0]) == 1 && zend_is_true(op_ptr[1]) == 1 ? 1 : 0);
-            } else if (expr_arg->type == BLITZ_EXPR_OPERATOR_LO) {
-                expression = (zend_is_true(op_ptr[0]) == 1 || zend_is_true(op_ptr[1]) == 1 ? 1 : 0);
+            } else if (arg->type == BLITZ_EXPR_OPERATOR_LA) {
+                b = (zend_is_true(z_stack_ptr[num_a]) == 1 && zend_is_true(z_stack_ptr[num_a-1]) == 1 ? 1 : 0);
+                ZVAL_BOOL(&z_stack[--num_a], b);
+            } else if (arg->type == BLITZ_EXPR_OPERATOR_LO) {
+                b = (zend_is_true(z_stack_ptr[num_a]) == 1 || zend_is_true(z_stack_ptr[num_a-1]) == 1 ? 1 : 0);
+                ZVAL_BOOL(&z_stack[--num_a], b);
+            } else if (arg->type == BLITZ_EXPR_OPERATOR_ADD ||
+                    arg->type == BLITZ_EXPR_OPERATOR_SUB ||
+                    arg->type == BLITZ_EXPR_OPERATOR_MUL ||
+                    arg->type == BLITZ_EXPR_OPERATOR_DIV ||
+                    arg->type == BLITZ_EXPR_OPERATOR_MOD) {
+                native_func = BLITZ_OPERATOR_TO_ZEND_NATIVE_FUNCTION(arg->type);
+                INIT_ZVAL(resval);
+                if (arguments_are_undefined == 1) {
+                    if (BLITZ_DEBUG) php_printf("one of the operands is undefined, result is false\n");
+                    ZVAL_BOOL(&z_stack[--num_a], 0);
+                } else if (native_func(&resval, z_stack_ptr[num_a-1], z_stack_ptr[num_a] TSRMLS_CC) == FAILURE) {
+                    if (BLITZ_DEBUG) php_printf("one of the operands is of incorrect type, or failed to run mod_function, result is error\n");
+                    *is_true = -1;
+                    return;
+                } else if (Z_TYPE(resval) == IS_DOUBLE) {
+                    ZVAL_DOUBLE(&z_stack[--num_a], Z_DVAL(resval));
+                } else {
+                    ZVAL_LONG(&z_stack[--num_a], Z_LVAL(resval));
+                }
             } else {
                 INIT_ZVAL(resval);
                 if (arguments_are_undefined == 1) {
                     if (BLITZ_DEBUG) php_printf("one of the operands is undefined, result is false\n");
-                    expression = 0;
-                } else if (compare_function(&resval, op_ptr[1], op_ptr[0] TSRMLS_CC) == FAILURE) {
+                    ZVAL_BOOL(&z_stack[--num_a], 0);
+                } else if (compare_function(&resval, z_stack_ptr[num_a-1], z_stack_ptr[num_a] TSRMLS_CC) == FAILURE) {
                     if (BLITZ_DEBUG) php_printf("one of the operands is of incorrect type, or failed to run compare_function, result is error\n");
-                    expression = -1;
+                    *is_true = -1;
+                    return;
                 } else {
-                    switch (expr_arg->type) {
-                        case BLITZ_EXPR_OPERATOR_E:  expression = (Z_LVAL(resval) == 0) ? 1 : 0; break;
-                        case BLITZ_EXPR_OPERATOR_NE: expression = (Z_LVAL(resval) != 0) ? 1 : 0; break;
-                        case BLITZ_EXPR_OPERATOR_G:  expression = (Z_LVAL(resval) > 0) ? 1 : 0; break;
-                        case BLITZ_EXPR_OPERATOR_GE: expression = (Z_LVAL(resval) >= 0) ? 1 : 0; break;
-                        case BLITZ_EXPR_OPERATOR_L:  expression = (Z_LVAL(resval) < 0) ? 1 : 0; break;
-                        case BLITZ_EXPR_OPERATOR_LE: expression = (Z_LVAL(resval) <= 0) ? 1 : 0; break;
-                        default: expression = 0;
-                    }
                     if (BLITZ_DEBUG) php_printf("compare function resulted in %ld\n", Z_LVAL(resval));
+                    switch (arg->type) {
+                        case BLITZ_EXPR_OPERATOR_E:  ZVAL_BOOL(&z_stack[--num_a], (Z_LVAL(resval) == 0) ? 1 : 0); break;
+                        case BLITZ_EXPR_OPERATOR_NE: ZVAL_BOOL(&z_stack[--num_a], (Z_LVAL(resval) != 0) ? 1 : 0); break;
+                        case BLITZ_EXPR_OPERATOR_G:  ZVAL_BOOL(&z_stack[--num_a], (Z_LVAL(resval) > 0) ? 1 : 0); break;
+                        case BLITZ_EXPR_OPERATOR_GE: ZVAL_BOOL(&z_stack[--num_a], (Z_LVAL(resval) >= 0) ? 1 : 0); break;
+                        case BLITZ_EXPR_OPERATOR_L:  ZVAL_BOOL(&z_stack[--num_a], (Z_LVAL(resval) < 0) ? 1 : 0); break;
+                        case BLITZ_EXPR_OPERATOR_LE: ZVAL_BOOL(&z_stack[--num_a], (Z_LVAL(resval) <= 0) ? 1 : 0); break;
+                        default: ZVAL_BOOL(&z_stack[--num_a], 0); break;
+                    }
                 }
             }
+            z_stack_ptr[num_a] = &z_stack[num_a];
 
-            // Push it to the stack
-            BLITZ_EXPR_STACK_PUSH(a_stack, num_a, NULL, 0, (expression == 1 ? BLITZ_ARG_TYPE_TRUE : BLITZ_ARG_TYPE_FALSE));
+            if (BLITZ_DEBUG) {
+                smart_str buf = {0};
+                php_var_export_ex(&z_stack_ptr[num_a], 1, &buf TSRMLS_CC);
+                smart_str_0 (&buf);
+                php_printf("intermediate results --> type:%s value:%s\n", zend_zval_type_name(&z_stack[num_a]), buf.c);
+                smart_str_free(&buf);
+            }
+
+            arguments_are_undefined = 0;
         }
     }
 
@@ -3598,7 +3661,7 @@ static inline void blitz_check_expr (
         return;
     }
 
-    *is_true = (a_stack[0].type == BLITZ_ARG_TYPE_TRUE ? 1 : (a_stack[0].type == BLITZ_ARG_TYPE_FALSE ? 0 : -1));
+    *is_true = zend_is_true(z_stack_ptr[0]);
 }
 /* }}} */
 
@@ -3640,15 +3703,15 @@ static void blitz_exec_if_context(
             }
 
             if (node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT) {
-                condition = is_true ? 0 : 1;
+                condition = is_true == 1 ? 0 : 1;
             } else {
-                condition = is_true ? 1 : 0;
+                condition = is_true == 1 ? 1 : 0;
             }
         }
 
         if (BLITZ_DEBUG) {
             php_printf("checking context %s (type=%u, args=%u)\n", node->lexem, node->type, node->n_args);
-            php_printf("condition = %u, is_true = %u\n", condition, is_true);
+            php_printf("condition = %u, is_true = %d\n", condition, is_true);
         }
 
         if (!condition) { // if condition is false - move to the next node in this chain
