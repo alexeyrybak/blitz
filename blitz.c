@@ -126,17 +126,6 @@ ZEND_GET_MODULE(blitz)
 
 #define GET_CALL_ARGS_SIZE(n)                                                   \
     ((n)->n_args)
-
-#define DUMP_CALL_ARGS(n) {                                                     \
-    php_printf("[D] call args (%u):\n", (n)->n_args);                           \
-    call_arg *___n = (n)->args;                                                 \
-    for (int __n = 0; __n < (n)->n_args; __n++) {                               \
-        ___n = (n)->args + __n;                                                 \
-        php_printf("- %d: name:%s len:%lu type:%s (%d)\n", __n, ___n->name,     \
-            ___n->len, BLITZ_ARG_TO_STRING(___n->type), ___n->type);            \
-    }                                                                           \
-}
-
 /* }}} */
 
 static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
@@ -212,6 +201,26 @@ PHP_INI_BEGIN()
 
 PHP_INI_END()
 /* }}} */
+
+static void dump_call_args(blitz_node *node) {
+    int i;
+    php_printf("[D] call args (%u):\n", node->n_args);
+    call_arg *n_args = node->args;
+    for (i = 0; i < node->n_args; i++) {
+        n_args = node->args + i;
+        php_printf("- %d: name:%s len:%lu type:%s (%d)\n", i, n_args->name,
+            n_args->len, BLITZ_ARG_TO_STRING(n_args->type), n_args->type);
+    }
+}
+
+static void dump_if_stack(unsigned char *stack, int stack_level) {
+    int i;
+    php_printf("[D] if stack (%u):\n", stack_level + 1);
+    for (i = 0; i <= stack_level; i++) {
+        php_printf("- %d: type:%s (%d)\n", i, BLITZ_OPERATOR_TO_STRING(stack[i]),
+            stack[i]);
+    }
+}
 
 static void blitz_error (blitz_tpl *tpl TSRMLS_DC, unsigned int level, char *format, ...) { /* {{{ */
     char *msg = NULL;
@@ -1236,8 +1245,8 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 
     args_since_bracket = 0;
     if (BLITZ_DEBUG) {
-        DUMP_CALL_ARGS(node);
-        DUMP_IF_STACK(op_stack, op_len);
+        dump_call_args(node);
+        dump_if_stack(op_stack, op_len);
     }
 
     // While we have an argument and we have still text to parse
@@ -1249,7 +1258,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
             // Argument is an operator
             if (i_type == BLITZ_EXPR_OPERATOR_LP) { // Left bracket, just add it to the stack
                 BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type, *error_out);
-                if (BLITZ_DEBUG) DUMP_IF_STACK(op_stack, op_len);
+                if (BLITZ_DEBUG) dump_if_stack(op_stack, op_len);
 
                 if (*error_out) {
                     return;
@@ -1272,7 +1281,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                     args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
                     ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
-                    if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
+                    if (BLITZ_DEBUG) dump_call_args(node);
                     ++node->n_if_args;
                     --op_len;
 
@@ -1284,7 +1293,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 
                 // Push operator to the stack
                 BLITZ_IF_STACK_PUSH(op_stack, op_len, i_type, *error_out);
-                if (BLITZ_DEBUG) DUMP_IF_STACK(op_stack, op_len);
+                if (BLITZ_DEBUG) dump_if_stack(op_stack, op_len);
                 if (*error_out) {
                     return;
                 }
@@ -1309,7 +1318,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
                     args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
                     ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
-                    if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
+                    if (BLITZ_DEBUG) dump_call_args(node);
                     ++node->n_if_args;
                     --op_len;
 
@@ -1331,7 +1340,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
         } else {
             // operand
             ADD_CALL_ARGS(node, buf, i_len, i_type);
-            if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
+            if (BLITZ_DEBUG) dump_call_args(node);
             ++node->n_if_args;
             args_on_list++;
             args_since_bracket++;
@@ -1367,7 +1376,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
         args_on_list = args_on_list - BLITZ_OPERATOR_GET_NUM_OPERANDS(op_stack[op_len]) + 1; // produces one result
 
         ADD_CALL_ARGS(node, NULL, 0, op_stack[op_len]);
-        if (BLITZ_DEBUG) DUMP_CALL_ARGS(node);
+        if (BLITZ_DEBUG) dump_call_args(node);
         ++node->n_if_args;
         --op_len;
 
@@ -1388,7 +1397,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
     // We finished parsing all arguments, in RPN!!! Remember that IF a <operator> b became a b <operator>
     if (BLITZ_DEBUG) {
         php_printf("Successfully parsed if: dumping...\n");
-        DUMP_CALL_ARGS(node);
+        dump_call_args(node);
     }
     return;
 }
