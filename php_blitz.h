@@ -865,14 +865,6 @@ typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
         error = BLITZ_CALL_ERROR_IF_TOO_COMPLEX;                                                  \
     }                                                                                             \
 
-#define DUMP_IF_STACK(stack, stack_level) {                                                       \
-    php_printf("[D] if stack (%u):\n", stack_level + 1);                                          \
-    for (int __stack = 0; __stack <= stack_level; __stack++) {                                    \
-        php_printf("- %d: type:%s (%d)\n", __stack, BLITZ_OPERATOR_TO_STRING(stack[__stack]),     \
-            stack[__stack]);                                                                      \
-    }                                                                                             \
-}
-
 #define BLITZ_GET_PREDEFINED_VAR_EX(tpl, n, len, value, stack_level)                                                   \
     if (len == 0 || n[0] != '_') {                                                                                     \
         value = -1;                                                                                                    \
