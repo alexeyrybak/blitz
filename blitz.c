@@ -3840,8 +3840,8 @@ static void blitz_exec_if_context(
         if (node->type == BLITZ_NODE_TYPE_ELSE_CONTEXT) {
             condition = 1;
         } else { 
-
-            if (node->n_args > 1) {
+            // special check is required for if syntax with a single method call like '{{IF some_method()}}'
+            if (node->n_args > 1 || node->n_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD) {
                 blitz_check_expr(tpl, node, id, node->n_if_args, parent_params, &is_true TSRMLS_CC);
             } else {
                 blitz_check_arg(tpl, node, parent_params, &is_true TSRMLS_CC);

@@ -15,12 +15,18 @@ $body = <<<BODY
 Test between ifs
 {{IF(cb("world", a, a > 5), "Inline callback also works!", "Does not work")}}
 Text after ifs
+{{IF empty_args_cb()}}Empty argument callback{{END}}
+Text after all ifs
 BODY;
 
 class View extends Blitz {
 	public function cb($a, $b, $c) {
 		return $b == "hello";
 	}
+
+        public function empty_args_cb() {
+            return func_get_args() === array();
+        }
 }
 
 $T = new View();
@@ -33,3 +39,5 @@ Callback works!
 Test between ifs
 Inline callback also works!
 Text after ifs
+Empty argument callback
+Text after all ifs
