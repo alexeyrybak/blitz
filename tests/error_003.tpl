@@ -1,7 +1,7 @@
 {{ IF a == }}
 
-{{ IF func() == 0 }}
+{{ IF func1() > func2() }}
 {{ END }}
 
-{{ IF func() }}
+{{ IF 1 && func2() }}
 {{ END }}
