@@ -3712,7 +3712,19 @@ static inline void blitz_check_expr (
                 for (j = 0; j < operands_needed; j++) {
                     args[j] = &z_stack_ptr[j];
                 }
-                method_res = call_user_function_ex(&Z_OBJCE_P(id)->function_table, &id, zmethod, &retval, operands_needed, args, 1, NULL TSRMLS_CC);
+
+                if (BLITZ_G(enable_php_callbacks)) {
+                    method_res = call_user_function_ex(&Z_OBJCE_P(id)->function_table, &id, zmethod, &retval, operands_needed, args, 1, NULL TSRMLS_CC);
+                } else {
+                    method_res = FAILURE;
+                    blitz_error(tpl TSRMLS_CC, E_WARNING,
+                        "PHP callbacks are disabled by blitz.enable_php_callbacks, %s call was ignored, line %lu, pos %lu",
+                        node->lexem,
+                        get_line_number(tpl->static_data.body, node->pos_begin),
+                        get_line_pos(tpl->static_data.body, node->pos_begin)
+                    );
+                }
+
                 if (method_res == FAILURE) {
                     tmp_str = estrndup(arg->name, arg->len);
                     blitz_error(tpl TSRMLS_CC, E_WARNING,
