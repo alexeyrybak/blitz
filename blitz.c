@@ -2861,7 +2861,8 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
         unsigned int arg_offset = 1;
         call_arg *arg = NULL;
 
-        if (node->n_if_args > 1) {
+        // special check is required for if syntax with a single method call like '{{IF some_method()}}'
+        if (node->n_if_args > 1 || node->n_if_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD) {
             blitz_check_expr(tpl, node, id, node->n_if_args, iteration_params, &is_true TSRMLS_CC);
             /* complex if structures have as result there's a variable number of node args (say if you have if(a||b, "true", "false")),
              * node_args will be [ var b, var a, operator ||, literal "true", literal "false" ].

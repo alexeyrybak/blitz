@@ -16,6 +16,8 @@ Test between ifs
 {{IF(cb("world", a, a > 5), "Inline callback also works!", "Does not work")}}
 Text after ifs
 {{IF empty_args_cb()}}Empty argument callback{{END}}
+Text after empty args cb
+{{IF(empty_args_cb(), "Inline empty arguments callback", "Something went wrong")}}
 Text after all ifs
 BODY;
 
@@ -40,4 +42,6 @@ Test between ifs
 Inline callback also works!
 Text after ifs
 Empty argument callback
+Text after empty args cb
+Inline empty arguments callback
 Text after all ifs
