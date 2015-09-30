@@ -79,7 +79,7 @@ path-variables test:
 
 class User {
     var $login;
-    function User() {
+    function __construct() {
         $this->login = TRUE;
     }
 }

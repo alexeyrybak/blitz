@@ -7,7 +7,7 @@ include('common.inc');
 class BlitzTemplate extends Blitz {
     var $titem;
 
-    function BlitzTemplate($t) {
+    function __construct($t) {
         parent::Blitz($t);
         $this->set(array(
             'test'=>'var_test',
