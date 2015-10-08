@@ -373,7 +373,7 @@ typedef struct _blitz_static_data {
     struct _blitz_node *nodes;
     unsigned int n_nodes;
     char *body;
-    unsigned long body_len;
+	size_t body_len;
     HashTable *fetch_index;
     unsigned int tag_open_len;
     unsigned int tag_close_len;
@@ -389,11 +389,11 @@ typedef struct _blitz_tpl {
     struct _blitz_static_data static_data;
     char flags;
     HashTable *hash_globals;
-    zval *iterations;
-    zval **current_iteration;  /* current iteraion values */
-    zval **last_iteration;     /* latest iteration - used in combined iterate+set methods  */
-    zval **current_iteration_parent; /* list of current context iterations (current_iteration is last element in this list) */
-    zval **caller_iteration;  /* caller iteraion */
+    zval iterations;
+    zval *current_iteration;  /* current iteraion values */
+    zval *last_iteration;     /* latest iteration - used in combined iterate+set methods  */
+    zval *current_iteration_parent; /* list of current context iterations (current_iteration is last element in this list) */
+    zval *caller_iteration;  /* caller iteraion */
     char *current_path;
     char *tmp_buf;
     HashTable *ht_tpl_name; /* index template_name -> itpl_list number */
@@ -725,21 +725,22 @@ typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
 #define BLITZ_CALL_ERROR_IF_METHOD_CALL_TOO_COMPLEX 9
 
 #define BLITZ_ZVAL_NOT_EMPTY(z, res)                                                              \
-    switch (Z_TYPE_PP(z)) {                                                                       \
-        case IS_BOOL: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
+    switch (Z_TYPE_P(z)) {                                                                        \
+        case IS_TRUE: res = 1; break;                                                             \
+        case IS_FALSE: res = 0; break;                                                            \
         case IS_STRING:                                                                           \
-            if (0 == Z_STRLEN_PP(z)) {                                                            \
+            if (0 == Z_STRLEN_P(z)) {                                                            \
                 res = 0;                                                                          \
-            } else if ((1 == Z_STRLEN_PP(z)) && (Z_STRVAL_PP(z)[0] == '0')) {                     \
+            } else if ((1 == Z_STRLEN_P(z)) && (Z_STRVAL_P(z)[0] == '0')) {                     \
                 res = 0;                                                                          \
             } else {                                                                              \
                 res = 1;                                                                          \
             }                                                                                     \
             break;                                                                                \
-        case IS_LONG: res = (0 == Z_LVAL_PP(z)) ? 0 : 1; break;                                   \
-        case IS_DOUBLE: res = (.0 == Z_DVAL_PP(z)) ? 0 : 1; break;                                \
-        case IS_ARRAY: res = (0 == zend_hash_num_elements(Z_ARRVAL_PP(z))) ? 0 : 1; break;        \
-        case IS_OBJECT: res = (0 == zend_hash_num_elements(Z_OBJPROP_PP(z))) ? 0 : 1; break;      \
+        case IS_LONG: res = (0 == Z_LVAL_P(z)) ? 0 : 1; break;                                   \
+        case IS_DOUBLE: res = (.0 == Z_DVAL_P(z)) ? 0 : 1; break;                                \
+        case IS_ARRAY: res = (0 == zend_hash_num_elements(Z_ARRVAL_P(z))) ? 0 : 1; break;        \
+        case IS_OBJECT: res = (0 == zend_hash_num_elements(Z_OBJPROP_P(z))) ? 0 : 1; break;      \
                                                                                                   \
         default: res = 0; break;                                                                  \
     }
@@ -754,9 +755,10 @@ typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
     } else if ((a).type == BLITZ_ARG_TYPE_NUM) {                                                  \
         (res) = (0 == strncmp((a).name, "0", 1)) ? 0 : 1;                                         \
     } else if (((a).type == BLITZ_ARG_TYPE_VAR) && ht) {                                          \
-        zval **z;                                                                                 \
+        zval *z;                                                                                  \
         if((a).name && (a).len > 0) {                                                             \
-            if (SUCCESS == zend_hash_find(ht, (a).name, 1 + (a).len, (void**)&z))                 \
+            z = zend_hash_str_find(ht, (a).name, (a).len);                                        \
+            if (z != NULL)                                                                        \
             {                                                                                     \
                 BLITZ_ZVAL_NOT_EMPTY(z, res)                                                      \
             } else {                                                                              \
@@ -776,13 +778,13 @@ typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
 #define BLITZ_GET_ARG_ZVAL(a, ht, z)                                                              \
     if (((a).type == BLITZ_ARG_TYPE_VAR) && ht) {                                                 \
         if ((a).name && (a).len>0) {                                                              \
-            zend_hash_find(ht, (a).name, 1 + (a).len, (void**)&z);                                \
+            zend_hash_str_find(ht, (a).name, (a).len, (void**)&z);                                \
         }                                                                                         \
     }                                                                                             
 
 #define BLITZ_HASH_FIND_P(z, k, k_len, out)                                                       \
-    ( (Z_TYPE_P(z) == IS_ARRAY) ? zend_hash_find(Z_ARRVAL_P(z), k, k_len, (void **)out) :         \
-       ( (Z_TYPE_P(z) == IS_OBJECT) ? zend_hash_find(Z_OBJPROP_P(z), k, k_len, (void **)out) :    \
+    ( (Z_TYPE_P(z) == IS_ARRAY) ? zend_hash_str_find(Z_ARRVAL_P(z), k, k_len, (void **)out) :         \
+       ( (Z_TYPE_P(z) == IS_OBJECT) ? zend_hash_str_find(Z_OBJPROP_P(z), k, k_len, (void **)out) :    \
           FAILURE                                                                                 \
        )                                                                                          \
     )
@@ -802,14 +804,15 @@ typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
         RETURN_FALSE;                                                                             \
     }                                                                                             \
                                                                                                   \
-    if (zend_hash_find(Z_OBJPROP_P((id)), "tpl", sizeof("tpl"), (void **)&(desc)) == FAILURE) {   \
+    desc = zend_hash_str_find(Z_OBJPROP_P((id)), "tpl", sizeof("tpl") - 1);                       \
+    if (!desc || Z_TYPE_P(desc) != IS_RESOURCE) {                                                 \
         php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
             "INTERNAL: template was not loaded/initialized (cannot find template descriptor)"     \
         );                                                                                        \
         RETURN_FALSE;                                                                             \
     }                                                                                             \
-                                                                                                  \
-    ZEND_FETCH_RESOURCE(tpl, blitz_tpl *, desc, -1, "blitz template", le_blitz);                  \
+   \
+    tpl = (blitz_tpl *)zend_fetch_resource(Z_RES_P(desc), "blitz template", le_blitz);            \
     if(!tpl) {                                                                                    \
         RETURN_FALSE;                                                                             \
     }

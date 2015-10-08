@@ -6,7 +6,7 @@ include('common.inc');
 
 class DummyObjWithSubProperty {
    var $sub;
-   function DummyObjWithSubProperty($val) {
+   function __construct($val) {
        $this->sub = array('key' => $val);
    }
 }

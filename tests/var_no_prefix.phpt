@@ -6,7 +6,7 @@ unprefixed variables syntax
 class Dummy {
     var $var;
 
-    function Dummy($value) {
+    function __construct($value) {
         $this->var = $value;
     }
 }
