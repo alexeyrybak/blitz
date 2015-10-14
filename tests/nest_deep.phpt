@@ -1,7 +1,5 @@
 --TEST--
 testing deep nesting
---XFAIL--
-crazy references
 --FILE--
 <?php
 include('common.inc');

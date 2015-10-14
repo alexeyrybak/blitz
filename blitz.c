@@ -16,7 +16,7 @@
   +----------------------------------------------------------------------+
 */
 
-#define BLITZ_DEBUG 0
+#define BLITZ_DEBUG 0 
 #define BLITZ_VERSION_STRING "0.10.1 (PHP7)"
 
 #ifndef PHP_WIN32
@@ -137,6 +137,15 @@ ZEND_GET_MODULE(blitz)
         continue;                              \
     }
 
+#define INDIRECT_CONTINUE_FORWARD_EX(hash, pos, zv)    \
+    if (Z_TYPE_P(zv) == IS_INDIRECT) {                 \
+        zv = Z_INDIRECT_P(zv);                         \
+    }                                                  \
+    if (Z_TYPE_P(zv) == IS_UNDEF) {                    \
+        zend_hash_move_forward_ex(hash, pos);          \
+        continue;                                      \
+    }
+
 #define INDIRECT_RETURN(zv, val)               \
     if (Z_TYPE_P(zv) == IS_INDIRECT) {         \
         zv = Z_INDIRECT_P(zv);                 \
@@ -183,6 +192,15 @@ static zend_always_inline zval *blitz_hash_get_current_data(const HashTable *ht)
 }
 /* }}} */
 
+static zend_always_inline zval *blitz_hash_get_current_data_ex(const HashTable *ht, HashPosition *pos) /* {{{ */
+{
+   zval *zv;
+   zv = zend_hash_get_current_data_ex(ht, pos);
+   if (zv && Z_TYPE_P(zv) == IS_REFERENCE) {
+       zv = Z_REFVAL_P(zv);
+   }
+   return zv;
+}
 /* }}} */
 
 static ZEND_INI_MH(OnUpdateVarPrefixHandler) /* {{{ */
@@ -3496,6 +3514,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     zval *ctx_iterations = NULL;
     zval *ctx_data = NULL;
     call_arg *arg = node->args;
+    HashPosition pos;
 
     if (BLITZ_DEBUG) php_printf("*** FUNCTION *** blitz_exec_context: %s\n",node->args->name);
 
@@ -3537,8 +3556,8 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     if ((Z_TYPE_P(ctx_iterations) == IS_ARRAY || Z_TYPE_P(ctx_iterations) == IS_OBJECT) && zend_hash_num_elements(HASH_OF(ctx_iterations))) {
         if (BLITZ_DEBUG) php_printf("will walk through iterations\n");
 
-        zend_hash_internal_pointer_reset(HASH_OF(ctx_iterations));
-        check_key = zend_hash_get_current_key(HASH_OF(ctx_iterations), &key, &key_index);
+        zend_hash_internal_pointer_reset_ex(HASH_OF(ctx_iterations), &pos);
+        check_key = zend_hash_get_current_key_ex(HASH_OF(ctx_iterations), &key, &key_index, &pos);
         if (BLITZ_DEBUG) php_printf("KEY_TYPE: %d\n", check_key);
 
         if (HASH_KEY_IS_STRING == check_key) {
@@ -3553,7 +3572,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
             if (BLITZ_DEBUG) php_printf("KEY_CHECK: %lu <long>\n", key_index);
             BLITZ_LOOP_INIT(tpl, zend_hash_num_elements(HASH_OF(ctx_iterations)));
             first_type = -1;
-            while ((ctx_data = blitz_hash_get_current_data(HASH_OF(ctx_iterations))) != NULL) {
+            while ((ctx_data = blitz_hash_get_current_data_ex(HASH_OF(ctx_iterations), &pos)) != NULL) {
                 INDIRECT_CONTINUE_FORWARD(HASH_OF(ctx_iterations), ctx_data);
 
                 if (first_type == -1) first_type = Z_TYPE_P(ctx_data);
@@ -3570,7 +3589,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                         get_line_number(tpl->static_data.body, node->pos_begin),
                         get_line_pos(tpl->static_data.body, node->pos_begin)
                     );
-                    zend_hash_move_forward(HASH_OF(ctx_iterations));
+                    zend_hash_move_forward_ex(HASH_OF(ctx_iterations), &pos);
                     continue;
                 }
 
@@ -3581,7 +3600,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                     ctx_data
                 );
                 BLITZ_LOOP_INCREMENT(tpl);
-                zend_hash_move_forward(HASH_OF(ctx_iterations));
+                zend_hash_move_forward_ex(HASH_OF(ctx_iterations), &pos);
             }
         } else {
             blitz_error(tpl, E_WARNING, "INTERNAL ERROR: non existant hash key");
