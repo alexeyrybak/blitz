@@ -184,7 +184,7 @@ static zend_always_inline zval *blitz_hash_index_find(const HashTable *ht, zend_
 static zend_always_inline zval *blitz_hash_get_current_data(const HashTable *ht) /* {{{ */
 {
    zval *zv;
-   zv = zend_hash_get_current_data(ht);
+   zv = zend_hash_get_current_data((HashTable*)ht);
    if (zv && Z_TYPE_P(zv) == IS_REFERENCE) {
        zv = Z_REFVAL_P(zv);
    }
@@ -195,7 +195,7 @@ static zend_always_inline zval *blitz_hash_get_current_data(const HashTable *ht)
 static zend_always_inline zval *blitz_hash_get_current_data_ex(const HashTable *ht, HashPosition *pos) /* {{{ */
 {
    zval *zv;
-   zv = zend_hash_get_current_data_ex(ht, pos);
+   zv = zend_hash_get_current_data_ex((HashTable*)ht, pos);
    if (zv && Z_TYPE_P(zv) == IS_REFERENCE) {
        zv = Z_REFVAL_P(zv);
    }
@@ -2946,7 +2946,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
         call_arg *arg = NULL;
 
         // special check is required for if syntax with a single method call like '{{IF some_method()}}'
-        if (node->n_if_args > 1 || node->n_if_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD) {
+        if (node->n_if_args > 1 || (node->n_if_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD)) {
             blitz_check_expr(tpl, node, id, node->n_if_args, iteration_params, &is_true);
             /* complex if structures have as result there's a variable number of node args (say if you have if(a||b, "true", "false")),
              * node_args will be [ var b, var a, operator ||, literal "true", literal "false" ].
@@ -3508,7 +3508,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
     char **result, unsigned long *result_len, unsigned long *result_alloc_len)
 {
     zend_string *key = NULL;
-    unsigned long key_index = 0;
+    zend_ulong key_index = 0;
     int check_key = 0, not_empty = 0, first_type = -1;
     long predefined = -1;
     zval *ctx_iterations = NULL;
@@ -3569,7 +3569,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                 ctx_iterations
             );
         } else if (HASH_KEY_IS_LONG == check_key) {
-            if (BLITZ_DEBUG) php_printf("KEY_CHECK: %lu <long>\n", key_index);
+            if (BLITZ_DEBUG) php_printf("KEY_CHECK: %llu <zend_ulong>\n", key_index);
             BLITZ_LOOP_INIT(tpl, zend_hash_num_elements(HASH_OF(ctx_iterations)));
             first_type = -1;
             while ((ctx_data = blitz_hash_get_current_data_ex(HASH_OF(ctx_iterations), &pos)) != NULL) {
@@ -3975,7 +3975,7 @@ static void blitz_exec_if_context(
             condition = 1;
         } else {
             // special check is required for if syntax with a single method call like '{{IF some_method()}}'
-            if (node->n_args > 1 || node->n_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD) {
+            if (node->n_args > 1 || (node->n_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD)) {
                 blitz_check_expr(tpl, node, id, node->n_if_args, parent_params, &is_true);
             } else {
                 blitz_check_arg(tpl, node, parent_params, &is_true);
@@ -4213,7 +4213,7 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
     {
         zval *iteration_data = NULL;
         zend_string *key;
-        unsigned long key_index;
+        zend_ulong key_index;
 
         /* if it's an array of numbers - treat this as single iteration and pass as a parameter */
         /* otherwise walk and iterate all the array elements */
@@ -4533,7 +4533,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
     char *key = NULL;
     zend_string *tmp_key;
     zval *dummy;
-    unsigned long index = 0;
+    zend_ulong index = 0;
 
     k = pmax - 1;
     tmp = &tpl->iterations;
@@ -4721,7 +4721,7 @@ static int blitz_build_fetch_index(blitz_tpl *tpl) /* {{{ */
     if (BLITZ_DEBUG) {
         zval *elem;
         zend_string *key;
-        unsigned long index;
+        zend_ulong index;
         HashTable *ht = tpl->static_data.fetch_index;
 
         zend_hash_internal_pointer_reset(ht);
@@ -4868,7 +4868,7 @@ static inline int blitz_merge_iterations_by_str_keys(zval *target, zval *input) 
     zval *elem;
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input)) || (IS_ARRAY != Z_TYPE_P(target))) {
         return 0;
@@ -4904,7 +4904,7 @@ static inline int blitz_merge_iterations_by_num_keys(zval *target, zval *input) 
     zval *elem;
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
         return 0;
@@ -4938,7 +4938,7 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr) /*
 {
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
     int res = 0, is_current_iteration = 0, first_key_type = 0;
     zval *target_iteration;
 
@@ -5192,7 +5192,7 @@ static PHP_FUNCTION(blitz_set_global)
     blitz_tpl *tpl;
     HashTable *input_ht;
     zend_string *key;
-    unsigned long index;
+    zend_ulong index;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
@@ -5589,7 +5589,7 @@ static PHP_FUNCTION(blitz_fetch)
     zval *input_arr = NULL, *elem;
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
     zval *path_iteration = NULL;
     zval *path_iteration_parent = NULL;
     zval *final_params = NULL;
