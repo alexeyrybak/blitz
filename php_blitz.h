@@ -702,27 +702,28 @@ typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
       NULL                                                                                          \
     )
 
-#define BLITZ_CALL_STATE_NEXT_ARG    1
-#define BLITZ_CALL_STATE_FINISHED    2
-#define BLITZ_CALL_STATE_HAS_NEXT    3 
-#define BLITZ_CALL_STATE_BEGIN       4
-#define BLITZ_CALL_STATE_END         5
-#define BLITZ_CALL_STATE_IF          6
-#define BLITZ_CALL_STATE_ELSE        7
-#define BLITZ_CALL_STATE_NEXT_ARG_IF 8
-#define BLITZ_CALL_STATE_ERROR       0
+#define BLITZ_CALL_STATE_NEXT_ARG       1
+#define BLITZ_CALL_STATE_FINISHED       2
+#define BLITZ_CALL_STATE_HAS_NEXT       3 
+#define BLITZ_CALL_STATE_BEGIN          4
+#define BLITZ_CALL_STATE_END            5
+#define BLITZ_CALL_STATE_IF             6
+#define BLITZ_CALL_STATE_ELSE           7
+#define BLITZ_CALL_STATE_NEXT_ARG_IF    8
+#define BLITZ_CALL_STATE_NEXT_ARG_SCOPE 9
+#define BLITZ_CALL_STATE_ERROR          0
 
 #define BLITZ_CALL_ERROR             1
 #define BLITZ_CALL_ERROR_IF          2
 #define BLITZ_CALL_ERROR_INCLUDE     3
 #define BLITZ_CALL_ERROR_IF_CONTEXT  4
 
-#define BLITZ_CALL_ERROR_IF_MISSING_BRACKETS     5
-#define BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS  6
-#define BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION     7
-#define BLITZ_CALL_ERROR_IF_TOO_COMPLEX          8
-
+#define BLITZ_CALL_ERROR_IF_MISSING_BRACKETS        5
+#define BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS     6
+#define BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION        7
+#define BLITZ_CALL_ERROR_IF_TOO_COMPLEX             8
 #define BLITZ_CALL_ERROR_IF_METHOD_CALL_TOO_COMPLEX 9
+#define BLITZ_CALL_ERROR_SCOPE                      10
 
 #define BLITZ_ZVAL_NOT_EMPTY(z, res)                                                              \
     switch (Z_TYPE_P(z)) {                                                                        \
