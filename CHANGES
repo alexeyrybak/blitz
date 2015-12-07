@@ -1,4 +1,11 @@
 ===================================================================================================
+0.10.2 (PHP7) version 7 dec 2015. ✡ Happy hanukkah! ✡
+===================================================================================================
+- ADD: include scope finally merged, having {{ include('filename.tpl', user=$_.user) }} 
+  you can do {{ $user.name }} in the included templates. Thanks to Nicolas Van Eenaeme 
+  and Yuri Nasretdinov.
+
+===================================================================================================
 0.10.1 (PHP7) version 14 oct 2015
 ===================================================================================================
 - CHANGE: this is the first PHP7 port (based on 0.9.1) with all the tests passed as expected. 
