@@ -5014,7 +5014,7 @@ static inline int blitz_merge_iterations_by_str_keys(zval *target, zval *input) 
             zval tmp;
             ZVAL_COPY_VALUE(&tmp, elem);
             zval_copy_ctor(&tmp);
-            zend_hash_update(HASH_OF(target), key, &tmp);
+            zend_hash_str_update(HASH_OF(target), key->val, key->len, &tmp);
         }
         zend_hash_move_forward(input_ht);
     }
@@ -5345,7 +5345,7 @@ static PHP_FUNCTION(blitz_set_global)
         ZVAL_COPY_VALUE(&temp, elem);
         zval_copy_ctor(&temp);
 
-        zend_hash_update(tpl->hash_globals, key, &temp);
+        zend_hash_str_update(tpl->hash_globals, key->val, key->len, &temp);
         zend_hash_move_forward(input_ht);
     }
 
@@ -5751,15 +5751,8 @@ static PHP_FUNCTION(blitz_fetch)
     if (input_arr && path_iteration) {
         if (BLITZ_DEBUG) php_printf("merging current iteration and params in fetch\n");
         input_ht = HASH_OF(input_arr);
-        zend_hash_internal_pointer_reset(HASH_OF(path_iteration));
-        zend_hash_internal_pointer_reset(input_ht);
 
-        while ((elem = blitz_hash_get_current_data(input_ht)) != NULL) {
-            if (zend_hash_get_current_key(input_ht, &key, &index) != HASH_KEY_IS_STRING) {
-                zend_hash_move_forward(input_ht);
-                continue;
-            }
-
+        ZEND_HASH_FOREACH_STR_KEY_VAL_IND(input_ht, key, elem) {
             INDIRECT_CONTINUE_FORWARD(input_ht, elem);
 
             if (key && key->len) {
@@ -5768,10 +5761,9 @@ static PHP_FUNCTION(blitz_fetch)
                 ZVAL_COPY_VALUE(&temp, elem);
                 zval_copy_ctor(&temp);
 
-                zend_hash_update(HASH_OF(path_iteration), key, &temp);
+                zend_hash_str_update(HASH_OF(path_iteration), key->val, key->len, &temp);
             }
-            zend_hash_move_forward(input_ht);
-        }
+        } ZEND_HASH_FOREACH_END();
     }
 
     if (BLITZ_DEBUG) {
