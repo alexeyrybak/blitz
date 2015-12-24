@@ -3175,7 +3175,6 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
 
                 tmp_arg = node->args + i;
 
-		Z_ADDREF(tmp_z); // Increment refcounter since we're adding it to the array
                 add_assoc_zval(&scope_iteration, tmp_arg->name, &tmp_z);
             }
 
