@@ -27,6 +27,7 @@ extern zend_module_entry blitz_module_entry;
 #ifdef PHP_WIN32
 #define PHP_BLITZ_API __declspec(dllexport)
 #define BLITZ_USE_STREAMS
+#define BLITZ_MAX_LEXEM_LEN 512
 #else
 #define PHP_BLITZ_API
 #endif
