@@ -27,6 +27,7 @@ extern zend_module_entry blitz_module_entry;
 #ifdef PHP_WIN32
 #define PHP_BLITZ_API __declspec(dllexport)
 #define BLITZ_USE_STREAMS
+#define BLITZ_MAX_LEXEM_LEN 512
 #else
 #define PHP_BLITZ_API
 #endif
@@ -691,7 +692,7 @@ typedef struct _blitz_analizer_ctx {
         i_len = 1;                                                                                  \
     }                                                                                               \
 
-typedef int (*zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
+typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
 
 #define BLITZ_OPERATOR_TO_ZEND_NATIVE_FUNCTION(op)                                                  \
     ( (op == BLITZ_EXPR_OPERATOR_ADD) ? add_function :                                              \
