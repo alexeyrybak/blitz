@@ -993,7 +993,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
     unsigned int tag_min_len = 0;
     unsigned char check_map[256];
     blitz_string *t = NULL;
-    tag_pos *tp = NULL;
+    tag_pos *tp = NULL, *prev_tp = NULL;
 
     list_tag[BLITZ_TAG_ID_OPEN].s = BLITZ_G(tag_open);
     list_tag[BLITZ_TAG_ID_CLOSE].s = BLITZ_G(tag_close);
@@ -1069,13 +1069,34 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos TSR
                 found = 1;
                 p++;
                 if (p == t->len) {
-                    if (!blitz_realloc_list_to_add(list_pos))
-                        return 0;
+                    // Check if the previous tag was the same tag, if so, than we meant a literal tag (unparsed)
+                    if (prev_tp != NULL && prev_tp->tag_id == tag_id && prev_tp->pos + list_tag[prev_tp->tag_id].len == pos - list_tag[tag_id].len + 1) {
+                        // Remove the previous item from the list
+                        list_pos->size--;
+                        list_pos->end -= list_pos->item_size;
+                        prev_tp = list_pos->size > 0 ? (tag_pos*)list_pos->first + (list_pos->size - 1) * list_pos->item_size : NULL;
 
-                    tp = (tag_pos*)list_pos->end;
-                    tp->pos = pos - list_tag[tag_id].len + 1;
-                    tp->tag_id = tag_id;
-                    list_pos->size++;
+                        // Trim out the last tag since we only want to keep one tag
+                        pc -= list_tag[tag_id].len;
+                        memmove(pc, pc + 2, body->len - pos);
+                        memset(pc + body->len - pos, 0, 2);
+                        body->len -= list_tag[tag_id].len;
+
+                        pos_check_max = body->len - tag_min_len;
+                        pos -= list_tag[tag_id].len;
+                        c = *pc;
+                    } else {
+                        // Add the tag to the list
+                        if (!blitz_realloc_list_to_add(list_pos))
+                            return 0;
+
+                        tp = (tag_pos*)list_pos->end;
+                        tp->pos = pos - list_tag[tag_id].len + 1;
+                        tp->tag_id = tag_id;
+                        prev_tp = tp;
+                        list_pos->size++;
+                    }
+
                     list_pos->end = list_pos->first + list_pos->size * list_pos->item_size;
                     for (tag_id = 0; tag_id < tag_list_len; tag_id++) {
                         current_tag_pos[tag_id] = 0;
