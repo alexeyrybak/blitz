@@ -229,6 +229,25 @@
        */
       public function getTokens()
       {}
+
+      /**
+       * Changes autoescape policy for current class.
+       * Returns old policy value.
+       *
+       * @param bool $value
+       *
+       * @return bool
+       */
+      public function setAutoEscape($value)
+      {}
+
+      /**
+       * Returns autoescape policy for current class.
+       *
+       * @return bool
+       */
+      public function getAutoEscape()
+      {}
     }
     
   }

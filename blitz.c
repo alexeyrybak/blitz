@@ -774,6 +774,17 @@ static int blitz_include_tpl_cached(blitz_tpl *tpl, const char *filename, unsign
 }
 /* }}} */
 
+/* {{{ char blitz_get_autoescape(blitz_tpl *tpl) */
+static zend_always_inline zend_bool blitz_get_autoescape(blitz_tpl *tpl)
+{
+    if (tpl && tpl->flags & BLITZ_FLAG_AUTOESCAPE_OVERWRITE) {
+        return (tpl->flags & BLITZ_FLAG_AUTOESCAPE_VALUE) != 0;
+    }
+
+    return BLITZ_G(auto_escape);
+}
+/* }}} */
+
 static void blitz_resource_dtor(zend_resource *rsrc) /* {{{ */
 {
     blitz_tpl *tpl = NULL;
@@ -3587,7 +3598,7 @@ static inline void blitz_exec_var(
         p_result = (char*)memcpy(p_result, str->val, var_len);
         zend_string_release(str);
     } else {
-        if (escape_mode == BLITZ_ESCAPE_YES || escape_mode == BLITZ_ESCAPE_NL2BR || ((escape_mode == BLITZ_ESCAPE_DEFAULT) && BLITZ_G(auto_escape))) {
+        if (escape_mode == BLITZ_ESCAPE_YES || escape_mode == BLITZ_ESCAPE_NL2BR || ((escape_mode == BLITZ_ESCAPE_DEFAULT) && blitz_get_autoescape(tpl))) {
 #if defined(ENT_SUBSTITUTE) && defined(ENT_DISALLOWED) && defined(ENT_HTML5)
             long quote_style = ENT_QUOTES | ENT_SUBSTITUTE | ENT_DISALLOWED | ENT_HTML5;
 #else
@@ -5873,6 +5884,46 @@ static PHP_FUNCTION(blitz_get_error)
 }
 /* }}} */
 
+/* {{{ bool Blitz->getAutoEscape() */
+static PHP_FUNCTION(blitz_get_autoescape)
+{
+    zval *id, *desc;
+    blitz_tpl *tpl;
+
+    BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
+
+    RETURN_BOOL(blitz_get_autoescape(tpl));
+}
+/* }}} */
+
+/* {{{ bool Blitz->setAutoEscape() */
+static PHP_FUNCTION(blitz_set_autoescape)
+{
+    zval *id, *desc;
+    blitz_tpl *tpl;
+    zend_bool value, old_value;
+
+    BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
+    if (FAILURE == zend_parse_parameters(ZEND_NUM_ARGS(), "b", &value)) {
+        return;
+    }
+
+    if (tpl) {
+        old_value = blitz_get_autoescape(tpl);
+        tpl->flags |= BLITZ_FLAG_AUTOESCAPE_OVERWRITE;
+        if (value) {
+          tpl->flags |= BLITZ_FLAG_AUTOESCAPE_VALUE;
+        } else {
+          tpl->flags &= ~BLITZ_FLAG_AUTOESCAPE_VALUE;
+        }
+
+        RETURN_BOOL(old_value);
+    }
+
+    RETURN_FALSE;
+}
+/* }}} */
+
 /* {{{ arginfo */
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_init, 0, 0, 0)
@@ -5956,6 +6007,13 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_error, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_set_autoescape, 0, 0, 1)
+    ZEND_ARG_INFO(0, value)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_get_autoescape, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 /* }}} */
 
 #define BLITZ_ALIAS(method, func) PHP_FALIAS(method, func, arginfo_ ## func)
@@ -5996,6 +6054,8 @@ static const zend_function_entry blitz_functions[] = {
     BLITZ_ALIAS(cleanglobals,        blitz_clean_globals)
     BLITZ_ALIAS(geterror,            blitz_get_error)
     BLITZ_ALIAS(get_error,           blitz_get_error)
+    BLITZ_ALIAS(setautoescape,       blitz_set_autoescape)
+    BLITZ_ALIAS(getautoescape,       blitz_get_autoescape)
     {NULL, NULL, NULL}
 };
 /* }}} */
