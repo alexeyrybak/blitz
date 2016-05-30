@@ -16,7 +16,7 @@
   +----------------------------------------------------------------------+
 */
 
-#define BLITZ_DEBUG 0 
+#define BLITZ_DEBUG 0
 #define BLITZ_VERSION_STRING "0.9.1"
 
 #ifndef PHP_WIN32
@@ -2749,7 +2749,7 @@ static inline int blitz_scope_stack_find(blitz_tpl *tpl, char *key, unsigned lon
 static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *lexem, int lexem_len, zval *params, blitz_tpl *tpl TSRMLS_DC) /* {{{ */
 {
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
-    char key[256];
+    char key[BLITZ_MAX_LEXEM_LEN];
     char root_found = 0;
     char use_scope = 0, found_in_scope = 0;
     int magic_offset = 0;
@@ -2782,13 +2782,15 @@ static inline unsigned int blitz_fetch_var_by_path(zval ***zparam, const char *l
                     root_found = (tpl->hash_globals && (SUCCESS == zend_hash_find(tpl->hash_globals, key, key_len + 1, (void**)zparam)));
                     if (!root_found) {
                         use_scope = BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos;
-                        if (use_scope) {
-                            stack_level = blitz_scope_stack_find(tpl, key, key_len + 1, zparam TSRMLS_CC);
-                            if (stack_level == 0) {
-                                return 0;
-                            }
-                            found_in_scope = 1;
+                        if (!use_scope) {
+                            return 0;
                         }
+
+                        stack_level = blitz_scope_stack_find(tpl, key, key_len + 1, zparam TSRMLS_CC);
+                        if (stack_level == 0) {
+                            return 0;
+                        }
+                        found_in_scope = 1;
                     }
                 }
             } else if (*zparam) { /* just propagate through elem */
