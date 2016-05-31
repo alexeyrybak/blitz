@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0
-#define BLITZ_VERSION_STRING "0.10.2 (PHP7)"
+#define BLITZ_VERSION_STRING "0.10.3 (PHP7)"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -2950,13 +2950,15 @@ static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *le
                     root_found = (tpl->hash_globals && (*zparam = blitz_hash_str_find_ind(tpl->hash_globals, key, key_len)));
                     if (!root_found) {
                         use_scope = BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos;
-                        if (use_scope) {
-                            stack_level = blitz_scope_stack_find_ind(tpl, key, key_len, zparam);
-                            if (stack_level == 0) {
-                                return 0;
-                            }
-                            found_in_scope = 1;
+                        if (!use_scope) {
+                            return 0;
                         }
+
+                        stack_level = blitz_scope_stack_find_ind(tpl, key, key_len, zparam);
+                        if (stack_level == 0) {
+                            return 0;
+                        }
+                        found_in_scope = 1;
                     }
                 }
             } else if (*zparam) { /* just propagate through elem */
