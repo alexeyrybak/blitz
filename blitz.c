@@ -2915,7 +2915,7 @@ static inline int blitz_scope_stack_find_ind(blitz_tpl *tpl, char *key, unsigned
 static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *lexem, int lexem_len, zval *params, blitz_tpl *tpl) /* {{{ */
 {
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
-    char key[BLITZ_LEXEM_MAX_LEN];
+    char key[BLITZ_MAX_LEXEM_LEN];
     char root_found = 0;
     char use_scope = 0, found_in_scope = 0;
     int magic_offset = 0;
