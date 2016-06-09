@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0
-#define BLITZ_VERSION_STRING "0.10.2 (PHP7)"
+#define BLITZ_VERSION_STRING "0.10.3 (PHP7)"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -1073,7 +1073,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
     unsigned char c = 0, p = 0, tag_id = 0, idx_tag_id = 0, found = 0, skip_steps = 0;
     unsigned char *pc = NULL;
     unsigned int tag_min_len = 0;
-    unsigned char check_map[256];
+    unsigned char tag_char_exists_map[BLITZ_CHAR_EXISTS_MAP_SIZE];
     blitz_string *t = NULL;
     tag_pos *tp = NULL;
 
@@ -1110,7 +1110,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
     tag_list_len -= 2;
 #endif
 
-    memset(check_map, 0, 256*sizeof(unsigned char));
+    memset(tag_char_exists_map, 0, BLITZ_CHAR_EXISTS_MAP_SIZE*sizeof(unsigned char));
     tag_min_len = strlen(list_tag[0].s);
     for (idx_tag_id = 0; idx_tag_id < tag_list_len; idx_tag_id++) {
         tag_id = idx_tag[idx_tag_id]; // loop through index, some tags can be disabled
@@ -1122,7 +1122,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
 
         pc = (unsigned char *) list_tag[tag_id].s;
         while (*pc) {
-            check_map[*pc] = 1;
+            tag_char_exists_map[*pc] = 1;
             pc++;
         }
     }
@@ -1176,7 +1176,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
         }
 
         if (found == 0) {
-            while ((pos < pos_check_max) && 0 == check_map[*(pc + tag_min_len)]) {
+            while ((pos < pos_check_max) && 0 == tag_char_exists_map[*(pc + tag_min_len)]) {
                 pc += tag_min_len;
                 pos += tag_min_len;
             }
@@ -2926,7 +2926,7 @@ static inline int blitz_scope_stack_find_ind(blitz_tpl *tpl, char *key, unsigned
 static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *lexem, int lexem_len, zval *params, blitz_tpl *tpl) /* {{{ */
 {
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
-    char key[256];
+    char key[BLITZ_MAX_LEXEM_LEN];
     char root_found = 0;
     char use_scope = 0, found_in_scope = 0;
     int magic_offset = 0;
@@ -2961,13 +2961,15 @@ static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *le
                     root_found = (tpl->hash_globals && (*zparam = blitz_hash_str_find_ind(tpl->hash_globals, key, key_len)));
                     if (!root_found) {
                         use_scope = BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos;
-                        if (use_scope) {
-                            stack_level = blitz_scope_stack_find_ind(tpl, key, key_len, zparam);
-                            if (stack_level == 0) {
-                                return 0;
-                            }
-                            found_in_scope = 1;
+                        if (!use_scope) {
+                            return 0;
                         }
+
+                        stack_level = blitz_scope_stack_find_ind(tpl, key, key_len, zparam);
+                        if (stack_level == 0) {
+                            return 0;
+                        }
+                        found_in_scope = 1;
                     }
                 }
             } else if (*zparam) { /* just propagate through elem */

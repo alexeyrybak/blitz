@@ -129,6 +129,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_TAG_COMMENT_OPEN          "/*"
 #define BLITZ_TAG_COMMENT_CLOSE          "*/"
 #define BLITZ_TAG_LIST_LEN              6
+#define BLITZ_CHAR_EXISTS_MAP_SIZE      256
 
 #define BLITZ_TAG_ID_OPEN               0
 #define BLITZ_TAG_ID_OPEN_ALT           1
