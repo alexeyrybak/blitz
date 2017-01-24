@@ -2332,6 +2332,7 @@ static inline int blitz_analizer_add(analizer_ctx *ctx) {
     // just do nothing inside literal blocks, only wait for {{ end }}       
     if (ctx->is_literal) {
         if (i_node->type != BLITZ_NODE_TYPE_END) {
+            blitz_free_node(i_node);
             return 1;
         }
     }
