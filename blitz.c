@@ -16,8 +16,8 @@
   +----------------------------------------------------------------------+
 */
 
-#define BLITZ_DEBUG 0
-#define BLITZ_VERSION_STRING "0.10.3"
+#define BLITZ_DEBUG 0 
+#define BLITZ_VERSION_STRING "0.10.3.1"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -2328,6 +2328,13 @@ static inline int blitz_analizer_add(analizer_ctx *ctx) {
 
     if (BLITZ_DEBUG)
         php_printf("parsed lexem: %s\n", i_node->lexem);
+    
+    // just do nothing inside literal blocks, only wait for {{ end }}       
+    if (ctx->is_literal) {
+        if (i_node->type != BLITZ_NODE_TYPE_END) {
+            return 1;
+        }
+    }
 
     if (i_error) {
         if (is_alt_tag) return 1; /* alternative tags can be just HTML comment tags */
