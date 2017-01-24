@@ -176,6 +176,13 @@ ZEND_END_MODULE_GLOBALS(blitz)
         ('b' == s[0] && 'e' == s[1] && 'g' == s[2] && 'i' == s[3] && 'n' == s[4]))          \
     )
     
+#define BLITZ_STRING_IS_LITERAL(s, len)                                                                             \
+    ((7 == len) &&                                                                                                  \
+        (('L' == s[0] && 'I' == s[1] && 'T' == s[2] && 'E' == s[3] && 'R' == s[4] && 'A' == s[5] && 'L' == s[6])    \
+        ||                                                                                                          \
+        ('l' == s[0] && 'i' == s[1] && 't' == s[2] && 'e' == s[3] && 'r' == s[4] && 'a' == s[5] && 'l' == s[6]))    \
+    )
+
 #define BLITZ_STRING_IS_END(s, len)                                                         \
     ((3 == len) &&                                                                          \
         (('E' == s[0] && 'N' == s[1] && 'D' == s[2])                                        \
@@ -260,6 +267,7 @@ ZEND_END_MODULE_GLOBALS(blitz)
 #define BLITZ_NODE_TYPE_END                     (5 << 2 | BLITZ_TYPE_METHOD) /* non-finalized node - will be removed after parsing */
 #define BLITZ_NODE_TYPE_CONTEXT                 (6 << 2 | BLITZ_TYPE_METHOD) /* {{ BEGIN a }} bla-bla {{ END }} */
 #define BLITZ_NODE_TYPE_CONDITION               (7 << 2 | BLITZ_TYPE_METHOD) /* {{ BEGIN a }} bla-bla {{ END }} */
+#define BLITZ_NODE_TYPE_LITERAL                 (8 << 2 | BLITZ_TYPE_METHOD) /* {{ LITERAL }} bla-bla {{ END }} */
 // reserved +3 base types
 
 #define BLITZ_NODE_TYPE_WRAPPER_ESCAPE          (11 << 2 | BLITZ_TYPE_METHOD) 
@@ -437,6 +445,7 @@ typedef struct _blitz_analizer_ctx {
     unsigned int true_lexem_len;
     unsigned int n_needs_end;
     unsigned int n_actual_end;
+    unsigned char is_literal;
 } analizer_ctx;
 
 /* call scanner */
@@ -708,11 +717,12 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
 #define BLITZ_CALL_STATE_FINISHED       2
 #define BLITZ_CALL_STATE_HAS_NEXT       3 
 #define BLITZ_CALL_STATE_BEGIN          4
-#define BLITZ_CALL_STATE_END            5
+#define BLITZ_CALL_STATE_END            5 
 #define BLITZ_CALL_STATE_IF             6
 #define BLITZ_CALL_STATE_ELSE           7
 #define BLITZ_CALL_STATE_NEXT_ARG_IF    8
 #define BLITZ_CALL_STATE_NEXT_ARG_SCOPE 9
+#define BLITZ_CALL_STATE_LITERAL        10
 #define BLITZ_CALL_STATE_ERROR          0
 
 #define BLITZ_CALL_ERROR             1

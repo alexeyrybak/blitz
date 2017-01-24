@@ -1,6 +1,8 @@
 ===================================================================================================
 0.10.3 (PHP7) version ...
 ===================================================================================================
+- ADD: {{ literal }} ... {{ end }} blocks are processed literally (analog of literal/verbatim
+  functionality in other template engines) 
 - FIX: bug47 fix ported to PHP7 branch (https://github.com/alexeyrybak/blitz/issues/47)
 
 ===================================================================================================
