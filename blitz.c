@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0 
-#define BLITZ_VERSION_STRING "0.10.1 (PHP7)"
+#define BLITZ_VERSION_STRING "0.10.3.1"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -73,13 +73,14 @@ static void blitz_error (blitz_tpl *tpl, unsigned int level, char *format, ...);
 static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned long *result_len);
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data);
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params);
 static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data, int push_stack);
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params, int push_stack);
 static inline int blitz_analize (blitz_tpl *tpl);
 static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl);
 static inline unsigned int blitz_extract_var(blitz_tpl *tpl, char *name, unsigned long len, unsigned char is_path, zval *params, long *l, zval **z);
+static inline int blitz_arg_to_zval(blitz_tpl *tpl, blitz_node *node, zval *parent_params, call_arg *arg, zval *return_value);
 static inline void blitz_check_arg(blitz_tpl *tpl, blitz_node *node, zval *parent_params, int *not_empty);
 static inline void blitz_check_expr(blitz_tpl *tpl, blitz_node *node, zval *id, unsigned int node_count, zval *parent_params, int *is_true);
 
@@ -184,7 +185,7 @@ static zend_always_inline zval *blitz_hash_index_find(const HashTable *ht, zend_
 static zend_always_inline zval *blitz_hash_get_current_data(const HashTable *ht) /* {{{ */
 {
    zval *zv;
-   zv = zend_hash_get_current_data(ht);
+   zv = zend_hash_get_current_data((HashTable*)ht);
    if (zv && Z_TYPE_P(zv) == IS_REFERENCE) {
        zv = Z_REFVAL_P(zv);
    }
@@ -195,7 +196,7 @@ static zend_always_inline zval *blitz_hash_get_current_data(const HashTable *ht)
 static zend_always_inline zval *blitz_hash_get_current_data_ex(const HashTable *ht, HashPosition *pos) /* {{{ */
 {
    zval *zv;
-   zv = zend_hash_get_current_data_ex(ht, pos);
+   zv = zend_hash_get_current_data_ex((HashTable*)ht, pos);
    if (zv && Z_TYPE_P(zv) == IS_REFERENCE) {
        zv = Z_REFVAL_P(zv);
    }
@@ -822,6 +823,7 @@ static void blitz_get_node_paths(zval *list, blitz_node *node, const char *paren
         return;
 
     if (node->type == BLITZ_NODE_TYPE_CONTEXT ||
+        node->type == BLITZ_NODE_TYPE_LITERAL ||
         node->type == BLITZ_NODE_TYPE_IF_CONTEXT ||
         node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT ||
         node->type == BLITZ_NODE_TYPE_ELSEIF_CONTEXT ||
@@ -967,7 +969,7 @@ static void php_blitz_get_node_tokens(blitz_node *node, zval *list) /* {{{ */
 
     if (BLITZ_IS_METHOD(node->type)) {
 
-        if( node->n_args > 0 ) {
+        if (node->n_args > 0 ) {
             array_init(&args_list);
             for (j = 0; j < node->n_args; ++j) {
                 array_init(&arg);
@@ -1061,7 +1063,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
     unsigned char c = 0, p = 0, tag_id = 0, idx_tag_id = 0, found = 0, skip_steps = 0;
     unsigned char *pc = NULL;
     unsigned int tag_min_len = 0;
-    unsigned char check_map[256];
+    unsigned char tag_char_exists_map[BLITZ_CHAR_EXISTS_MAP_SIZE];
     blitz_string *t = NULL;
     tag_pos *tp = NULL;
 
@@ -1098,7 +1100,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
     tag_list_len -= 2;
 #endif
 
-    memset(check_map, 0, 256*sizeof(unsigned char));
+    memset(tag_char_exists_map, 0, BLITZ_CHAR_EXISTS_MAP_SIZE*sizeof(unsigned char));
     tag_min_len = strlen(list_tag[0].s);
     for (idx_tag_id = 0; idx_tag_id < tag_list_len; idx_tag_id++) {
         tag_id = idx_tag[idx_tag_id]; // loop through index, some tags can be disabled
@@ -1110,7 +1112,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
 
         pc = (unsigned char *) list_tag[tag_id].s;
         while (*pc) {
-            check_map[*pc] = 1;
+            tag_char_exists_map[*pc] = 1;
             pc++;
         }
     }
@@ -1164,7 +1166,7 @@ static int blitz_find_tag_positions(blitz_string *body, blitz_list *list_pos) { 
         }
 
         if (found == 0) {
-            while ((pos < pos_check_max) && 0 == check_map[*(pc + tag_min_len)]) {
+            while ((pos < pos_check_max) && 0 == tag_char_exists_map[*(pc + tag_min_len)]) {
                 pc += tag_min_len;
                 pos += tag_min_len;
             }
@@ -1562,6 +1564,82 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 }
 /* }}} */
 
+/* {{{ void blitz_parse_scope() */
+static inline void blitz_parse_scope (char *text, unsigned int len_text, blitz_node *node, char var_prefix,
+    unsigned int *pos_out, char *error_out TSRMLS_DC)
+{
+    char *c = text;
+    unsigned int pos = 0, i_pos = 0, i_len = 0, key_len = 0;
+    char key[BLITZ_MAX_LEXEM_LEN];
+    char buf[BLITZ_MAX_LEXEM_LEN];
+    unsigned char i_type = 0;
+    int has_key = 0;
+    call_arg *i_arg = NULL;
+
+    *error_out = 0;
+    *pos_out = 0;
+
+    if (BLITZ_DEBUG) {
+        char *tmp = estrndup((char *)text, len_text + 1);
+        tmp[len_text] = '\x0';
+        php_printf("*** FUNCTION *** blitz_parse_scope, started at pos=%u, c=%c, len=%u\n", pos, *c, len_text);
+        php_printf("text: %s\n", tmp);
+        efree(tmp);
+    }
+
+    i_pos = has_key = 0;
+
+    // While we have an argument and we have still text to parse
+    while (pos < len_text && *c != ')') {
+        pos += i_pos;
+        c = text + pos;
+
+        BLITZ_SKIP_BLANK(c,i_pos,pos);
+        if (pos >= len_text) {
+            // If we're at the end of our text, break and don't do the blitz_parse_arg call again (just optimalization)
+            break;
+        }
+
+        if (*c == ')') {
+            break;
+        } else if (has_key == 0 && *c == ',') {
+            i_pos = 1;
+            continue; // Okay!
+        } else if (has_key == 1 && *c == '=') {
+            i_pos = 1;
+            continue; // Okay!
+        } else if (has_key == 1) {
+            i_len = i_pos = i_type = 0;
+            blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos, 0);
+            if (!i_pos || BLITZ_IS_ARG_EXPR(i_type)) {
+                *error_out = BLITZ_CALL_ERROR_SCOPE;
+                return;
+            }
+
+            // Add it to the zval
+            ADD_CALL_ARGS(node, key, key_len, BLITZ_ARG_TYPE_VAR)
+            ADD_CALL_ARGS(node, buf, i_len, i_type)
+
+            has_key = 0;
+        } else {
+            i_len = i_pos = i_type = 0;
+            blitz_parse_arg(c, var_prefix, key, &i_type, &i_len, &i_pos, 0);
+            if (!i_pos || i_type != BLITZ_ARG_TYPE_VAR) {
+                *error_out = BLITZ_CALL_ERROR_SCOPE;
+                return;
+            }
+            key_len = i_len;
+            has_key = 1;
+        }
+    }
+
+    *pos_out = pos;
+
+    // We finished parsing all arguments, in RPN!!! Remember that IF a <operator> b became a b <operator>
+    return;
+}
+/* }}} */
+
 /* {{{ void blitz_parse_call() */
 static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_node *node,
     unsigned int *true_lexem_len, char var_prefix, char *error)
@@ -1708,6 +1786,9 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     INIT_CALL_ARGS(node);
                     state = BLITZ_CALL_STATE_BEGIN;
                     node->type = BLITZ_NODE_TYPE_BEGIN;
+                } else if (BLITZ_STRING_IS_LITERAL(node->lexem, node->lexem_len)) {
+                    state = BLITZ_CALL_STATE_LITERAL;
+                    node->type = BLITZ_NODE_TYPE_LITERAL;
                 } else if (BLITZ_STRING_IS_IF(node->lexem, node->lexem_len)) {
                     INIT_CALL_ARGS(node);
                     state = BLITZ_CALL_STATE_IF;
@@ -1758,6 +1839,14 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                         state = BLITZ_CALL_STATE_ERROR;
                     }
                     break;
+                case BLITZ_CALL_STATE_LITERAL:
+                    i_pos = 0;
+                    BLITZ_SKIP_BLANK(c,i_pos,pos); i_pos = 0; symb = *c;
+                    if (BLITZ_IS_ALPHA(symb)) {
+                        BLITZ_SCAN_VAR(c,p,i_pos,i_symb,is_path); pos += i_pos; i_pos = 0;
+                    }
+                    state = BLITZ_CALL_STATE_FINISHED;
+                    break;
                 case BLITZ_CALL_STATE_END:
                     i_pos = 0;
                     BLITZ_SKIP_BLANK(c,i_pos,pos); i_pos = 0; symb = *c;
@@ -1797,6 +1886,18 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     c = text + pos;
                     state = BLITZ_CALL_STATE_HAS_NEXT;
                     break;
+                case BLITZ_CALL_STATE_NEXT_ARG_SCOPE:
+                    BLITZ_SKIP_BLANK(c,i_pos,pos);
+                    is_path = i_len = i_pos = i_type = 0;
+
+                    blitz_parse_scope(c, len_text-pos, node, var_prefix, &i_pos, error TSRMLS_CC);
+                    if (*error != 0) {
+                        return;
+                    }
+                    pos += i_pos; i_pos = 0;
+                    c = text + pos;
+                    state = BLITZ_CALL_STATE_HAS_NEXT;
+                    break;
                 case BLITZ_CALL_STATE_NEXT_ARG:
                     blitz_parse_arg(c, var_prefix, buf, &i_type, &i_len, &i_pos, 1);
                     if (i_pos && !BLITZ_IS_ARG_EXPR(i_type)) {
@@ -1812,7 +1913,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
                     symb = *c;
                     if (symb == ',') {
-                        state = BLITZ_CALL_STATE_NEXT_ARG;
+                        // Include supports a scope, so if node type is include, read scope
+                        state = (node->type == BLITZ_NODE_TYPE_INCLUDE ? BLITZ_CALL_STATE_NEXT_ARG_SCOPE : BLITZ_CALL_STATE_NEXT_ARG);
                         ++c; ++pos;
                     } else if (symb == ')') {
                         state = BLITZ_CALL_STATE_FINISHED;
@@ -1859,12 +1961,12 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
 
     if (state == BLITZ_CALL_STATE_ERROR && (node->type == BLITZ_NODE_TYPE_IF_NF || node->type == BLITZ_NODE_TYPE_UNLESS_NF || node->type == BLITZ_NODE_TYPE_ELSEIF_NF)) {
         *error = BLITZ_CALL_ERROR_IF_CONTEXT;
+    } else if (node->type == BLITZ_NODE_TYPE_INCLUDE && (node->n_args < 1 || (node->n_args % 2 != 1) || state == BLITZ_CALL_STATE_ERROR)) {
+        *error = BLITZ_CALL_ERROR_INCLUDE;
     } else if (state != BLITZ_CALL_STATE_FINISHED) {
         *error = BLITZ_CALL_ERROR;
     } else if ((node->type == BLITZ_NODE_TYPE_IF || node->type == BLITZ_NODE_TYPE_UNLESS) && ((node->n_args - node->n_if_args) < 1 || (node->n_args - node->n_if_args) > 2)) {
         *error = BLITZ_CALL_ERROR_IF;
-    } else if ((node->type == BLITZ_NODE_TYPE_INCLUDE) && (node->n_args != 1)) {
-        *error = BLITZ_CALL_ERROR_INCLUDE;
     }
 
     /* FIXME: check arguments for wrappers (escape, date, trim) */
@@ -2009,6 +2111,10 @@ static inline int blitz_analizer_create_parent(analizer_ctx *ctx, unsigned int g
         );
     }
 
+    if (BLITZ_NODE_TYPE_LITERAL == i_node->type) {
+        ctx->is_literal = 1;
+    }
+
     ++(ctx->node_stack_len);
     stack_head = ctx->node_stack + ctx->node_stack_len;
     stack_head->parent = i_node;
@@ -2042,7 +2148,7 @@ static inline void blitz_analizer_finalize_parent(analizer_ctx *ctx, unsigned in
         stack_head = ctx->node_stack + ctx->node_stack_len;
 
         /**************************************************************************/
-        /* parent BEGIN/IF/ELSEIF/ELSE becomes:                                   */
+        /* parent BEGIN/LITERAL/IF/ELSEIF/ELSE becomes:                           */
         /**************************************************************************/
         /*    {{ begin   a }}         bla       {{             end a }}           */
         /*    ^--pos_begin   ^--pos_begin_shift ^--pos_end_shift       ^--pos_end */
@@ -2085,6 +2191,10 @@ static inline void blitz_analizer_finalize_parent(analizer_ctx *ctx, unsigned in
                 stack_head->last->next = i_node;
             }
             stack_head->last = i_node;
+        }
+
+        if (BLITZ_NODE_TYPE_LITERAL == parent->type) {
+            ctx->is_literal = 0;
         }
 
         --(ctx->node_stack_len);
@@ -2218,56 +2328,71 @@ static inline int blitz_analizer_add(analizer_ctx *ctx) {
 
     if (BLITZ_DEBUG)
         php_printf("parsed lexem: %s\n", i_node->lexem);
+    
+    // just do nothing inside literal blocks, only wait for {{ end }}       
+    if (ctx->is_literal) {
+        if (i_node->type != BLITZ_NODE_TYPE_END) {
+            blitz_free_node(i_node);
+            return 1;
+        }
+    }
 
     if (i_error) {
         if (is_alt_tag) return 1; /* alternative tags can be just HTML comment tags */
-        i_node->hidden = 1;
-        if (i_error == BLITZ_CALL_ERROR) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid method call (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, only 2 or 3 arguments allowed (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_INCLUDE) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <inlcude> syntax, only 1 argument allowed (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_CONTEXT) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, probably a bracket mismatch but could be wrong operands too (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_MISSING_BRACKETS) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, bracket mismatch (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, wrong number of operands (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, empty expression between the brackets (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_TOO_COMPLEX) {
-            blitz_error(tpl, E_WARNING,
-                "SYNTAX ERROR: invalid <if> syntax, the expression is too complex, consider raising BLITZ_IF_STACK_MAX=%d (%s: line %lu, pos %lu)",
-                BLITZ_IF_STACK_MAX, tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
-        } else if (i_error == BLITZ_CALL_ERROR_IF_METHOD_CALL_TOO_COMPLEX) {
-            blitz_error(tpl, E_WARNING,
-                "Method calls in IF statements are only supported in form '{{IF callback(...)}}'. "\
-                "You cannot use method call results in statements or use nested method calls (%s: line %lu, pos %lu)",
-                tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
-            );
+        if (!ctx->is_literal) { /* suppress errors and don't hide anything inside literal blocks */
+            i_node->hidden = 1;
+            if (i_error == BLITZ_CALL_ERROR) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid method call (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <if> syntax, only 2 or 3 arguments allowed (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_INCLUDE) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <include> syntax, first param must be filename and there can be optional scope arguments (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_SCOPE) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid scope syntax, to define scope use key1 = value1, key2 = value2, ... while key is a literal var without quotes (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF_CONTEXT) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <if> syntax, probably a bracket mismatch but could be wrong operands too (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF_MISSING_BRACKETS) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <if> syntax, bracket mismatch (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF_NOT_ENOUGH_OPERANDS) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <if> syntax, wrong number of operands (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF_EMPTY_EXPRESSION) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <if> syntax, empty expression between the brackets (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF_TOO_COMPLEX) {
+                blitz_error(tpl, E_WARNING,
+                    "SYNTAX ERROR: invalid <if> syntax, the expression is too complex, consider raising BLITZ_IF_STACK_MAX=%d (%s: line %lu, pos %lu)",
+                    BLITZ_IF_STACK_MAX, tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            } else if (i_error == BLITZ_CALL_ERROR_IF_METHOD_CALL_TOO_COMPLEX) {
+                blitz_error(tpl, E_WARNING,
+                    "Method calls in IF statements are only supported in form '{{IF callback(...)}}'. "\
+                    "You cannot use method call results in statements or use nested method calls (%s: line %lu, pos %lu)",
+                    tpl->static_data.name, get_line_number(body, current_open), get_line_pos(body, current_open)
+                );
+            }
         }
     } else {
         i_node->hidden = 0;
@@ -2279,7 +2404,7 @@ static inline int blitz_analizer_add(analizer_ctx *ctx) {
     ctx->close_len = close_len;
     ctx->true_lexem_len = true_lexem_len;
 
-    if (i_node->type == BLITZ_NODE_TYPE_BEGIN || i_node->type == BLITZ_NODE_TYPE_IF_NF || i_node->type == BLITZ_NODE_TYPE_UNLESS_NF) {
+    if (i_node->type == BLITZ_NODE_TYPE_BEGIN || i_node->type == BLITZ_NODE_TYPE_LITERAL || i_node->type == BLITZ_NODE_TYPE_IF_NF || i_node->type == BLITZ_NODE_TYPE_UNLESS_NF) {
         if (!blitz_analizer_create_parent(ctx, 1)) {
             return 0;
         }
@@ -2333,16 +2458,22 @@ static inline void blitz_analizer_process_node (analizer_ctx *ctx, unsigned int 
             break;
 
         case BLITZ_ANALISER_ACTION_ERROR_CURR:
-            blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->tag->tag_id, ctx->tag->pos);
+            if (!ctx->is_literal) {
+                blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->tag->tag_id, ctx->tag->pos);
+            }
             break;
 
         case BLITZ_ANALISER_ACTION_ERROR_PREV:
-            blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->prev_tag->tag_id, ctx->prev_tag->pos);
+            if (!ctx->is_literal) {
+                blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->prev_tag->tag_id, ctx->prev_tag->pos);
+            }
             break;
 
         case BLITZ_ANALISER_ACTION_ERROR_BOTH:
-            blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->tag->tag_id, ctx->tag->pos);
-            blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->prev_tag->tag_id, ctx->prev_tag->pos);
+            if (!ctx->is_literal) {
+                blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->tag->tag_id, ctx->tag->pos);
+                blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->prev_tag->tag_id, ctx->prev_tag->pos);
+            }
             break;
 
         case BLITZ_ANALISER_ACTION_ADD:
@@ -2364,7 +2495,9 @@ static inline void blitz_analizer_process_node (analizer_ctx *ctx, unsigned int 
 
     if (is_last && state != BLITZ_ANALISER_STATE_NONE) {
         if (BLITZ_DEBUG) php_printf("is_last = %u, state = %u\n", is_last, state);
-        blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->tag->tag_id, ctx->tag->pos);
+        if (!ctx->is_literal) {
+            blitz_analizer_warn_unexpected_tag(ctx->tpl, ctx->tag->tag_id, ctx->tag->pos);
+        }
     }
 
     if (ctx->tag)
@@ -2529,6 +2662,7 @@ static inline int blitz_analize (blitz_tpl *tpl) /* {{{ */
     ctx.prev_tag = NULL;
     ctx.n_needs_end = 0;
     ctx.n_actual_end = 0;
+    ctx.is_literal = 0;
 
     for (i=0; i < tags_len; i++, i_tag++) {
         i_tag_id = i_tag->tag_id;
@@ -2587,6 +2721,7 @@ static inline void blitz_remove_spaces_around_context_tags(blitz_tpl *tpl) {
         i_node = tpl->static_data.nodes + i;
         if (i_node->type != BLITZ_NODE_TYPE_CONTEXT
             && i_node->type != BLITZ_NODE_TYPE_END
+            && i_node->type != BLITZ_NODE_TYPE_LITERAL
             && i_node->type != BLITZ_NODE_TYPE_IF_CONTEXT
             && i_node->type != BLITZ_NODE_TYPE_UNLESS_CONTEXT
             && i_node->type != BLITZ_NODE_TYPE_ELSEIF_CONTEXT
@@ -2820,7 +2955,7 @@ static inline int blitz_scope_stack_find_ind(blitz_tpl *tpl, char *key, unsigned
 static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *lexem, int lexem_len, zval *params, blitz_tpl *tpl) /* {{{ */
 {
     register int i = 0, j = 0, last_pos = 0, key_len = 0, is_last = 0;
-    char key[256];
+    char key[BLITZ_MAX_LEXEM_LEN];
     char root_found = 0;
     char use_scope = 0, found_in_scope = 0;
     int magic_offset = 0;
@@ -2855,13 +2990,15 @@ static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *le
                     root_found = (tpl->hash_globals && (*zparam = blitz_hash_str_find_ind(tpl->hash_globals, key, key_len)));
                     if (!root_found) {
                         use_scope = BLITZ_G(scope_lookup_limit) && tpl->scope_stack_pos;
-                        if (use_scope) {
-                            stack_level = blitz_scope_stack_find_ind(tpl, key, key_len, zparam);
-                            if (stack_level == 0) {
-                                return 0;
-                            }
-                            found_in_scope = 1;
+                        if (!use_scope) {
+                            return 0;
                         }
+
+                        stack_level = blitz_scope_stack_find_ind(tpl, key, key_len, zparam);
+                        if (stack_level == 0) {
+                            return 0;
+                        }
+                        found_in_scope = 1;
                     }
                 }
             } else if (*zparam) { /* just propagate through elem */
@@ -2931,7 +3068,7 @@ static inline unsigned int blitz_fetch_var_by_path(zval **zparam, const char *le
 /* }}} */
 
 /* {{{ int blitz_exec_predefined_method() */
-static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node, zval *iteration_params, zval *id,
+static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node, zval *iteration_params, zval *parent_params, zval *id,
     char **result, char **p_result, unsigned long *result_len, unsigned long *result_alloc_len, char *tmp_buf)
 {
     zval *z;
@@ -2946,7 +3083,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
         call_arg *arg = NULL;
 
         // special check is required for if syntax with a single method call like '{{IF some_method()}}'
-        if (node->n_if_args > 1 || node->n_if_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD) {
+        if (node->n_if_args > 1 || (node->n_if_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD)) {
             blitz_check_expr(tpl, node, id, node->n_if_args, iteration_params, &is_true);
             /* complex if structures have as result there's a variable number of node args (say if you have if(a||b, "true", "false")),
              * node_args will be [ var b, var a, operator ||, literal "true", literal "false" ].
@@ -3024,14 +3161,17 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         }
     } else if (node->type == BLITZ_NODE_TYPE_INCLUDE) {
-        call_arg *arg = node->args;
+        call_arg *arg = node->args, *tmp_arg = NULL;
+        zval tmp_z;
+        zval scope_iteration, *tmp_z_ptr = NULL;
         char *filename = arg->name;
         unsigned int arg_type = arg->type;
         int filename_len = arg->len;
         char *inner_result = NULL;
         unsigned long inner_result_len = 0;
         blitz_tpl *itpl = NULL;
-        int res = 0, found = 0;
+        unsigned char i;
+        int res = 0, found = 0, have_scope_iteration = 0;
         zend_string *zstr = NULL;
 
         if (!BLITZ_G(enable_include)) {
@@ -3063,7 +3203,36 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         }
 
-        if (!blitz_include_tpl_cached(tpl, filename, filename_len, iteration_params, &itpl)) {
+        // Check if we have scope provided
+        if (node->n_args > 1) {
+            have_scope_iteration = 1;
+            array_init(&scope_iteration);
+
+            for (i = 1; (i + 1) < node->n_args; i += 2) {
+                tmp_arg = node->args + i + 1;
+
+                if (blitz_arg_to_zval(tpl, node, parent_params, tmp_arg, &tmp_z) == 0) {
+                    continue;
+                }
+
+                tmp_arg = node->args + i;
+
+                add_assoc_zval(&scope_iteration, tmp_arg->name, &tmp_z);
+            }
+
+            zend_hash_merge(HASH_OF(&scope_iteration), HASH_OF(iteration_params), zval_add_ref, 0);
+
+            if (BLITZ_DEBUG) {
+                smart_str buf = {0};
+                php_var_export_ex(&scope_iteration, 1, &buf);
+                smart_str_0 (&buf);
+                php_printf("--> scope_iteration:%s value:%s\n", zend_zval_type_name(&scope_iteration), buf.a);
+                smart_str_free(&buf);
+            }
+
+        }
+
+        if (!blitz_include_tpl_cached(tpl, filename, filename_len, (have_scope_iteration ? &scope_iteration : iteration_params), &itpl)) {
             if (zstr) {
                 zend_string_release(zstr);
             }
@@ -3087,6 +3256,9 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
             }
         }
 
+        if (have_scope_iteration) {
+            zval_ptr_dtor(&scope_iteration);
+        }
     } else if (node->type >= BLITZ_NODE_TYPE_WRAPPER_ESCAPE && node->type < BLITZ_NODE_TYPE_IF_NF) {
         char *wrapper_args[BLITZ_WRAPPER_MAX_ARGS];
         unsigned int wrapper_args_len[BLITZ_WRAPPER_MAX_ARGS];
@@ -3197,20 +3369,11 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
             if (i_arg_type == BLITZ_ARG_TYPE_VAR) {
                 predefined = -1;
-                // magic $_, as all predefined are casted to long, treat this separately
-                if (i_arg->len == 1 && i_arg->name[0] == '_') {
-                    if (has_iterations) {
-                        ZVAL_COPY_VALUE(&arg, iteration_params);
-                        zval_copy_ctor(&arg);
-                    }
-                } else {
-                    predefined = -1;
-                    found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp);
-                    if (predefined >= 0) {
-                        ZVAL_LONG(&arg, (long)predefined);
-                    } else if (found) {
-                        args[i] = ztmp;
-                    }
+                found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp TSRMLS_CC);
+                if (predefined >= 0) {
+                    ZVAL_LONG(&arg, (long)predefined);
+                } else if (found) {
+                    args[i] = ztmp;
                 }
             } else if (i_arg_type == BLITZ_ARG_TYPE_VAR_PATH) {
                 if (has_iterations && blitz_fetch_var_by_path(&ztmp, i_arg->name, i_arg->len, iteration_params, tpl)) {
@@ -3503,12 +3666,38 @@ static inline void blitz_exec_var(
 }
 /* }}} */
 
+/* {{{ int blitz_exec_literal() */
+static void blitz_exec_literal(blitz_tpl *tpl, blitz_node *node, zval *parent_params, zval *id,
+    char **result, unsigned long *result_len, unsigned long *result_alloc_len)
+{
+    unsigned long literal_len = 0, new_len = 0;
+    char *p_result = *result;
+
+    if (BLITZ_DEBUG) php_printf("*** FUNCTION *** blitz_exec_literal\n");
+    if (BLITZ_DEBUG) {
+        php_printf("node: pos_begin = %lu, pos_begin_shift = %lu, pos_end = %lu, pos_end_shift = %lu\n",
+        node->pos_begin, node->pos_begin_shift, node->pos_end, node->pos_end_shift);
+    }
+
+    if (0 == node->pos_end_shift) { // {{ literal }} with no {{ end }}
+        return; 
+    }
+ 
+    literal_len = node->pos_end_shift - node->pos_begin_shift;
+    BLITZ_REALLOC_RESULT(literal_len, new_len, *result_len, *result_alloc_len, *result, p_result);
+    p_result = (char*)memcpy(p_result, tpl->static_data.body + node->pos_begin_shift, literal_len);
+
+    *result_len += literal_len;
+    p_result += *result_len;
+    (*result)[*result_len] = '\0';
+}
+
 /* {{{ int blitz_exec_context() */
 static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_params, zval *id,
     char **result, unsigned long *result_len, unsigned long *result_alloc_len)
 {
     zend_string *key = NULL;
-    unsigned long key_index = 0;
+    zend_ulong key_index = 0;
     int check_key = 0, not_empty = 0, first_type = -1;
     long predefined = -1;
     zval *ctx_iterations = NULL;
@@ -3566,10 +3755,10 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                 result, result_len, result_alloc_len,
                 node->pos_begin_shift,
                 node->pos_end_shift,
-                ctx_iterations
+                ctx_iterations, parent_params
             );
         } else if (HASH_KEY_IS_LONG == check_key) {
-            if (BLITZ_DEBUG) php_printf("KEY_CHECK: %lu <long>\n", key_index);
+            if (BLITZ_DEBUG) php_printf("KEY_CHECK: %llu <zend_ulong>\n", key_index);
             BLITZ_LOOP_INIT(tpl, zend_hash_num_elements(HASH_OF(ctx_iterations)));
             first_type = -1;
             while ((ctx_data = blitz_hash_get_current_data_ex(HASH_OF(ctx_iterations), &pos)) != NULL) {
@@ -3597,7 +3786,7 @@ static void blitz_exec_context(blitz_tpl *tpl, blitz_node *node, zval *parent_pa
                     result,result_len,result_alloc_len,
                     node->pos_begin_shift,
                     node->pos_end_shift,
-                    ctx_data
+                    ctx_data, parent_params
                 );
                 BLITZ_LOOP_INCREMENT(tpl);
                 zend_hash_move_forward_ex(HASH_OF(ctx_iterations), &pos);
@@ -3635,6 +3824,9 @@ static inline unsigned int blitz_extract_var (
         if (BLITZ_DEBUG) php_printf("predefined path _parent\n");
         magic_stack = (tpl->scope_stack_pos > 2 ? tpl->scope_stack_pos - 2 : 0); /* keep track of the current magic scope to enable things like _parent._parent */
         *z = tpl->scope_stack[magic_stack];
+        return 1;
+    } else if (len == 1 && name[0] == '_') {
+        *z = tpl->scope_stack[tpl->scope_stack_pos-1];
         return 1;
     }
 
@@ -3975,7 +4167,7 @@ static void blitz_exec_if_context(
             condition = 1;
         } else {
             // special check is required for if syntax with a single method call like '{{IF some_method()}}'
-            if (node->n_args > 1 || node->n_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD) {
+            if (node->n_args > 1 || (node->n_args == 1 && node->args[0].type == BLITZ_EXPR_OPERATOR_METHOD)) {
                 blitz_check_expr(tpl, node, id, node->n_if_args, parent_params, &is_true);
             } else {
                 blitz_check_arg(tpl, node, parent_params, &is_true);
@@ -4016,7 +4208,7 @@ static void blitz_exec_if_context(
             blitz_exec_nodes_ex(tpl, node->first_child, id,
                 result, result_len, result_alloc_len,
                 node->pos_begin_shift, node->pos_end_shift,
-                parent_params, 0
+                parent_params, parent_params, 0
             );
 
             // find the end of this chain
@@ -4040,27 +4232,27 @@ static void blitz_exec_if_context(
 /* {{{ int blitz_exec_nodes() */
 static int blitz_exec_nodes(blitz_tpl *tpl, blitz_node *first_child,
     zval *id, char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data)
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params)
 {
-    return blitz_exec_nodes_ex(tpl, first_child, id, result, result_len, result_alloc_len, parent_begin, parent_end, parent_ctx_data, 1);
+    return blitz_exec_nodes_ex(tpl, first_child, id, result, result_len, result_alloc_len, parent_begin, parent_end, ctx_data, parent_params, 1);
 }
 /* }}} */
 
 /* {{{ int blitz_exec_nodes_ex() */
 static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
     zval *id, char **result, unsigned long *result_len, unsigned long *result_alloc_len,
-    unsigned long parent_begin, unsigned long parent_end, zval *parent_ctx_data, int push_stack)
+    unsigned long parent_begin, unsigned long parent_end, zval *ctx_data, zval *parent_params, int push_stack)
 {
     char *p_result = NULL;
     unsigned long buf_len = 0, new_len = 0;
     unsigned long shift = 0, last_close = 0, current_open = 0, i = 0, n_jump = 0;
-    zval *parent_params = NULL;
+    zval *ctx = NULL;
     blitz_node *node = NULL;
 
     /* check parent data (once in the beginning) - user could put non-array here.  */
     /* if we use hash_find on non-array - we get segfaults. */
-    if (parent_ctx_data && (Z_TYPE_P(parent_ctx_data) == IS_ARRAY || Z_TYPE_P(parent_ctx_data) == IS_OBJECT)) {
-        parent_params = parent_ctx_data;
+    if (ctx_data && (Z_TYPE_P(ctx_data) == IS_ARRAY || Z_TYPE_P(ctx_data) == IS_OBJECT)) {
+        ctx = ctx_data;
     }
 
     p_result = *result;
@@ -4069,9 +4261,9 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
 
     if (BLITZ_DEBUG) {
         php_printf("*** FUNCTION *** blitz_exec_nodes\n");
-        if (parent_ctx_data) {
-            php_printf("parent_ctx_data (%p):\n", parent_ctx_data);
-            php_var_dump(parent_ctx_data, 0);
+        if (ctx_data) {
+            php_printf("ctx_data (%p):\n", ctx_data);
+            php_var_dump(ctx_data, 0);
         }
         if (parent_params) {
             php_printf("parent_params (%p):\n", parent_params);
@@ -4080,7 +4272,7 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
     }
 
     if (push_stack) {
-        BLITZ_SCOPE_STACK_PUSH(tpl, parent_params);
+        BLITZ_SCOPE_STACK_PUSH(tpl, ctx);
     }
 
     node = first_child;
@@ -4107,20 +4299,22 @@ static int blitz_exec_nodes_ex(blitz_tpl *tpl, blitz_node *first_child,
         if (node->lexem && !node->hidden) {
             if ((node->type == BLITZ_NODE_TYPE_VAR) || (node->type == BLITZ_NODE_TYPE_VAR_PATH)) {
                 blitz_exec_var(tpl, node->lexem, node->lexem_len, node->type == BLITZ_NODE_TYPE_VAR_PATH, node->escape_mode, node->pos_begin,
-                    parent_params, result, result_len, result_alloc_len);
+                    ctx, result, result_len, result_alloc_len);
             } else if (BLITZ_IS_METHOD(node->type)) {
                 if (node->type == BLITZ_NODE_TYPE_CONTEXT) {
                     BLITZ_LOOP_MOVE_FORWARD(tpl);
-                    blitz_exec_context(tpl, node, parent_params, id, result, result_len, result_alloc_len);
+                    blitz_exec_context(tpl, node, ctx, id, result, result_len, result_alloc_len);
                     BLITZ_LOOP_MOVE_BACK(tpl);
+                } else if (node->type == BLITZ_NODE_TYPE_LITERAL) {
+                    blitz_exec_literal(tpl, node, ctx, id, result, result_len, result_alloc_len);
                 } else if (node->type == BLITZ_NODE_TYPE_IF_CONTEXT || node->type == BLITZ_NODE_TYPE_UNLESS_CONTEXT) {
-                    blitz_exec_if_context(tpl, node->pos_in_list, parent_params, id,
+                    blitz_exec_if_context(tpl, node->pos_in_list, ctx, id,
                         result, result_len, result_alloc_len, &n_jump);
                 } else {
-                    zval *iteration_params = parent_params ? parent_params : NULL;
+                    zval *iteration_params = ctx ? ctx : NULL;
                     if (BLITZ_IS_PREDEF_METHOD(node->type)) {
                         blitz_exec_predefined_method(
-                            tpl, node, iteration_params, id,
+                            tpl, node, iteration_params, parent_params, id,
                             result, &p_result, result_len, result_alloc_len, tpl->tmp_buf
                         );
                     } else {
@@ -4213,14 +4407,14 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
     {
         zval *iteration_data = NULL;
         zend_string *key;
-        unsigned long key_index;
+        zend_ulong key_index;
 
         /* if it's an array of numbers - treat this as single iteration and pass as a parameter */
         /* otherwise walk and iterate all the array elements */
         zend_hash_internal_pointer_reset(HASH_OF(&tpl->iterations));
         if (HASH_KEY_IS_LONG != zend_hash_get_current_key(HASH_OF(&tpl->iterations), &key, &key_index)) {
             blitz_exec_nodes(tpl, tpl->static_data.nodes, id, result, result_len, &result_alloc_len, 0,
-                tpl->static_data.body_len, &tpl->iterations);
+                tpl->static_data.body_len, &tpl->iterations, &tpl->iterations);
         } else {
             BLITZ_LOOP_INIT(tpl, zend_hash_num_elements(HASH_OF(&tpl->iterations)));
             while ((iteration_data = blitz_hash_get_current_data(HASH_OF(&tpl->iterations))) != NULL) {
@@ -4234,7 +4428,7 @@ static int blitz_exec_template(blitz_tpl *tpl, zval *id, char **result, unsigned
                 INDIRECT_CONTINUE_FORWARD(HASH_OF(&tpl->iterations), iteration_data);
 
                 blitz_exec_nodes(tpl, tpl->static_data.nodes, id,
-                    result, result_len, &result_alloc_len, 0, tpl->static_data.body_len, iteration_data);
+                    result, result_len, &result_alloc_len, 0, tpl->static_data.body_len, iteration_data, &tpl->iterations);
                 BLITZ_LOOP_INCREMENT(tpl);
                 zend_hash_move_forward(HASH_OF(&tpl->iterations));
             }
@@ -4533,7 +4727,7 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
     char *key = NULL;
     zend_string *tmp_key;
     zval *dummy;
-    unsigned long index = 0;
+    zend_ulong index = 0;
 
     k = pmax - 1;
     tmp = &tpl->iterations;
@@ -4721,7 +4915,7 @@ static int blitz_build_fetch_index(blitz_tpl *tpl) /* {{{ */
     if (BLITZ_DEBUG) {
         zval *elem;
         zend_string *key;
-        unsigned long index;
+        zend_ulong index;
         HashTable *ht = tpl->static_data.fetch_index;
 
         zend_hash_internal_pointer_reset(ht);
@@ -4789,7 +4983,7 @@ static int blitz_fetch_node_by_path(blitz_tpl *tpl, zval *id, const char *path, 
         return blitz_exec_nodes(tpl, i_node->first_child, id,
             result, result_len, &result_alloc_len,
             i_node->pos_begin_shift, i_node->pos_end_shift,
-            input_params
+            input_params, input_params
         );
     } else {
         unsigned long rlen = i_node->pos_end_shift - i_node->pos_begin_shift;
@@ -4868,7 +5062,7 @@ static inline int blitz_merge_iterations_by_str_keys(zval *target, zval *input) 
     zval *elem;
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input)) || (IS_ARRAY != Z_TYPE_P(target))) {
         return 0;
@@ -4890,7 +5084,7 @@ static inline int blitz_merge_iterations_by_str_keys(zval *target, zval *input) 
             zval tmp;
             ZVAL_COPY_VALUE(&tmp, elem);
             zval_copy_ctor(&tmp);
-            zend_hash_update(HASH_OF(target), key, &tmp);
+            zend_hash_str_update(HASH_OF(target), key->val, key->len, &tmp);
         }
         zend_hash_move_forward(input_ht);
     }
@@ -4904,7 +5098,7 @@ static inline int blitz_merge_iterations_by_num_keys(zval *target, zval *input) 
     zval *elem;
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
 
     if (!input || (IS_ARRAY != Z_TYPE_P(input))) {
         return 0;
@@ -4938,7 +5132,7 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr) /*
 {
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
     int res = 0, is_current_iteration = 0, first_key_type = 0;
     zval *target_iteration;
 
@@ -5029,6 +5223,7 @@ static void blitz_register_constants(INIT_FUNC_ARGS) /* {{{ */
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_INCLUDE", BLITZ_NODE_TYPE_INCLUDE, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_END", BLITZ_NODE_TYPE_END, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_CONTEXT", BLITZ_NODE_TYPE_CONTEXT, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_LITERAL", BLITZ_NODE_TYPE_LITERAL, BLITZ_CONSTANT_FLAGS);
 
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_ESCAPE", BLITZ_NODE_TYPE_WRAPPER_ESCAPE, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_DATE", BLITZ_NODE_TYPE_WRAPPER_DATE, BLITZ_CONSTANT_FLAGS);
@@ -5192,7 +5387,7 @@ static PHP_FUNCTION(blitz_set_global)
     blitz_tpl *tpl;
     HashTable *input_ht;
     zend_string *key;
-    unsigned long index;
+    zend_ulong index;
 
     BLITZ_FETCH_TPL_RESOURCE(id, tpl, desc);
 
@@ -5221,7 +5416,7 @@ static PHP_FUNCTION(blitz_set_global)
         ZVAL_COPY_VALUE(&temp, elem);
         zval_copy_ctor(&temp);
 
-        zend_hash_update(tpl->hash_globals, key, &temp);
+        zend_hash_str_update(tpl->hash_globals, key->val, key->len, &temp);
         zend_hash_move_forward(input_ht);
     }
 
@@ -5589,7 +5784,7 @@ static PHP_FUNCTION(blitz_fetch)
     zval *input_arr = NULL, *elem;
     HashTable *input_ht = NULL;
     zend_string *key = NULL;
-    unsigned long index = 0;
+    zend_ulong index = 0;
     zval *path_iteration = NULL;
     zval *path_iteration_parent = NULL;
     zval *final_params = NULL;
@@ -5627,15 +5822,8 @@ static PHP_FUNCTION(blitz_fetch)
     if (input_arr && path_iteration) {
         if (BLITZ_DEBUG) php_printf("merging current iteration and params in fetch\n");
         input_ht = HASH_OF(input_arr);
-        zend_hash_internal_pointer_reset(HASH_OF(path_iteration));
-        zend_hash_internal_pointer_reset(input_ht);
 
-        while ((elem = blitz_hash_get_current_data(input_ht)) != NULL) {
-            if (zend_hash_get_current_key(input_ht, &key, &index) != HASH_KEY_IS_STRING) {
-                zend_hash_move_forward(input_ht);
-                continue;
-            }
-
+        ZEND_HASH_FOREACH_STR_KEY_VAL_IND(input_ht, key, elem) {
             INDIRECT_CONTINUE_FORWARD(input_ht, elem);
 
             if (key && key->len) {
@@ -5644,10 +5832,9 @@ static PHP_FUNCTION(blitz_fetch)
                 ZVAL_COPY_VALUE(&temp, elem);
                 zval_copy_ctor(&temp);
 
-                zend_hash_update(HASH_OF(path_iteration), key, &temp);
+                zend_hash_str_update(HASH_OF(path_iteration), key->val, key->len, &temp);
             }
-            zend_hash_move_forward(input_ht);
-        }
+        } ZEND_HASH_FOREACH_END();
     }
 
     if (BLITZ_DEBUG) {

@@ -1,4 +1,18 @@
 ===================================================================================================
+0.10.3 (PHP7) version ...
+===================================================================================================
+- ADD: {{ literal }} ... {{ end }} blocks are processed literally (analog of literal/verbatim
+  functionality in other template engines) 
+- FIX: bug47 fix ported to PHP7 branch (https://github.com/alexeyrybak/blitz/issues/47)
+
+===================================================================================================
+0.10.2 (PHP7) version 7 dec 2015. ✡ Happy hanukkah! ✡
+===================================================================================================
+- ADD: include scope finally merged, having {{ include('filename.tpl', user=$_.user) }} 
+  you can do {{ $user.name }} in the included templates. Thanks to Nicolas Van Eenaeme 
+  and Yuri Nasretdinov.
+
+===================================================================================================
 0.10.1 (PHP7) version 14 oct 2015
 ===================================================================================================
 - CHANGE: this is the first PHP7 port (based on 0.9.1) with all the tests passed as expected. 
