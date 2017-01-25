@@ -8,6 +8,7 @@ ini_set('blitz.path', $pwd);
 
 ini_set('blitz.remove_spaces_around_context_tags', 0);
 ini_set('blitz.warn_context_duplicates', 1);
+ini_set('blitz.enable_alternative_tags', 1);
 
 // set this handler to simplify error checking for both PHP4 and PHP5
 error_reporting(E_ALL);
