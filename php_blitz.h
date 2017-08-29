@@ -382,8 +382,7 @@ typedef struct _blitz_static_data {
     char name[MAXPATHLEN];
     struct _blitz_node *nodes;
     unsigned int n_nodes;
-    char *body;
-	size_t body_len;
+	smart_str body;
     HashTable *fetch_index;
     unsigned int tag_open_len;
     unsigned int tag_close_len;
@@ -799,7 +798,7 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
     ( (Z_TYPE_P(z) == IS_ARRAY) ? zend_hash_str_find(Z_ARRVAL_P(z), k, k_len, (void **)out) :         \
        ( (Z_TYPE_P(z) == IS_OBJECT) ? zend_hash_str_find(Z_OBJPROP_P(z), k, k_len, (void **)out) :    \
           FAILURE                                                                                 \
-       )                                                                                          \
+       )                                                                                             \
     )
 
 #define BLITZ_REALLOC_RESULT(blen,nlen,rlen,alen,res,pres)                                        \
@@ -808,8 +807,8 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
         while ((alen) < (nlen)) {                                                                 \
             (alen) <<= 1;                                                                         \
         }                                                                                         \
-        (res) = erealloc((res),(alen + 1)*sizeof(char));                                          \
-        (pres) = (res) + (rlen);                                                                  \
+        (res) = zend_string_extend((res),(alen + 1), 0);                                          \
+        (pres) = ZSTR_VAL(res) + (rlen);                                                          \
     }                                                                                             \
 
 #define BLITZ_FETCH_TPL_RESOURCE(id,tpl,desc)                                                     \
