@@ -420,7 +420,9 @@ static blitz_tpl *blitz_init_tpl_base(HashTable *globals, zval *iterations, blit
 
 
     static_data = & tpl->static_data;
-    static_data->body.a = 0;
+    /* make sure body is always not-NULL */
+    smart_str_alloc(&static_data->body, 1, 0);
+    smart_str_0(&static_data->body);
 
     tpl->flags = 0;
     static_data->n_nodes = 0;
@@ -2597,7 +2599,7 @@ static inline int blitz_analize (blitz_tpl *tpl) /* {{{ */
         },
     };
 
-    if (!tpl->static_data.body.s) {
+    if (!ZSTR_LEN(tpl->static_data.body.s)) {
         return 0;
     }
 
@@ -5213,7 +5215,7 @@ static PHP_FUNCTION(blitz_load)
         return;
     }
 
-    if (tpl->static_data.body.s) {
+    if (ZSTR_LEN(tpl->static_data.body.s)) {
         blitz_error(tpl, E_WARNING, "INTERNAL ERROR: template is already loaded");
         RETURN_FALSE;
     }
@@ -5413,8 +5415,8 @@ static PHP_FUNCTION(blitz_parse)
         return;
     }
 
-    if (!tpl->static_data.body.s) { /* body was not loaded */
-        RETURN_FALSE;
+    if (!ZSTR_LEN(tpl->static_data.body.s)) { /* body was not loaded */
+        RETURN_EMPTY_STRING();
     }
 
     if (input_arr && 0 < zend_hash_num_elements(HASH_OF(input_arr))) {
@@ -5448,8 +5450,8 @@ static PHP_FUNCTION(blitz_display)
         return;
     }
 
-    if (!tpl->static_data.body.s) { /* body was not loaded */
-        RETURN_FALSE;
+    if (!ZSTR_LEN(tpl->static_data.body.s)) { /* body was not loaded */
+        RETURN_EMPTY_STRING();
     }
 
     if (input_arr && 0 < zend_hash_num_elements(HASH_OF(input_arr))) {
