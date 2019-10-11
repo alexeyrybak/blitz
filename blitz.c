@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0
-#define BLITZ_VERSION_STRING "0.10.4"
+#define BLITZ_VERSION_STRING "0.10.5"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -5310,6 +5310,10 @@ static PHP_FUNCTION(blitz_set_global)
     }
 
     input_ht = HASH_OF(input_arr);
+    if (0 == zend_hash_num_elements(input_ht)) {
+        return;
+    }
+
     zend_hash_internal_pointer_reset(tpl->hash_globals);
     zend_hash_internal_pointer_reset(input_ht);
 
@@ -5998,7 +6002,7 @@ PHP_MINFO_FUNCTION(blitz) /* {{{ */
 {
     php_info_print_table_start();
     php_info_print_table_row(2, "Blitz support", "enabled");
-    php_info_print_table_row(2, "Version", BLITZ_VERSION_STRING);
+    php_info_print_table_row(2, "Blitz version", BLITZ_VERSION_STRING);
     php_info_print_table_end();
 
     DISPLAY_INI_ENTRIES();
