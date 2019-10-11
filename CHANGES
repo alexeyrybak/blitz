@@ -1,4 +1,10 @@
 ===================================================================================================
+0.10.5 (PHP7) version 11 Oct 2019
+===================================================================================================
+- FIX: crash on empty globals set fixed (https://github.com/alexeyrybak/blitz/issues/62)
+- CHANGE: phpinfo() shows 'Blitz version' instead of 'Version' to simplify 'php -i | grep' usage
+
+===================================================================================================
 0.10.4 (PHP7) version 1 sent 2017. С днём знаний!
 ===================================================================================================
 - ADD: optimisations that reduce memory usage and improve performance: smart_str and other. Thanks 
