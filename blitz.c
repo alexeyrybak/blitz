@@ -38,6 +38,7 @@
 #include "ext/standard/php_standard.h"
 #include "ext/standard/info.h"
 #include "ext/standard/html.h"
+#include "ext/standard/url.h"
 #include "Zend/zend_exceptions.h"
 #include <fcntl.h>
 
@@ -1765,6 +1766,8 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                             node->type = BLITZ_NODE_TYPE_WRAPPER_ESCAPE;
                         } else if (BLITZ_STRING_IS_DATE(node->lexem, node->lexem_len)) {
                             node->type = BLITZ_NODE_TYPE_WRAPPER_DATE;
+                        } else if (BLITZ_STRING_IS_RAWURLENCODE(node->lexem, node->lexem_len)) {
+                            node->type = BLITZ_NODE_TYPE_WRAPPER_RAWURLENCODE;
                         }
                     }
                 }
@@ -2864,6 +2867,12 @@ static inline int blitz_exec_wrapper(blitz_tpl *tpl, smart_str *result, unsigned
         result->s = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], all, quote_style, SG(default_charset), 1);
         result->a = ZSTR_LEN(result->s);
 
+    } else if (type == BLITZ_NODE_TYPE_WRAPPER_RAWURLENCODE) {
+        const char *str = args[0];
+        const size_t str_len = args_len[0];
+
+        result->s = php_raw_url_encode(str, str_len);
+        result->a = ZSTR_LEN(result->s);
     } else if (type == BLITZ_NODE_TYPE_WRAPPER_DATE) {
 /* FIXME: check how it works under Windows */
         char *format = NULL;
@@ -5145,6 +5154,7 @@ static void blitz_register_constants(INIT_FUNC_ARGS) /* {{{ */
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_UPPER", BLITZ_NODE_TYPE_WRAPPER_UPPER, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_LOWER", BLITZ_NODE_TYPE_WRAPPER_LOWER, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_TRIM", BLITZ_NODE_TYPE_WRAPPER_TRIM, BLITZ_CONSTANT_FLAGS);
+    REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_WRAPPER_RAWURLENCODE", BLITZ_NODE_TYPE_WRAPPER_RAWURLENCODE, BLITZ_CONSTANT_FLAGS);
 
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_IF_CONTEXT", BLITZ_NODE_TYPE_IF_CONTEXT, BLITZ_CONSTANT_FLAGS);
     REGISTER_LONG_CONSTANT("BLITZ_NODE_TYPE_UNLESS_CONTEXT", BLITZ_NODE_TYPE_UNLESS_CONTEXT, BLITZ_CONSTANT_FLAGS);
