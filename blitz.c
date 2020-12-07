@@ -3397,10 +3397,10 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
     function_table = &Z_OBJCE_P(obj)->function_table;
     if (node->namespace_code == BLITZ_NODE_THIS_NAMESPACE) {
-        method_res = call_user_function_ex(function_table, obj, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+        method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
     } else if (node->namespace_code) {
         if (BLITZ_G(enable_php_callbacks)) {
-            method_res = call_user_function_ex(NULL, NULL, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+            method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
         } else {
             blitz_error(tpl, E_WARNING,
                 "PHP callbacks are disabled by blitz.enable_php_callbacks, %s call was ignored, line %lu, pos %lu",
@@ -3411,14 +3411,14 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
         }
     } else {
         if (BLITZ_G(php_callbacks_first) && BLITZ_G(enable_php_callbacks)) {
-            method_res = call_user_function_ex(NULL, NULL, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+            method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
             if (method_res == FAILURE) {
-                method_res = call_user_function_ex(function_table, obj, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+                method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
             }
         } else {
-            method_res = call_user_function_ex(function_table, obj, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+            method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
             if (method_res == FAILURE && BLITZ_G(enable_php_callbacks)) {
-                method_res = call_user_function_ex(NULL, NULL, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+                method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
             }
         }
     }
@@ -3951,7 +3951,7 @@ static inline void blitz_check_expr (
                 ZVAL_UNDEF(&retval);
 
                 if (BLITZ_G(enable_php_callbacks)) {
-                    method_res = call_user_function_ex(&Z_OBJCE_P(id)->function_table, id, &zmethod, &retval, operands_needed, args, 1, NULL);
+                    method_res = call_user_function(&Z_OBJCE_P(id)->function_table, id, &zmethod, &retval, operands_needed, args);
                 } else {
                     method_res = FAILURE;
                     blitz_error(tpl, E_WARNING,
