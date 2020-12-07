@@ -701,7 +701,7 @@ typedef struct _blitz_analizer_ctx {
         i_len = 1;                                                                                  \
     }                                                                                               \
 
-typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_CC);
+typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval *);
 
 #define BLITZ_OPERATOR_TO_ZEND_NATIVE_FUNCTION(op)                                                  \
     ( (op == BLITZ_EXPR_OPERATOR_ADD) ? add_function :                                              \
@@ -818,7 +818,7 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
                                                                                                   \
     desc = zend_hash_str_find(Z_OBJPROP_P((id)), "tpl", sizeof("tpl") - 1);                       \
     if (!desc || Z_TYPE_P(desc) != IS_RESOURCE) {                                                 \
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+        php_error_docref(NULL, E_WARNING,                                               \
             "INTERNAL: template was not loaded/initialized (cannot find template descriptor)"     \
         );                                                                                        \
         RETURN_FALSE;                                                                             \
@@ -834,7 +834,7 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
 /* loop stack tricks */
 #define BLITZ_LOOP_MOVE_FORWARD(tpl)                                                              \
     if (tpl->loop_stack_level>=BLITZ_LOOP_STACK_MAX) {                                            \
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+        php_error_docref(NULL, E_WARNING,                                               \
             "INTERNAL ERROR: loop stack limit (%u) was exceeded, recompile blitz "                \
             "with BLITZ_LOOP_STACK_MAX increased", BLITZ_LOOP_STACK_MAX);                         \
     } else {                                                                                      \
@@ -856,7 +856,7 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
         tpl->scope_stack[tpl->scope_stack_pos] = data;                                            \
         tpl->scope_stack_pos++;                                                                   \
     } else {                                                                                      \
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+        php_error_docref(NULL, E_WARNING,                                               \
             "Too deep iteration set, lookup scope depth is too high, lookup stack is broken "     \
             "and variables can be resolved improperly. To fix this rebuild blitz extension with " \
             "increased BLITZ_SCOPE_STACK_MAX constant in php_blitz.h"                             \
@@ -870,7 +870,7 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
     if (tpl->scope_stack_pos > 0) {                                                               \
         tpl->scope_stack_pos--;                                                                   \
     } else {                                                                                      \
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+        php_error_docref(NULL, E_WARNING,                                               \
             "Too deep iteration set, lookup scope depth is too high, lookup stack is broken "     \
             "and variables can be resolved improperly. To fix this rebuild blitz extension with " \
             "increased BLITZ_SCOPE_STACK_MAX constant in php_blitz.h"                             \
@@ -884,7 +884,7 @@ typedef int (ZEND_FASTCALL *zend_native_function)(zval *, zval *, zval * TSRMLS_
         stack[stack_level].len = alen;                                                            \
         stack[stack_level].type = atype;                                                          \
     } else {                                                                                      \
-        php_error_docref(NULL TSRMLS_CC, E_WARNING,                                               \
+        php_error_docref(NULL, E_WARNING,                                               \
             "Too complex conditional, operator stack depth is too high and broken, operators "    \
             "will  be resolved improperly. To fix this rebuild blitz extension with increased "   \
             "BLITZ_IF_STACK_MAX constant in php_blitz.h"                                          \

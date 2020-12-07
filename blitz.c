@@ -324,7 +324,7 @@ static void blitz_error (blitz_tpl *tpl, unsigned int level, char *format, ...) 
     php_error_docref(NULL, level, "%s", msg);
 
     if (BLITZ_G(throw_exceptions) && level == E_WARNING) {
-        zend_throw_exception_ex(zend_exception_get_default(TSRMLS_C), 0, "%s", msg);
+        zend_throw_exception_ex(zend_exception_get_default(), 0, "%s", msg);
     }
 
     if (free_msg) {
@@ -1559,7 +1559,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 
 /* {{{ void blitz_parse_scope() */
 static inline void blitz_parse_scope (char *text, unsigned int len_text, blitz_node *node, char var_prefix,
-    unsigned int *pos_out, char *error_out TSRMLS_DC)
+    unsigned int *pos_out, char *error_out)
 {
     char *c = text;
     unsigned int pos = 0, i_pos = 0, i_len = 0, key_len = 0;
@@ -1883,7 +1883,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
                     is_path = i_len = i_pos = i_type = 0;
 
-                    blitz_parse_scope(c, len_text-pos, node, var_prefix, &i_pos, error TSRMLS_CC);
+                    blitz_parse_scope(c, len_text-pos, node, var_prefix, &i_pos, error);
                     if (*error != 0) {
                         return;
                     }
@@ -3335,7 +3335,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
             if (i_arg_type == BLITZ_ARG_TYPE_VAR) {
                 predefined = -1;
-                found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp TSRMLS_CC);
+                found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp);
                 if (predefined >= 0) {
                     ZVAL_LONG(&arg, (long)predefined);
                 } else if (found) {
