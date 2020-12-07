@@ -2861,7 +2861,7 @@ static inline int blitz_exec_wrapper(blitz_tpl *tpl, smart_str *result, unsigned
             return 0;
         }
 
-        result->s = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], all, quote_style, SG(default_charset), 1);
+        result->s = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], all, quote_style, SG(default_charset), 1, 0);
         result->a = ZSTR_LEN(result->s);
 
     } else if (type == BLITZ_NODE_TYPE_WRAPPER_DATE) {
@@ -3582,7 +3582,7 @@ static inline void blitz_exec_var(
 #else
             long quote_style = ENT_QUOTES;
 #endif
-            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_P(zparam), Z_STRLEN_P(zparam), 0, quote_style, SG(default_charset), 1);
+            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_P(zparam), Z_STRLEN_P(zparam), 0, quote_style, SG(default_charset), 1, 0);
 
             if (escape_mode == BLITZ_ESCAPE_NL2BR) {
                 char *escaped_str;
