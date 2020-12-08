@@ -131,7 +131,7 @@ a equals b
 c not bigger then d
 e is bigger or equal to f
 ---
-a equals b
-c not bigger then d
+a doesn't equals b
+c is bigger then d
 e is bigger or equal to f
 ---

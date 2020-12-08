@@ -324,7 +324,7 @@ static void blitz_error (blitz_tpl *tpl, unsigned int level, char *format, ...) 
     php_error_docref(NULL, level, "%s", msg);
 
     if (BLITZ_G(throw_exceptions) && level == E_WARNING) {
-        zend_throw_exception_ex(zend_exception_get_default(TSRMLS_C), 0, "%s", msg);
+        zend_throw_exception_ex(zend_exception_get_default(), 0, "%s", msg);
     }
 
     if (free_msg) {
@@ -1559,7 +1559,7 @@ static inline void blitz_parse_if (char *text, unsigned int len_text, blitz_node
 
 /* {{{ void blitz_parse_scope() */
 static inline void blitz_parse_scope (char *text, unsigned int len_text, blitz_node *node, char var_prefix,
-    unsigned int *pos_out, char *error_out TSRMLS_DC)
+    unsigned int *pos_out, char *error_out)
 {
     char *c = text;
     unsigned int pos = 0, i_pos = 0, i_len = 0, key_len = 0;
@@ -1883,7 +1883,7 @@ static inline void blitz_parse_call (char *text, unsigned int len_text, blitz_no
                     BLITZ_SKIP_BLANK(c,i_pos,pos);
                     is_path = i_len = i_pos = i_type = 0;
 
-                    blitz_parse_scope(c, len_text-pos, node, var_prefix, &i_pos, error TSRMLS_CC);
+                    blitz_parse_scope(c, len_text-pos, node, var_prefix, &i_pos, error);
                     if (*error != 0) {
                         return;
                     }
@@ -2861,7 +2861,7 @@ static inline int blitz_exec_wrapper(blitz_tpl *tpl, smart_str *result, unsigned
             return 0;
         }
 
-        result->s = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], all, quote_style, SG(default_charset), 1);
+        result->s = php_escape_html_entities_ex((unsigned char *)args[0], args_len[0], all, quote_style, SG(default_charset), 1, 0);
         result->a = ZSTR_LEN(result->s);
 
     } else if (type == BLITZ_NODE_TYPE_WRAPPER_DATE) {
@@ -3335,7 +3335,7 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
             if (i_arg_type == BLITZ_ARG_TYPE_VAR) {
                 predefined = -1;
-                found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp TSRMLS_CC);
+                found = blitz_extract_var(tpl, i_arg->name, i_arg->len, 0, iteration_params, &predefined, &ztmp);
                 if (predefined >= 0) {
                     ZVAL_LONG(&arg, (long)predefined);
                 } else if (found) {
@@ -3397,10 +3397,10 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
 
     function_table = &Z_OBJCE_P(obj)->function_table;
     if (node->namespace_code == BLITZ_NODE_THIS_NAMESPACE) {
-        method_res = call_user_function_ex(function_table, obj, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+        method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
     } else if (node->namespace_code) {
         if (BLITZ_G(enable_php_callbacks)) {
-            method_res = call_user_function_ex(NULL, NULL, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+            method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
         } else {
             blitz_error(tpl, E_WARNING,
                 "PHP callbacks are disabled by blitz.enable_php_callbacks, %s call was ignored, line %lu, pos %lu",
@@ -3411,14 +3411,14 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
         }
     } else {
         if (BLITZ_G(php_callbacks_first) && BLITZ_G(enable_php_callbacks)) {
-            method_res = call_user_function_ex(NULL, NULL, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+            method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
             if (method_res == FAILURE) {
-                method_res = call_user_function_ex(function_table, obj, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+                method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
             }
         } else {
-            method_res = call_user_function_ex(function_table, obj, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+            method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
             if (method_res == FAILURE && BLITZ_G(enable_php_callbacks)) {
-                method_res = call_user_function_ex(NULL, NULL, &zmethod, &retval, node->n_args, pargs, 1, NULL);
+                method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
             }
         }
     }
@@ -3582,7 +3582,7 @@ static inline void blitz_exec_var(
 #else
             long quote_style = ENT_QUOTES;
 #endif
-            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_P(zparam), Z_STRLEN_P(zparam), 0, quote_style, SG(default_charset), 1);
+            escaped = php_escape_html_entities_ex((unsigned char *) Z_STRVAL_P(zparam), Z_STRLEN_P(zparam), 0, quote_style, SG(default_charset), 1, 0);
 
             if (escape_mode == BLITZ_ESCAPE_NL2BR) {
                 char *escaped_str;
@@ -3951,7 +3951,7 @@ static inline void blitz_check_expr (
                 ZVAL_UNDEF(&retval);
 
                 if (BLITZ_G(enable_php_callbacks)) {
-                    method_res = call_user_function_ex(&Z_OBJCE_P(id)->function_table, id, &zmethod, &retval, operands_needed, args, 1, NULL);
+                    method_res = call_user_function(&Z_OBJCE_P(id)->function_table, id, &zmethod, &retval, operands_needed, args);
                 } else {
                     method_res = FAILURE;
                     blitz_error(tpl, E_WARNING,
