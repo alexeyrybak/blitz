@@ -372,7 +372,7 @@ static inline int blitz_read_with_stream(blitz_tpl *tpl) /* {{{ */
         return 0;
     }
 
-    stream = php_stream_open_wrapper(filename, "rb", IGNORE_PATH|IGNORE_URL|IGNORE_URL_WIN|REPORT_ERRORS, NULL);
+    stream = php_stream_open_wrapper(filename, "rb", IGNORE_PATH|IGNORE_URL|REPORT_ERRORS, NULL);
     if (!stream) {
         return 0;
     }
