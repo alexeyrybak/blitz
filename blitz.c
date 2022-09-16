@@ -5059,6 +5059,7 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr) /*
     /* set works differently for numerical keys and string keys: */
     /*     (1) STRING: set(array('a' => 'a_val')) will update current_iteration keys */
     /*     (2) LONG: set(array(0=>array('a'=>'a_val'))) will reset current_iteration_parent */
+    SEPARATE_ARRAY(input_arr);
     input_ht = HASH_OF(input_arr);
     zend_hash_internal_pointer_reset(input_ht);
     first_key_type = zend_hash_get_current_key(input_ht, &key, &index);
