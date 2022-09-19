@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0
-#define BLITZ_VERSION_STRING "0.10.5"
+#define BLITZ_VERSION_STRING "0.10.6"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -4736,6 +4736,10 @@ static int blitz_find_iteration_by_path(blitz_tpl *tpl, const char *path, int pa
         blitz_error(tpl, E_WARNING, "ERROR: unable to find context '%s', "
             "it was set as \"scalar\" value - check your iteration params", path);
         return 0;
+    }
+
+    if (0 == zend_hash_num_elements(HASH_OF(tmp))) {
+        return 1;
     }
 
     zend_hash_internal_pointer_end(HASH_OF(tmp));
