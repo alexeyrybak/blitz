@@ -1,5 +1,9 @@
 --TEST--
 returning non-strings from user methods
+--SKIPIF--
+<?php
+	if (PHP_VERSION_ID >= 80000) echo("SKIP: PHP8 Throws exceptions: can't run");
+?>
 --FILE---
 <?php
 include('common.inc');
