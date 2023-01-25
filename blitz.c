@@ -17,7 +17,7 @@
 */
 
 #define BLITZ_DEBUG 0
-#define BLITZ_VERSION_STRING "0.10.6"
+#define BLITZ_VERSION_STRING "0.10.7"
 
 #ifndef PHP_WIN32
 #include <sys/mman.h>
@@ -5988,6 +5988,7 @@ PHP_MINIT_FUNCTION(blitz) /* {{{ */
     le_blitz = zend_register_list_destructors_ex(blitz_resource_dtor, NULL, "Blitz template", module_number);
 
     INIT_CLASS_ENTRY(blitz_class_entry, "blitz", blitz_functions);
+    blitz_class_entry.ce_flags |= ZEND_ACC_ALLOW_DYNAMIC_PROPERTIES;
     zend_register_internal_class(&blitz_class_entry);
     blitz_register_constants(INIT_FUNC_ARGS_PASSTHRU);
 
