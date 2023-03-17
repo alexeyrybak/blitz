@@ -5299,6 +5299,7 @@ static PHP_FUNCTION(blitz_set_global)
     zval *id, *desc, *input_arr, *elem;
     blitz_tpl *tpl;
     HashTable *input_ht;
+    HashPosition input_pos;
     zend_string *key;
     zend_ulong index;
 
@@ -5314,25 +5315,25 @@ static PHP_FUNCTION(blitz_set_global)
     }
 
     zend_hash_internal_pointer_reset(tpl->hash_globals);
-    zend_hash_internal_pointer_reset(input_ht);
+    zend_hash_internal_pointer_reset_ex(input_ht, &input_pos);
 
-    while ((elem = blitz_hash_get_current_data(input_ht)) != NULL) {
-        if (zend_hash_get_current_key(input_ht, &key, &index) != HASH_KEY_IS_STRING) {
-            zend_hash_move_forward(input_ht);
+    while ((elem = blitz_hash_get_current_data_ex(input_ht, &input_pos)) != NULL) {
+        if (zend_hash_get_current_key_ex(input_ht, &key, &index, &input_pos) != HASH_KEY_IS_STRING) {
+            zend_hash_move_forward_ex(input_ht, &input_pos);
             continue;
         }
 
-        INDIRECT_CONTINUE_FORWARD(input_ht, elem);
+        INDIRECT_CONTINUE_FORWARD_EX(input_ht, &input_pos, elem);
 
         /* disallow empty keys */
         if (!key || !key->len) {
-            zend_hash_move_forward(input_ht);
+            zend_hash_move_forward_ex(input_ht, &input_pos);
             continue;
         }
 
         zval_add_ref(elem);
         zend_hash_str_update(tpl->hash_globals, key->val, key->len, elem);
-        zend_hash_move_forward(input_ht);
+        zend_hash_move_forward_ex(input_ht, &input_pos);
     }
 
     RETURN_TRUE;
