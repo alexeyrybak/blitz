@@ -5920,6 +5920,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_block, 0, 0, 1)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_blitz_include, 0, 0, 1)
+    ZEND_ARG_INFO(0, filename)
     ZEND_ARG_INFO(0, input)
 ZEND_END_ARG_INFO()
 
