@@ -4981,34 +4981,28 @@ static inline int blitz_prepare_iteration(blitz_tpl *tpl, const char *path, int 
 }
 /* }}} */
 
-static inline int blitz_merge_iterations_by_str_keys(zval *target, zval *input) /* {{{ */
+static inline int blitz_merge_iterations_by_str_keys(zval *target, HashTable *input_ht, HashPosition *input_pos) /* {{{ */
 {
     zval *elem;
-    HashTable *input_ht = NULL;
     zend_string *key = NULL;
     zend_ulong index = 0;
 
-    if (!input || (IS_ARRAY != Z_TYPE_P(input)) || (IS_ARRAY != Z_TYPE_P(target))) {
-        return 0;
-    }
-
-    if (0 == zend_hash_num_elements(HASH_OF(input))) {
+    if (0 == zend_hash_num_elements(input_ht)) {
         return 1;
     }
 
-    input_ht = HASH_OF(input);
-    while ((elem = blitz_hash_get_current_data(input_ht)) != NULL) {
-        if (zend_hash_get_current_key(input_ht, &key, &index) != HASH_KEY_IS_STRING) {
-            zend_hash_move_forward(input_ht);
+    while ((elem = blitz_hash_get_current_data_ex(input_ht, input_pos)) != NULL) {
+        if (zend_hash_get_current_key_ex(input_ht, &key, &index, input_pos) != HASH_KEY_IS_STRING) {
+            zend_hash_move_forward_ex(input_ht, input_pos);
             continue;
         }
-        INDIRECT_CONTINUE_FORWARD(input_ht, elem);
+        INDIRECT_CONTINUE_FORWARD_EX(input_ht, input_pos, elem);
 
         if (key && key->len) {
             zval_add_ref(elem);
             zend_hash_str_update(HASH_OF(target), key->val, key->len, elem);
         }
-        zend_hash_move_forward(input_ht);
+        zend_hash_move_forward_ex(input_ht, input_pos);
     }
 
     return 1;
@@ -5050,6 +5044,7 @@ static inline int blitz_merge_iterations_by_num_keys(zval *target, zval *input) 
 static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr) /* {{{ */
 {
     HashTable *input_ht = NULL;
+    HashPosition input_pos;
     zend_string *key = NULL;
     zend_ulong index = 0;
     int is_current_iteration = 0, first_key_type = 0;
@@ -5064,8 +5059,8 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr) /*
     /*     (1) STRING: set(array('a' => 'a_val')) will update current_iteration keys */
     /*     (2) LONG: set(array(0=>array('a'=>'a_val'))) will reset current_iteration_parent */
     input_ht = HASH_OF(input_arr);
-    zend_hash_internal_pointer_reset(input_ht);
-    first_key_type = zend_hash_get_current_key(input_ht, &key, &index);
+    zend_hash_internal_pointer_reset_ex(input_ht, &input_pos);
+    first_key_type = zend_hash_get_current_key_ex(input_ht, &key, &index, &input_pos);
 
     /* *** FIXME *** */
     /* blitz_iterate_by_path here should have is_current_iteration = 1 ALWAYS. */
@@ -5090,7 +5085,7 @@ static inline int blitz_merge_iterations_set(blitz_tpl *tpl, zval *input_arr) /*
 
     if (HASH_KEY_IS_STRING == first_key_type) {
         target_iteration = tpl->last_iteration;
-        blitz_merge_iterations_by_str_keys(target_iteration, input_arr);
+        blitz_merge_iterations_by_str_keys(target_iteration, input_ht, &input_pos);
     } else {
         if (!tpl->current_iteration_parent) {
             blitz_error(tpl, E_WARNING, "INTERNAL ERROR: unable to set into current_iteration_parent, is NULL");
@@ -5304,6 +5299,7 @@ static PHP_FUNCTION(blitz_set_global)
     zval *id, *desc, *input_arr, *elem;
     blitz_tpl *tpl;
     HashTable *input_ht;
+    HashPosition input_pos;
     zend_string *key;
     zend_ulong index;
 
@@ -5319,25 +5315,25 @@ static PHP_FUNCTION(blitz_set_global)
     }
 
     zend_hash_internal_pointer_reset(tpl->hash_globals);
-    zend_hash_internal_pointer_reset(input_ht);
+    zend_hash_internal_pointer_reset_ex(input_ht, &input_pos);
 
-    while ((elem = blitz_hash_get_current_data(input_ht)) != NULL) {
-        if (zend_hash_get_current_key(input_ht, &key, &index) != HASH_KEY_IS_STRING) {
-            zend_hash_move_forward(input_ht);
+    while ((elem = blitz_hash_get_current_data_ex(input_ht, &input_pos)) != NULL) {
+        if (zend_hash_get_current_key_ex(input_ht, &key, &index, &input_pos) != HASH_KEY_IS_STRING) {
+            zend_hash_move_forward_ex(input_ht, &input_pos);
             continue;
         }
 
-        INDIRECT_CONTINUE_FORWARD(input_ht, elem);
+        INDIRECT_CONTINUE_FORWARD_EX(input_ht, &input_pos, elem);
 
         /* disallow empty keys */
         if (!key || !key->len) {
-            zend_hash_move_forward(input_ht);
+            zend_hash_move_forward_ex(input_ht, &input_pos);
             continue;
         }
 
         zval_add_ref(elem);
         zend_hash_str_update(tpl->hash_globals, key->val, key->len, elem);
-        zend_hash_move_forward(input_ht);
+        zend_hash_move_forward_ex(input_ht, &input_pos);
     }
 
     RETURN_TRUE;
