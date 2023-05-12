@@ -5816,7 +5816,9 @@ static PHP_FUNCTION(blitz_clean)
     }
 
     /* clean-up parent iteration */
-    zend_hash_clean(HASH_OF(path_iteration_parent));
+    if (path_iteration_parent) {
+        zend_hash_clean(HASH_OF(path_iteration_parent));
+    }
 
     /* reset current iteration pointer if it's current iteration  */
     if ((current_len == norm_len) && (0 == strncmp(tpl->tmp_buf, tpl->current_path, norm_len))) {
