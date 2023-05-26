@@ -4437,7 +4437,6 @@ static inline int blitz_normalize_path(blitz_tpl *tpl, char **dest, const char *
 
 static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int path_len, int is_current_iteration, int create_new) /* {{{ */
 {
-    zval *tmp;
     int i = 1, ilast = 1, j = 0, k = 0;
     const char *p = path;
     int pmax = path_len;
@@ -4447,7 +4446,8 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
     int is_root = 0;
 
     k = pmax - 1;
-    tmp = &tpl->iterations;
+    HashTable *tmp = HASH_OF(&tpl->iterations);
+    HashPosition tmp_pos;
 
     if (BLITZ_DEBUG) {
         php_printf("[debug] BLITZ_FUNCTION: blitz_iterate_by_path, path=%s\n", path);
@@ -4460,19 +4460,18 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
         is_root = 1;
     }
 
-    if ((0 == zend_hash_num_elements(HASH_OF(tmp)) || (is_root && create_new))) {
+    if ((0 == zend_hash_num_elements(tmp) || (is_root && create_new))) {
         blitz_populate_root(tpl);
     }
 
     /* iterate root  */
     if (is_root) {
         zval *tmp_iteration;
-        zend_hash_internal_pointer_end(HASH_OF(tmp));
-        if ((tmp_iteration = blitz_hash_get_current_data(HASH_OF(tmp))) != NULL) {
+        zend_hash_internal_pointer_end_ex(tmp, &tmp_pos);
+        if ((tmp_iteration = blitz_hash_get_current_data_ex(tmp, &tmp_pos)) != NULL) {
             INDIRECT_RETURN(tmp_iteration, 0);
             tpl->last_iteration = tmp_iteration;
             if (is_current_iteration) {
-                /*blitz_hash_get_current_data(HASH_OF(*tmp), (void **) &tpl->current_iteration); */
                 tpl->current_iteration = tpl->last_iteration;
                 tpl->current_iteration_parent = & tpl->iterations;
             }
@@ -4501,29 +4500,28 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
 
             if (BLITZ_DEBUG) php_printf("[debug] going move to:%s\n",key);
 
-            zend_hash_internal_pointer_end(HASH_OF(tmp));
-            if ((tmp2 = blitz_hash_get_current_data(HASH_OF(tmp))) == NULL) {
+            zend_hash_internal_pointer_end_ex(tmp, &tmp_pos);
+            if ((tmp2 = blitz_hash_get_current_data_ex(tmp, &tmp_pos)) == NULL) {
                 zval empty_array;
                 if (BLITZ_DEBUG) php_printf("[debug] current_data not found, will populate the list \n");
                 array_init(&empty_array);
-                add_next_index_zval(tmp, &empty_array);
-                if ((tmp2 = blitz_hash_get_current_data(HASH_OF(tmp))) == NULL) {
+                zend_hash_next_index_insert(tmp, &empty_array);
+                if ((tmp2 = blitz_hash_get_current_data_ex(tmp, &tmp_pos)) == NULL) {
                     return 0;
                 }
                 INDIRECT_RETURN(tmp2, 0);
                 if (BLITZ_DEBUG) {
                     php_printf("[debug] tmp becomes:\n");
-                    php_var_dump(tmp,0);
+                    blitz_dump_ht(tmp,0);
                 }
             } else {
                 if (BLITZ_DEBUG) {
                     php_printf("[debug] tmp dump (node):\n");
-                    php_var_dump(tmp,0);
+                    blitz_dump_ht(tmp,0);
                 }
             }
-            tmp = tmp2;
 
-            if (Z_TYPE_P(tmp) != IS_ARRAY) {
+            if (Z_TYPE_P(tmp2) != IS_ARRAY) {
                 blitz_error(tpl, E_WARNING,
                     "OPERATION ERROR: unable to iterate context \"%s\" in \"%s\" "
                     "because parent iteration was not set as array of arrays before. "
@@ -4531,7 +4529,10 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
                 return 0;
             }
 
-            tmp2 = blitz_hash_str_find_ind(HASH_OF(tmp), key, key_len);
+            tmp = HASH_OF(tmp2);
+            zend_hash_internal_pointer_end_ex(tmp, &tmp_pos);
+
+            tmp2 = blitz_hash_str_find_ind(tmp, key, key_len);
             if (!tmp2) {
                 zval empty_array;
                 zval init_array;
@@ -4549,7 +4550,7 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
                     if (tpl->current_iteration) php_var_dump(tpl->current_iteration,1);
                 }
 
-                add_assoc_zval_ex(tmp, key, key_len, &init_array);
+                zend_hash_str_add(tmp, key, key_len, &init_array);
 
                 if (BLITZ_DEBUG) {
                     php_printf("D-2: %p %p\n", tpl->current_iteration, tpl->last_iteration);
@@ -4557,27 +4558,25 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
                 }
 
                 add_next_index_zval(&init_array, &empty_array);
-                zend_hash_internal_pointer_end(HASH_OF(tmp));
+                zend_hash_internal_pointer_end_ex(tmp, &tmp_pos);
 
                 if (BLITZ_DEBUG) {
-                    php_var_dump(tmp, 0);
+                    blitz_dump_ht(tmp, 0);
                 }
 
                 /* 2DO: getting tmp and current_iteration_parent can be done by 1 call of blitz_hash_get_current_data */
                 if (is_current_iteration) {
-                    tpl->current_iteration_parent = blitz_hash_get_current_data(HASH_OF(tmp));
+                    tpl->current_iteration_parent = blitz_hash_get_current_data_ex(tmp, &tmp_pos);
                     if (!tpl->current_iteration_parent) {
                         return 0;
                     }
                 }
 
-                tmp2 = blitz_hash_get_current_data(HASH_OF(tmp));
+                tmp2 = blitz_hash_get_current_data_ex(tmp, &tmp_pos);
                 if (!tmp2) {
                     return 0;
                 }
             }
-
-            tmp = tmp2;
 
             if (Z_TYPE_P(tmp2) != IS_ARRAY) {
                 blitz_error(tpl, E_WARNING,
@@ -4587,10 +4586,13 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
                 return 0;
             }
 
+            tmp = HASH_OF(tmp2);
+            zend_hash_internal_pointer_end_ex(tmp, &tmp_pos);
+
             ilast = i + 1;
             if (BLITZ_DEBUG) {
                 php_printf("[debug] tmp dump (item \"%s\"):\n",key);
-                php_var_dump(tmp, 0);
+                blitz_dump_ht(tmp, 0);
             }
         }
         ++p;
@@ -4609,20 +4611,20 @@ static inline int blitz_iterate_by_path(blitz_tpl *tpl, const char *path, int pa
           so in this particular case we do create an empty iteration.
     */
 
-    if (found && (create_new || 0 == zend_hash_num_elements(HASH_OF(tmp)))) {
+    if (found && (create_new || 0 == zend_hash_num_elements(tmp))) {
         zval empty_array;
         array_init(&empty_array);
 
-        add_next_index_zval(tmp, &empty_array);
-        zend_hash_internal_pointer_end(HASH_OF(tmp));
+        zend_hash_next_index_insert(tmp, &empty_array);
+        zend_hash_internal_pointer_end_ex(tmp, &tmp_pos);
 
         if (BLITZ_DEBUG) {
             php_printf("[debug] found, will add new iteration\n");
-            php_var_dump(tmp, 0);
+            blitz_dump_ht(tmp, 0);
         }
     }
 
-    tpl->last_iteration = blitz_hash_get_current_data(HASH_OF(tmp));
+    tpl->last_iteration = blitz_hash_get_current_data_ex(tmp, &tmp_pos);
     if (!tpl->last_iteration) {
         blitz_error(tpl, E_WARNING,
             "INTERNAL ERROR: unable fetch last_iteration in blitz_iterate_by_path");
