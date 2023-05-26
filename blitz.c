@@ -46,6 +46,8 @@
 #include "zend_smart_str.h"
 #endif
 
+#include "blitz_debug.h"
+
 #ifdef PHP_WIN32
 #include "win32/time.h"
 #else
@@ -3201,7 +3203,7 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
                 smart_str buf = {0};
                 php_var_export_ex(&scope_iteration, 1, &buf);
                 smart_str_0 (&buf);
-                php_printf("--> scope_iteration:%s value:%s\n", zend_zval_type_name(&scope_iteration), buf.a);
+                php_printf("--> scope_iteration:%s value:%s\n", zend_zval_type_name(&scope_iteration), ZSTR_VAL(buf.s));
                 smart_str_free(&buf);
             }
 
@@ -3831,7 +3833,7 @@ static inline int blitz_arg_to_zval(
         smart_str buf = {0};
         php_var_export_ex(return_value, 1, &buf);
         smart_str_0 (&buf);
-        php_printf("--> type:%s value:%s\n", zend_zval_type_name(return_value), buf.a);
+        php_printf("--> type:%s value:%s\n", zend_zval_type_name(return_value), ZSTR_VAL(buf.s));
         smart_str_free(&buf);
     }
 
@@ -4050,7 +4052,7 @@ static inline void blitz_check_expr (
                 smart_str buf = {0};
                 php_var_export_ex(z_stack_ptr[num_a], 1, &buf);
                 smart_str_0 (&buf);
-                php_printf("intermediate results --> type:%s value:%s\n", zend_zval_type_name(&z_stack[num_a]), buf.a);
+                php_printf("intermediate results --> type:%s value:%s\n", zend_zval_type_name(&z_stack[num_a]), ZSTR_VAL(buf.s));
                 smart_str_free(&buf);
             }
 
