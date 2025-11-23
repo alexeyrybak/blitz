@@ -4,6 +4,9 @@ returning non-strings from user methods
 <?php
 	if (PHP_VERSION_ID < 80000) die("SKIP: The test is for PHP v8.0+");
 ?>
+--INI--
+; disable warning "Array to string conversion"
+error_reporting=E_ALL & ~E_WARNING;
 --FILE---
 <?php
 include('common.inc');
@@ -16,6 +19,8 @@ function myErrorHandler($errno, $errstr, $errfile, $errline) {
         $global_errors .= "\n";
     }
     $global_errors .= $errstr;
+
+    return true;
 }
 set_error_handler("myErrorHandler");
 
@@ -27,11 +32,16 @@ class Tpl extends Blitz
 }
 
 
-// number
-$T = new Tpl();
-$T->load("{{get_number()}}");
-$body = $T->parse();
-echo "$body\n";
+try {
+    // number
+    $T = new Tpl();
+    $T->load("{{get_number()}}");
+    $body = $T->parse();
+    echo "$body\n";
+} catch (\Throwable $t) {
+    $class = get_class($t);
+    echo "Exception caught: {$class} {$t->getMessage()}\n";
+}
 
 
 // array

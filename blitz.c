@@ -3293,6 +3293,40 @@ static inline int blitz_exec_predefined_method(blitz_tpl *tpl, blitz_node *node,
 }
 /* }}} */
 
+/*
+    call_user_function()/zend_call_function() raises an exception if the function/method not found
+    We may not want this - if we haven't found function, we may try method (and vice-versa)
+
+    That's why we will check if the call is legit first.
+*/
+static zend_result blitz_call_user_function(zval *zobject, zval *function_name, zval *retval_ptr, uint32_t param_count, zval params[])
+{
+    zend_fcall_info_cache function_info_cache = {0};
+    zend_object *object = NULL;
+    if (zobject) {
+        ZEND_ASSERT(Z_TYPE_P(zobject) == IS_OBJECT);
+        object = Z_OBJ_P(zobject);
+    }
+
+    char *error = NULL;
+    if (!zend_is_callable_ex(function_name, object, 0, NULL, &function_info_cache, &error)) {
+        efree(error);
+        return FAILURE;
+    }
+
+    zend_fcall_info fci;
+
+    fci.size = sizeof(fci);
+    fci.object = object;
+    ZVAL_COPY_VALUE(&fci.function_name, function_name);
+    fci.retval = retval_ptr;
+    fci.param_count = param_count;
+    fci.params = params;
+    fci.named_params = NULL;
+
+    return zend_call_function(&fci, &function_info_cache);
+}
+
 /* {{{ int blitz_exec_user_method() */
 static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval *iteration_params, zval *obj, smart_str *result, unsigned long *result_alloc_len)
 {
@@ -3397,12 +3431,11 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
               Otherwise, call object method and then PHP if PHP cals are enabled.
     */
 
-    function_table = &Z_OBJCE_P(obj)->function_table;
     if (node->namespace_code == BLITZ_NODE_THIS_NAMESPACE) {
-        method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
+        method_res = blitz_call_user_function(obj, &zmethod, &retval, node->n_args, pargs);
     } else if (node->namespace_code) {
         if (BLITZ_G(enable_php_callbacks)) {
-            method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
+            method_res = blitz_call_user_function(NULL, &zmethod, &retval, node->n_args, pargs);
         } else {
             blitz_error(tpl, E_WARNING,
                 "PHP callbacks are disabled by blitz.enable_php_callbacks, %s call was ignored, line %lu, pos %lu",
@@ -3413,14 +3446,14 @@ static inline int blitz_exec_user_method(blitz_tpl *tpl, blitz_node *node, zval 
         }
     } else {
         if (BLITZ_G(php_callbacks_first) && BLITZ_G(enable_php_callbacks)) {
-            method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
+            method_res = blitz_call_user_function(NULL, &zmethod, &retval, node->n_args, pargs);
             if (method_res == FAILURE) {
-                method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
+                method_res = blitz_call_user_function(obj, &zmethod, &retval, node->n_args, pargs);
             }
         } else {
-            method_res = call_user_function(function_table, obj, &zmethod, &retval, node->n_args, pargs);
+            method_res = blitz_call_user_function(obj, &zmethod, &retval, node->n_args, pargs);
             if (method_res == FAILURE && BLITZ_G(enable_php_callbacks)) {
-                method_res = call_user_function(NULL, NULL, &zmethod, &retval, node->n_args, pargs);
+                method_res = blitz_call_user_function(NULL, &zmethod, &retval, node->n_args, pargs);
             }
         }
     }
